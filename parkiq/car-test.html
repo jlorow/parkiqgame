@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ParkIQ - Car Test</title>
+  <script src="phaser-local.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0F0F0F; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    #game-container { width: 390px; height: 844px; }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <script>
+    // --- Constants from knowledge.md ---
+    const UNIT_PX = 48;
+    const CAR_WIDTH = 2 * UNIT_PX;   // 96
+    const CAR_LENGTH = 4 * UNIT_PX;  // 192
+    const CORNER_RADIUS = 8;
+    const WINDOW_INSET = 8;
+    const WINDOW_HEIGHT = 40;
+
+    const PLAYER_BODY = 0xe8320a;
+    const OBSTACLE_BODY = 0x6b7280;
+    const PLAYER_WINDOW = 0xc02808;
+    const OBSTACLE_WINDOW = 0x565b66;
+
+    // --- CarSprite equivalent ---
+    function createCarSprite(scene, config) {
+      const bodyColor = config.type === 'player' ? PLAYER_BODY : OBSTACLE_BODY;
+      const windowColor = config.type === 'player' ? PLAYER_WINDOW : OBSTACLE_WINDOW;
+
+      console.log('[CarSprite] type=' + config.type +
+        ' bodyColor=0x' + bodyColor.toString(16) +
+        ' px=(' + (config.x * UNIT_PX) + ',' + (config.y * UNIT_PX) + ')' +
+        ' angle=' + config.angle);
+
+      const g = scene.add.graphics();
+      const hw = CAR_WIDTH / 2;
+      const hl = CAR_LENGTH / 2;
+
+      g.fillStyle(bodyColor, 1);
+      g.fillRoundedRect(-hw, -hl, CAR_WIDTH, CAR_LENGTH, CORNER_RADIUS);
+
+      g.fillStyle(windowColor, 1);
+      g.fillRect(-hw + WINDOW_INSET, -hl + WINDOW_INSET,
+                 CAR_WIDTH - WINDOW_INSET * 2, WINDOW_HEIGHT);
+
+      g.setPosition(config.x * UNIT_PX, config.y * UNIT_PX);
+      g.setAngle(config.angle);
+      return g;
+    }
+
+    function createObstacleCar(scene, x, y, angle) {
+      return createCarSprite(scene, { x, y, angle, type: 'obstacle' });
+    }
+
+    // --- Test Scene ---
+    class TestScene extends Phaser.Scene {
+      constructor() { super('TestScene'); }
+
+      create() {
+        // Player car at [3,5], rotated 15°
+        createCarSprite(this, { x: 3, y: 5, angle: 15, type: 'player' });
+
+        // 4 obstacle cars with 48px gaps
+        createObstacleCar(this, 0, 5, 0);  // left
+        createObstacleCar(this, 6, 5, 0);  // right
+        createObstacleCar(this, 3, 0, 0);  // above
+        createObstacleCar(this, 3, 10, 0); // below
+      }
+    }
+
+    // --- Game config ---
+    const config = {
+      type: Phaser.AUTO,
+      width: 390,
+      height: 844,
+      backgroundColor: '#0F0F0F',
+      parent: 'game-container',
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      },
+      scene: [TestScene]
+    };
+
+    new Phaser.Game(config);
+  </script>
+</body>
+</html>
