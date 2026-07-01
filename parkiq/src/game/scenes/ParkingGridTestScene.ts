@@ -7,47 +7,48 @@ export class ParkingGridTestScene extends Phaser.Scene {
   }
 
   create(): void {
-    const screenWidth = this.scale.width;
-    const screenHeight = this.scale.height;
-    const thirdHeight = Math.floor(screenHeight / 3);
+    const gridW = 288;
+    const gridH = 288;
+    const gap = 20;
+    const startX = Math.floor((390 - gridW) / 2); // 51
 
     createParkingGrid(this, {
       environment: 'street',
-      x: 0,
-      y: 0,
-      width: screenWidth,
-      height: thirdHeight,
+      x: startX,
+      y: 20,
+      width: gridW,
+      height: gridH,
     });
 
     createParkingGrid(this, {
       environment: 'garage',
-      x: 0,
-      y: thirdHeight,
-      width: screenWidth,
-      height: thirdHeight,
+      x: startX,
+      y: 20 + gridH + gap,
+      width: gridW,
+      height: gridH,
     });
 
     createParkingGrid(this, {
       environment: 'open_lot',
-      x: 0,
-      y: thirdHeight * 2,
-      width: screenWidth,
-      height: screenHeight - thirdHeight * 2,
+      x: startX,
+      y: 20 + (gridH + gap) * 2,
+      width: gridW,
+      height: gridH,
     });
 
-    this.add.text(12, 12, 'Street', {
+    this.add.text(startX + 8, 8, 'Street', {
       color: '#FFFFFF',
       fontSize: '16px',
       fontFamily: 'Arial, sans-serif',
     });
 
-    this.add.text(12, thirdHeight + 12, 'Garage', {
+    this.add.text(startX + 8, 20 + gridH + 8, 'Garage', {
       color: '#FFFFFF',
       fontSize: '16px',
       fontFamily: 'Arial, sans-serif',
     });
 
-    this.add.text(12, thirdHeight * 2 + 12, 'Open Lot', {
+    this.add.text(startX + 8, 20 + (gridH + gap) * 2 + 8, 'Open Lot', {
       color: '#FFFFFF',
       fontSize: '16px',
       fontFamily: 'Arial, sans-serif',
