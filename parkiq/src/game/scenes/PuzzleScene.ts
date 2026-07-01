@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import type { Puzzle } from '../puzzles/puzzle-types';
-import { puzzles } from '../puzzles/puzzle-data';
 import { createParkingGrid } from '../components/ParkingGrid';
 import { createCarSprite } from '../components/CarSprite';
 import { createObstacleCar } from '../components/ObstacleCar';
@@ -65,9 +64,19 @@ export class PuzzleScene extends Phaser.Scene {
     this.answered = false;
     this.secondsRemaining = 60;
 
-    // Receive puzzle from scene data, or default to puzzle 1
-    const data = this.scene.settings.data as Partial<{ puzzle: Puzzle }> | undefined;
-    this.puzzle = data?.puzzle ?? puzzles[0]!;
+    // Receive puzzle from scene data — must be passed via scene.start()
+    const data = this.scene.settings.data as { puzzle: Puzzle } | undefined;
+    if (!data?.puzzle) {
+      this.add
+        .text(195, 420, 'No puzzle data', {
+          fontSize: '18px',
+          color: '#FFFFFF',
+        })
+        .setOrigin(0.5)
+        .setDepth(10);
+      return;
+    }
+    this.puzzle = data.puzzle;
 
     this.renderTopBar();
     this.renderParkingGrid();

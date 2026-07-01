@@ -6,7 +6,7 @@
     "customConditions": ["browser"],
     "rootDir": "../src"
   },
-  "include": ["../src/client/**/*", "../src/game/**/*"],
+  "include": ["../src/client/**/*", "../src/game/**/*", "../src/lib/**/*"],
   "exclude": [],
   "references": [
     {
