@@ -10,6 +10,6 @@ export function createObstacleCar(
   x: number,
   y: number,
   angle = 0,
-): Phaser.GameObjects.Graphics {
+): Phaser.GameObjects.Image {
   return createCarSprite(scene, { x, y, angle, type: 'obstacle' });
 }

@@ -2,19 +2,10 @@ import Phaser from 'phaser';
 
 /** Grid-unit constants from knowledge.md */
 const UNIT_PX = 48;
-const CAR_WIDTH = 2 * UNIT_PX; // 96
-const CAR_LENGTH = 4 * UNIT_PX; // 192
-const CORNER_RADIUS = 8;
-const WINDOW_INSET = 8;
-const WINDOW_HEIGHT = 40;
 
-/** Body colours from knowledge.md COLORS constant */
-const PLAYER_BODY = 0xe8320a;
-const OBSTACLE_BODY = 0x6b7280;
-
-/** Windscreen — roughly 80% brightness of the body colour */
-const PLAYER_WINDOW = 0xc02808;
-const OBSTACLE_WINDOW = 0x565b66;
+/** Tint colours from knowledge.md COLORS constant */
+const PLAYER_TINT = 0xe8320a;
+const OBSTACLE_TINT = 0x6b7280;
 
 export interface CarConfig {
   /** Grid X position (multiplied by UNIT_PX to get pixel position) */
@@ -28,45 +19,35 @@ export interface CarConfig {
 }
 
 /**
- * Creates a top-down car shape using Phaser Graphics.
- * The car is drawn as a rounded rectangle with a darker windscreen strip.
+ * Creates a car sprite from the shared SVG texture ('car').
+ * The SVG is a black silhouette that is tinted to the
+ * appropriate colour per type:
+ *  - player   → #E8320A (racing red)
+ *  - obstacle  → #6B7280 (neutral gray)
+ *
+ * The SVG texture must be loaded before this is called
+ * (e.g. in a scene's preload() via this.load.svg()).
+ *
  * Position and rotation use grid coordinates and degrees.
  */
 export function createCarSprite(
   scene: Phaser.Scene,
   config: CarConfig,
-): Phaser.GameObjects.Graphics {
-  const bodyColor =
-    config.type === 'player' ? PLAYER_BODY : OBSTACLE_BODY;
-  const windowColor =
-    config.type === 'player' ? PLAYER_WINDOW : OBSTACLE_WINDOW;
+): Phaser.GameObjects.Image {
+  const tint = config.type === 'player' ? PLAYER_TINT : OBSTACLE_TINT;
 
-  // Debug log — remove after visual verification
-  // eslint-disable-next-line no-console
-  console.log(
-    `[CarSprite] type=${config.type} bodyColor=0x${bodyColor.toString(16)} pixelPos=(${config.x * UNIT_PX}, ${config.y * UNIT_PX}) angle=${config.angle}`,
+  const image = scene.add.image(
+    config.x * UNIT_PX,
+    config.y * UNIT_PX,
+    'car',
   );
 
-  const graphics = scene.add.graphics();
-  const halfW = CAR_WIDTH / 2;
-  const halfL = CAR_LENGTH / 2;
+  // setTint + setTintMode(FILL) replaces pixels entirely (required for a flat black
+  // SVG silhouette — setTint alone would multiply black × color = black).
+  // In Phaser 4, setTintFill() was removed; the replacement is:
+  //   image.setTint(color).setTintMode(Phaser.TintModes.FILL)
+  image.setTint(tint).setTintMode(Phaser.TintModes.FILL);
+  image.setAngle(config.angle);
 
-  // --- Car body (rounded rect, centred at 0,0) ---
-  graphics.fillStyle(bodyColor, 1);
-  graphics.fillRoundedRect(-halfW, -halfL, CAR_WIDTH, CAR_LENGTH, CORNER_RADIUS);
-
-  // --- Windscreen (darker rect at the front / top) ---
-  graphics.fillStyle(windowColor, 1);
-  graphics.fillRect(
-    -halfW + WINDOW_INSET,
-    -halfL + WINDOW_INSET,
-    CAR_WIDTH - WINDOW_INSET * 2,
-    WINDOW_HEIGHT,
-  );
-
-  // --- Position & rotate ---
-  graphics.setPosition(config.x * UNIT_PX, config.y * UNIT_PX);
-  graphics.setAngle(config.angle);
-
-  return graphics;
+  return image;
 }

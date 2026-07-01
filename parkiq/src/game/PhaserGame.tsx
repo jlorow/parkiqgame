@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
-import { TestScene } from './scenes/TestScene';
+import { ParkingGridTestScene } from './scenes/ParkingGridTestScene';
 
 export const PhaserGame = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,7 +19,7 @@ export const PhaserGame = () => {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
-      scene: [TestScene],
+      scene: [ParkingGridTestScene],
     };
 
     gameRef.current = new Phaser.Game(config);
