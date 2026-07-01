@@ -10,7 +10,7 @@ export class ParkingGridTestScene extends Phaser.Scene {
     const gridW = 288;
     const gridH = 288;
     const gap = 20;
-    const startX = Math.floor((390 - gridW) / 2); // 51
+    const startX = Math.floor((this.scale.width - gridW) / 2);
 
     createParkingGrid(this, {
       environment: 'street',

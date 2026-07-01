@@ -16,7 +16,7 @@ export const PhaserGame = () => {
       backgroundColor: '#0F0F0F',
       parent: containerRef.current,
       scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
       scene: [ParkingGridTestScene],
