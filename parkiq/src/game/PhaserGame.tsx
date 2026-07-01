@@ -28,6 +28,9 @@ export const PhaserGame = () => {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
+      audio: {
+        disableWebAudio: false,
+      },
       // PuzzleScene is started manually with puzzle data (below), not auto-started
       scene: [WrongAnswerScene, CorrectScene, ResultScene],
     };

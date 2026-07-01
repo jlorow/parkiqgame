@@ -57,6 +57,7 @@ export class PuzzleScene extends Phaser.Scene {
       width: 72,
       height: 144,
     });
+    this.load.audio('tick', 'assets/sounds/tick.mp3');
   }
 
   create(): void {
@@ -200,9 +201,14 @@ export class PuzzleScene extends Phaser.Scene {
 
     this.timerText.setText(this.formatTime(this.secondsRemaining));
 
-    // Turn racing red at 10 seconds remaining
+    // Turn racing red at 10 seconds remaining + play tick
     if (this.secondsRemaining <= 10) {
       this.timerText.setColor('#E8320A');
+      try {
+        this.sound.play('tick');
+      } catch {
+        // Audio context may still be locked — silently skip
+      }
     }
   }
 

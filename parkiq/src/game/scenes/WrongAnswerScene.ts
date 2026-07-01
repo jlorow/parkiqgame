@@ -72,6 +72,7 @@ export class WrongAnswerScene extends Phaser.Scene {
       width: 72,
       height: 144,
     });
+    this.load.audio('crunch', 'assets/sounds/crunch.mp3');
   }
 
   create(): void {
@@ -203,6 +204,13 @@ export class WrongAnswerScene extends Phaser.Scene {
    * Scale animates: 0 → 1.5 → 0 over 200ms total.
    */
   private playImpact(x: number, y: number, onComplete: () => void): void {
+    // Play crunch sound at collision moment
+    try {
+      this.sound.play('crunch');
+    } catch {
+      // Audio context may still be locked — silently skip
+    }
+
     const impact = this.add.graphics({ x, y });
     impact.fillStyle(0xef4444, 1);
     impact.fillCircle(0, 0, 20);

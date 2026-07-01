@@ -27,7 +27,7 @@ export class CorrectScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // No SVG loading needed — all text + graphics
+    this.load.audio('success', 'assets/sounds/success.mp3');
   }
 
   create(): void {
@@ -114,6 +114,15 @@ export class CorrectScene extends Phaser.Scene {
    * Returns the height of the rendered card so the caller can stack them.
    */
   private renderOneCard(step: EscapeStep, y: number): number {
+    // Play success sound when the final step (step 4) renders
+    if (step.stepNumber === 4) {
+      try {
+        this.sound.play('success');
+      } catch {
+        // Audio context may still be locked — silently skip
+      }
+    }
+
     const card = this.add.container(CARD_LEFT, y);
     card.setDepth(5);
 
