@@ -5,6 +5,22 @@ import { PuzzleScene } from './scenes/PuzzleScene';
 import { ResultScene } from './scenes/ResultScene';
 import { WrongAnswerScene } from './scenes/WrongAnswerScene';
 import { getTodaysPuzzle } from '../lib/puzzle-engine';
+import { getUserData } from '../lib/devvit-client';
+
+type GameState = {
+  userId: string;
+  streak: number;
+  lastPlayed: string | null;
+  serverDate: Date;
+};
+
+// Global game state (module-level)
+let globalGameState: GameState = {
+  userId: 'anonymous',
+  streak: 0,
+  lastPlayed: null,
+  serverDate: new Date(),
+};
 
 export const PhaserGame = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -13,33 +29,53 @@ export const PhaserGame = () => {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Temporary placeholder: compute today's puzzle from device clock.
-    // In production (Epic 6 Story 2), the server-side date from Devvit's
-    // message bridge will replace new Date() here.
-    const todaysPuzzle = getTodaysPuzzle(new Date());
+    // Async initialization: fetch user data from server, then create game
+    const initGame = async () => {
+      // Fetch user data from Devvit backend (replaces device clock with server time)
+      const userData = await getUserData();
+      const serverDate = new Date(userData.serverDate);
 
-    const config: Phaser.Types.Core.GameConfig = {
-      type: Phaser.AUTO,
-      width: 390,
-      height: 844,
-      backgroundColor: '#0F0F0F',
-      parent: containerRef.current,
-      scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-      },
-      audio: {
-        disableWebAudio: false,
-      },
-      // PuzzleScene is started manually with puzzle data (below), not auto-started
-      scene: [WrongAnswerScene, CorrectScene, ResultScene],
+      // Store game state globally for access by scenes
+      globalGameState = {
+        userId: userData.userId,
+        streak: userData.streak,
+        lastPlayed: userData.lastPlayed,
+        serverDate,
+      };
+
+      console.log(
+        '[PhaserGame] Initialized with:',
+        globalGameState
+      );
+
+      // Get today's puzzle using server-provided date (not device clock)
+      const todaysPuzzle = getTodaysPuzzle(serverDate);
+
+      const config: Phaser.Types.Core.GameConfig = {
+        type: Phaser.AUTO,
+        width: 390,
+        height: 844,
+        backgroundColor: '#0F0F0F',
+        parent: containerRef.current,
+        scale: {
+          mode: Phaser.Scale.FIT,
+          autoCenter: Phaser.Scale.CENTER_BOTH,
+        },
+        audio: {
+          disableWebAudio: false,
+        },
+        // PuzzleScene is started manually with puzzle data (below), not auto-started
+        scene: [WrongAnswerScene, CorrectScene, ResultScene],
+      };
+
+      const game = new Phaser.Game(config);
+      gameRef.current = game;
+
+      // Add and start PuzzleScene with today's puzzle data on first boot
+      game.scene.add('PuzzleScene', PuzzleScene, true, { puzzle: todaysPuzzle });
     };
 
-    const game = new Phaser.Game(config);
-    gameRef.current = game;
-
-    // Add and start PuzzleScene with today's puzzle data on first boot
-    game.scene.add('PuzzleScene', PuzzleScene, true, { puzzle: todaysPuzzle });
+    void initGame();
 
     return () => {
       gameRef.current?.destroy(true);
@@ -54,3 +90,11 @@ export const PhaserGame = () => {
     />
   );
 };
+
+/**
+ * Get the current game state (userId, streak, etc.)
+ * Used by scenes to access shared data.
+ */
+export function getGameState(): GameState {
+  return globalGameState;
+}

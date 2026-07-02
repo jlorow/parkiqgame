@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Puzzle, EscapeStep } from '../puzzles/puzzle-types';
+import { getGameState } from '../PhaserGame';
 
 /** Layout constants */
 const HEADER_CHECK_Y = 30;
@@ -252,9 +253,13 @@ export class CorrectScene extends Phaser.Scene {
     const totalW = 3 * pillW + 2 * gap;
     const startX = 195 - totalW / 2;
 
+    // Get streak from game state (set during PhaserGame initialization)
+    const gameState = getGameState();
+    const streakValue = gameState.streak > 0 ? gameState.streak.toString() : '--';
+
     const stats: { label: string; value: string }[] = [
       { label: 'Answer', value: this.puzzle.correctAnswer },
-      { label: 'Streak', value: '--' },
+      { label: 'Streak', value: streakValue },
       { label: 'Time', value: `${this.timeTaken}s` },
     ];
 

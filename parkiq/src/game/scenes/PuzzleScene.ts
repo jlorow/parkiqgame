@@ -4,6 +4,7 @@ import { createParkingGrid } from '../components/ParkingGrid';
 import { createCarSprite } from '../components/CarSprite';
 import { createObstacleCar } from '../components/ObstacleCar';
 import { getTodaysPuzzle } from '../../lib/puzzle-engine';
+import { puzzleComplete } from '../../lib/devvit-client';
 
 /** Grid unit constant from knowledge.md */
 const UNIT_PX = 48;
@@ -293,6 +294,21 @@ export class PuzzleScene extends Phaser.Scene {
 
     // Determine if the answer is correct
     const isCorrect = answer === this.puzzle.correctAnswer;
+
+    // Send puzzle-complete to server with shareBlocks from puzzle data
+    const shareBlocks = this.puzzle.shareBlocks ?? [];
+    void puzzleComplete({
+      timeTaken,
+      wasCorrect: isCorrect,
+      shareBlocks,
+      puzzleId: this.puzzle.id,
+    }).then((result) => {
+      console.log('[handleAnswer] puzzleComplete result:', result);
+      // Result (streak, score) can be used by CorrectScene if needed
+    }).catch((error) => {
+      console.error('[handleAnswer] puzzleComplete failed:', error);
+      // Game continues even if API fails (fallback to defaults)
+    });
 
     if (isCorrect) {
       void this.scene.start('CorrectScene', {
