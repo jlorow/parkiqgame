@@ -3,6 +3,7 @@ import type { Puzzle } from '../puzzles/puzzle-types';
 import { createParkingGrid } from '../components/ParkingGrid';
 import { createCarSprite } from '../components/CarSprite';
 import { createObstacleCar } from '../components/ObstacleCar';
+import { getTodaysPuzzle } from '../../lib/puzzle-engine';
 
 /** Grid unit constant from knowledge.md */
 const UNIT_PX = 48;
@@ -48,6 +49,11 @@ export class PuzzleScene extends Phaser.Scene {
   /** Timer event reference for cleanup */
   private timerEvent!: Phaser.Time.TimerEvent;
 
+  /** WebAudio context — guaranteed by audio: { disableWebAudio: false } config */
+  private get webAudio(): Phaser.Sound.WebAudioSoundManager {
+    return this.sound as Phaser.Sound.WebAudioSoundManager;
+  }
+
   constructor() {
     super('PuzzleScene');
   }
@@ -58,6 +64,7 @@ export class PuzzleScene extends Phaser.Scene {
       height: 144,
     });
     this.load.audio('tick', 'assets/sounds/tick.mp3');
+    this.load.audio('crunch', 'assets/sounds/crunch.mp3');
   }
 
   create(): void {
@@ -65,19 +72,14 @@ export class PuzzleScene extends Phaser.Scene {
     this.answered = false;
     this.secondsRemaining = 60;
 
-    // Receive puzzle from scene data — must be passed via scene.start()
-    const data = this.scene.settings.data as { puzzle: Puzzle } | undefined;
-    if (!data?.puzzle) {
-      this.add
-        .text(195, 420, 'No puzzle data', {
-          fontSize: '18px',
-          color: '#FFFFFF',
-        })
-        .setOrigin(0.5)
-        .setDepth(10);
-      return;
-    }
-    this.puzzle = data.puzzle;
+    // Receive puzzle from scene data or silently fall back to today's puzzle
+    const data = this.scene.settings.data as { puzzle?: Puzzle } | undefined;
+    this.puzzle = data?.puzzle ?? getTodaysPuzzle(new Date());
+
+    // One-time scene-wide listener to unlock audio on first tap anywhere
+    this.input.once('pointerdown', () => {
+      void this.webAudio.context.resume();
+    });
 
     this.renderTopBar();
     this.renderParkingGrid();
@@ -189,20 +191,8 @@ export class PuzzleScene extends Phaser.Scene {
   private onTimerTick(): void {
     if (this.answered) return;
 
-    this.secondsRemaining -= 1;
-
-    if (this.secondsRemaining <= 0) {
-      // Timer expired — treat as wrong answer
-      this.secondsRemaining = 0;
-      this.timerText.setText('0:00');
-      this.handleAnswer('E');
-      return;
-    }
-
-    this.timerText.setText(this.formatTime(this.secondsRemaining));
-
-    // Turn racing red at 10 seconds remaining + play tick
-    if (this.secondsRemaining <= 10) {
+    // Check BEFORE decrementing: play tick only if context is already unlocked
+    if (this.secondsRemaining <= 10 && this.webAudio.context.state === 'running') {
       this.timerText.setColor('#E8320A');
       try {
         this.sound.play('tick');
@@ -210,6 +200,26 @@ export class PuzzleScene extends Phaser.Scene {
         // Audio context may still be locked — silently skip
       }
     }
+
+    this.secondsRemaining -= 1;
+
+    if (this.secondsRemaining <= 0) {
+      // Timer expired — treat as wrong answer
+      this.secondsRemaining = 0;
+      this.timerText.setText('0:00');
+      // Play crunch at expiry moment only if context is already unlocked
+      if (this.webAudio.context.state === 'running') {
+        try {
+          this.sound.play('crunch');
+        } catch {
+          // Audio context may still be locked — silently skip
+        }
+      }
+      this.handleAnswer('E');
+      return;
+    }
+
+    this.timerText.setText(this.formatTime(this.secondsRemaining));
   }
 
   private formatTime(seconds: number): string {
@@ -246,6 +256,11 @@ export class PuzzleScene extends Phaser.Scene {
 
       btn.on('pointerdown', () => {
         if (this.answered) return;
+        this.webAudio.context.resume().then(() => {
+          // audio context is now unlocked
+        }).catch(() => {
+          // ignore if already unlocked
+        });
         this.handleAnswer(letter);
       });
 
