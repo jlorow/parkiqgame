@@ -31,6 +31,10 @@ export type LeaderboardData = {
   entries: LeaderboardEntry[];
 };
 
+export type ResultTodayResponse = {
+  shareBlocks: string[] | null;
+};
+
 // ──────────────────────────────────────────────────────────
 //  Legacy Counter Types (from template)
 // ──────────────────────────────────────────────────────────

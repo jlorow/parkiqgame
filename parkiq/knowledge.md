@@ -254,6 +254,8 @@ VERIFIED:
 - Test run: [what you actually ran]
 - Result: [actual output, not assumption]
 
+
+
 ## Out of Scope (MVP)
 
 - AI puzzle generation (Claude API)

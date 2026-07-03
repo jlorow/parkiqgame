@@ -4,6 +4,8 @@ import { CorrectScene } from './scenes/CorrectScene';
 import { PuzzleScene } from './scenes/PuzzleScene';
 import { ResultScene } from './scenes/ResultScene';
 import { WrongAnswerScene } from './scenes/WrongAnswerScene';
+import { LeaderboardScene } from './scenes/LeaderboardScene';
+import { AlreadyPlayedScene } from './scenes/AlreadyPlayedScene';
 import { getTodaysPuzzle } from '../lib/puzzle-engine';
 import { getUserData } from '../lib/devvit-client';
 
@@ -65,14 +67,24 @@ export const PhaserGame = () => {
           disableWebAudio: false,
         },
         // PuzzleScene is started manually with puzzle data (below), not auto-started
-        scene: [WrongAnswerScene, CorrectScene, ResultScene],
+        scene: [WrongAnswerScene, CorrectScene, ResultScene, LeaderboardScene, AlreadyPlayedScene],
       };
 
       const game = new Phaser.Game(config);
       gameRef.current = game;
 
-      // Add and start PuzzleScene with today's puzzle data on first boot
-      game.scene.add('PuzzleScene', PuzzleScene, true, { puzzle: todaysPuzzle });
+      // Check if user already played today
+      const today = new Date(serverDate).toISOString().split('T')[0];
+      const alreadyPlayed = globalGameState.lastPlayed === today;
+
+      if (alreadyPlayed) {
+        // Show the "Already Played Today" screen instead of the puzzle
+        game.scene.add('PuzzleScene', PuzzleScene, false);
+        game.scene.start('AlreadyPlayedScene');
+      } else {
+        // Add and start PuzzleScene with today's puzzle data on first boot
+        game.scene.add('PuzzleScene', PuzzleScene, true, { puzzle: todaysPuzzle });
+      }
     };
 
     void initGame();

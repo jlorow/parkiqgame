@@ -111,6 +111,27 @@ export class PuzzleScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0)
       .setDepth(10);
+
+    // "🏆" — leaderboard icon, right-aligned
+    const trophy = this.add
+      .text(370, TOP_BAR_Y, '🏆', {
+        fontSize: '20px',
+      })
+      .setOrigin(1, 0)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(10);
+
+    trophy.on('pointerdown', () => {
+      void this.scene.start('LeaderboardScene');
+    });
+
+    trophy.on('pointerover', () => {
+      trophy.setStyle({ fontSize: '22px' });
+    });
+
+    trophy.on('pointerout', () => {
+      trophy.setStyle({ fontSize: '20px' });
+    });
   }
 
   // ──────────────────────────────────────────────────────────

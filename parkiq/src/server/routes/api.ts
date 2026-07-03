@@ -7,6 +7,7 @@ import type {
   UserData,
   PuzzleCompleteResponse,
   LeaderboardData,
+  ResultTodayResponse,
 } from '../../shared/api';
 
 type ErrorResponse = {
@@ -379,6 +380,56 @@ api.get('/leaderboard', async (c) => {
     console.error('API leaderboard Error:', error);
     return c.json<LeaderboardData>(
       { entries: [] },
+      200
+    );
+  }
+});
+
+// ──────────────────────────────────────────────────────────
+//  GET /api/result-today
+//  Returns shareBlocks for the current user's today result
+// ──────────────────────────────────────────────────────────
+
+api.get('/result-today', async (c) => {
+  try {
+    const user = await reddit.getCurrentUser();
+    const userId = user?.id;
+
+    if (!userId) {
+      return c.json<ResultTodayResponse>(
+        { shareBlocks: null },
+        200
+      );
+    }
+
+    const todayDate = new Date();
+    const today = todayDate.toISOString().split('T')[0]!;
+    const resultKey = `result:${userId}:${today}`;
+
+    let shareBlocks: string[] | null = null;
+
+    try {
+      const raw = await redis.get(resultKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          shareBlocks = parsed as string[];
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to read result for ${userId}:${today}:`, error);
+      shareBlocks = null;
+    }
+
+    console.log(
+      `[result-today] userId=${userId}, today=${today}, shareBlocks=${JSON.stringify(shareBlocks)}`
+    );
+
+    return c.json<ResultTodayResponse>({ shareBlocks });
+  } catch (error) {
+    console.error('API result-today Error:', error);
+    return c.json<ResultTodayResponse>(
+      { shareBlocks: null },
       200
     );
   }

@@ -12,6 +12,7 @@ const CARD_W = 340;
 const CARD_PADDING = 20;
 const CARD_LEFT = 25;
 const STATS_Y = 620;
+const MILESTONE_BADGE_Y = 656;
 const BUTTON_Y = 680;
 const TOMORROW_Y = 730;
 
@@ -53,6 +54,7 @@ export class CorrectScene extends Phaser.Scene {
     this.renderHeader();
     this.renderStepCards();
     this.renderStats();
+    this.renderMilestoneBadge();
     this.renderShareButton();
     this.renderTomorrowText();
   }
@@ -298,6 +300,36 @@ export class CorrectScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(11);
+  }
+
+  // ==========================================================
+  //  MILESTONE BADGE
+  // ==========================================================
+
+  private renderMilestoneBadge(): void {
+    const gameState = getGameState();
+    const streak = gameState.streak;
+
+    if (streak === 7) {
+      this.add
+        .text(195, MILESTONE_BADGE_Y, '🔥 7-Day Streak!', {
+          fontSize: '14px',
+          color: '#E8320A',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(10);
+    } else if (streak === 30) {
+      this.add
+        .text(195, MILESTONE_BADGE_Y, '🏆 30-Day Streak!', {
+          fontSize: '14px',
+          color: '#F59E0B',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(10);
+    }
+    // Otherwise show nothing
   }
 
   // ==========================================================

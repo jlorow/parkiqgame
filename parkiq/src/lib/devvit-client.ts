@@ -3,6 +3,7 @@ import type {
   PuzzleCompletePayload,
   PuzzleCompleteResponse,
   LeaderboardData,
+  ResultTodayResponse,
 } from '../shared/api';
 
 /**
@@ -106,5 +107,29 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
     return {
       entries: [],
     };
+  }
+}
+
+/**
+ * Fetch helper: GET /api/result-today
+ * Returns: { shareBlocks: string[] | null }
+ *
+ * Falls back to null if the API call fails.
+ */
+export async function getResultToday(): Promise<ResultTodayResponse> {
+  try {
+    const response = await fetch('/api/result-today');
+
+    if (!response.ok) {
+      console.error(`getResultToday: HTTP ${response.status}`);
+      return { shareBlocks: null };
+    }
+
+    const data: ResultTodayResponse = await response.json();
+    console.log('[getResultToday]', data);
+    return data;
+  } catch (error) {
+    console.error('[getResultToday] Error:', error);
+    return { shareBlocks: null };
   }
 }
