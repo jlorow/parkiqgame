@@ -290,13 +290,17 @@ api.post('/puzzle-complete', async (c) => {
     }
 
     // Write result (shareBlocks as JSON)
+    // Fix: if wasCorrect is false, replace first block with 🟥 to reflect actual attempt
+    const blocksToStore = wasCorrect
+      ? shareBlocks
+      : shareBlocks.map((block, index) => (index === 0 ? '🟥' : block));
     try {
       await redis.set(
         `result:${userId}:${today}`,
-        JSON.stringify(shareBlocks)
+        JSON.stringify(blocksToStore)
       );
       console.log(
-        `[redis] result:${userId}:${today} = ${JSON.stringify(shareBlocks)}`
+        `[redis] result:${userId}:${today} = ${JSON.stringify(blocksToStore)}`
       );
     } catch (error) {
       console.error(`Failed to write result for ${userId}:`, error);
