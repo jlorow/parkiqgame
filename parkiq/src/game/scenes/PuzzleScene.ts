@@ -68,7 +68,16 @@ export class PuzzleScene extends Phaser.Scene {
   private puzzle!: Puzzle;
   private timerText!: Phaser.GameObjects.Text;
   private secondsRemaining = 60;
-  private answered = false;
+  /** Guard against double-fire of exit-zone win */
+  private exited = false;
+  /** Guard: timer expired, showing "Time's Up!" — prevents ticks and input */
+  private timeUp = false;
+  /** Text object for the "Time's Up!" overlay */
+  private timeUpText: Phaser.GameObjects.Text | null = null;
+  /** Spawn position for resetting the car */
+  private spawnX = 0;
+  private spawnY = 0;
+  private spawnAngle = 0;
   private timerEvent!: Phaser.Time.TimerEvent;
   /** Whether we are currently in the last-10-seconds pulse state */
   private isTimerPulsing = false;
@@ -84,7 +93,6 @@ export class PuzzleScene extends Phaser.Scene {
   private drivingControls!: DrivingControls;
 
   // ── Debug instrumentation ──────────────────────────────
-  private frameCount = 0;
   private debugText!: Phaser.GameObjects.Text;
   private inputText!: Phaser.GameObjects.Text;
   private playerCarStatusText!: Phaser.GameObjects.Text;
@@ -104,10 +112,13 @@ export class PuzzleScene extends Phaser.Scene {
     });
     this.load.audio('tick', 'assets/sounds/tick.mp3');
     this.load.audio('crunch', 'assets/sounds/crunch.mp3');
+    this.load.audio('success', 'assets/sounds/success.mp3');
   }
 
   create(): void {
-    this.answered = false;
+    this.exited = false;
+    this.timeUp = false;
+    this.timeUpText = null;
     this.secondsRemaining = 60;
     this.isTimerPulsing = false;
 
@@ -234,9 +245,12 @@ export class PuzzleScene extends Phaser.Scene {
     const pc = this.puzzle.playerCar;
 
     // Store initial car state in container-local pixel coords
-    this.carX = (pc.x + CONTAINER_OFFSET_X) * UNIT_PX;
-    this.carY = (pc.y + CONTAINER_OFFSET_Y) * UNIT_PX;
-    this.carAngle = pc.angle;
+    this.spawnX = (pc.x + CONTAINER_OFFSET_X) * UNIT_PX;
+    this.spawnY = (pc.y + CONTAINER_OFFSET_Y) * UNIT_PX;
+    this.spawnAngle = pc.angle;
+    this.carX = this.spawnX;
+    this.carY = this.spawnY;
+    this.carAngle = this.spawnAngle;
 
     const container = this.add.container(CONTAINER_X, CONTAINER_Y);
     container.setScale(CONTAINER_SCALE);
@@ -384,7 +398,7 @@ export class PuzzleScene extends Phaser.Scene {
   // ──────────────────────────────────────────────────────────
 
   override update(_time: number, delta: number): void {
-    if (this.answered) return;
+    if (this.exited || this.timeUp) return;
 
     const input: DrivingInputState = this.drivingControls.getState();
     const dt = delta / 1000; // seconds
@@ -424,9 +438,34 @@ export class PuzzleScene extends Phaser.Scene {
     this.playerCarImage.setPosition(this.carX, this.carY);
     this.playerCarImage.setAngle(this.carAngle);
 
-    // ── 5. Exit zone check ────────────────────────────────
-    if (this.checkExitReached(this.carX, this.carY)) {
-      console.log('EXIT_REACHED');
+    // ── 5. Exit zone check — win flow ──────────────────────
+    if (!this.exited && this.checkExitReached(this.carX, this.carY)) {
+      this.exited = true;
+
+      // Play success sound (try/catch, never crash)
+      try {
+        this.sound.play('success');
+      } catch {
+        // Audio context may still be locked
+      }
+
+      const timeTaken = 60 - this.secondsRemaining;
+
+      void puzzleComplete({
+        timeTaken,
+        wasCorrect: true,
+        shareBlocks: this.puzzle.shareBlocks ?? [],
+        puzzleId: this.puzzle.id,
+      })
+        .then((result) => {
+          console.log('[exit] puzzleComplete result:', result);
+        })
+        .catch((error) => {
+          console.error('[exit] puzzleComplete failed:', error);
+        });
+
+      this.timerEvent.destroy();
+      void this.scene.start('AlreadyPlayedScene');
     }
 
     // ── 6. Debug overlay ──────────────────────────────────
@@ -502,7 +541,7 @@ export class PuzzleScene extends Phaser.Scene {
   // ──────────────────────────────────────────────────────────
 
   private onTimerTick(): void {
-    if (this.answered) return;
+    if (this.exited || this.timeUp) return;
 
     if (this.secondsRemaining <= 10) {
       this.timerText.setColor('#E8320A');
@@ -538,18 +577,49 @@ export class PuzzleScene extends Phaser.Scene {
       // Stop pulse tween
       this.tweens.killTweensOf(this.timerText);
       this.timerText.setScale(1);
-      if (this.webAudio.context.state === 'running') {
-        try {
-          this.sound.play('crunch');
-        } catch {
-          // silently skip
+
+      // Show "Time's Up! Try again" overlay
+      this.timeUp = true;
+      this.timeUpText = this.add
+        .text(195, 420, "Time's Up!\nTry again", {
+          fontSize: '32px',
+          color: '#E8320A',
+          fontStyle: 'bold',
+          align: 'center',
+        })
+        .setOrigin(0.5)
+        .setDepth(200);
+
+      // Remove text after 1000ms, then reset car + timer
+      this.time.delayedCall(1000, () => {
+        if (this.timeUpText) {
+          this.timeUpText.destroy();
+          this.timeUpText = null;
         }
-      }
-      this.handleAnswer('E');
+        this.timeUp = false;
+        this.resetToSpawn();
+        this.secondsRemaining = 60;
+        this.isTimerPulsing = false;
+        this.timerText.setText(this.formatTime(60));
+        this.timerText.setColor('#FFFFFF');
+        this.timerText.setScale(1);
+      });
+
       return;
     }
 
     this.timerText.setText(this.formatTime(this.secondsRemaining));
+  }
+
+  /**
+   * Reset the player car to its spawn position.
+   */
+  private resetToSpawn(): void {
+    this.carX = this.spawnX;
+    this.carY = this.spawnY;
+    this.carAngle = this.spawnAngle;
+    this.playerCarImage.setPosition(this.carX, this.carY);
+    this.playerCarImage.setAngle(this.carAngle);
   }
 
   private formatTime(seconds: number): string {
@@ -557,45 +627,5 @@ export class PuzzleScene extends Phaser.Scene {
     return `0:${secs.toString().padStart(2, '0')}`;
   }
 
-  // ──────────────────────────────────────────────────────────
-  //  Answer Handling (preserved for timer expiry)
-  // ──────────────────────────────────────────────────────────
 
-  private handleAnswer(answer: string): void {
-    if (this.answered) return;
-    this.answered = true;
-
-    this.timerEvent.destroy();
-
-    // Scene transitions immediately — no need to stop physics here
-
-    const timeTaken = 60 - this.secondsRemaining;
-    const isCorrect = answer === this.puzzle.correctAnswer;
-    const shareBlocks = this.puzzle.shareBlocks ?? [];
-
-    void puzzleComplete({
-      timeTaken,
-      wasCorrect: isCorrect,
-      shareBlocks,
-      puzzleId: this.puzzle.id,
-    })
-      .then((result) => {
-        console.log('[handleAnswer] puzzleComplete result:', result);
-      })
-      .catch((error) => {
-        console.error('[handleAnswer] puzzleComplete failed:', error);
-      });
-
-    if (isCorrect) {
-      void this.scene.start('CorrectScene', {
-        timeTaken,
-        puzzle: this.puzzle,
-      });
-    } else {
-      void this.scene.start('WrongAnswerScene', {
-        answer,
-        puzzle: this.puzzle,
-      });
-    }
-  }
 }

@@ -1,94 +1,112 @@
 # ParkIQ — Project Knowledge Base
 
-> **Hackathon:** Reddit Games With a Hook — **Deadline:** July 16, 2026
+> **Hackathon:** Reddit Games With a Hook — **Deploy target: July 8, 2026 · Judging: July 15–16, 2026**
 > **Tech Stack:** Phaser 4 + React 18 + TypeScript + Vite + Devvit Web (Reddit) + Hono
-> **MVP Success Metric:** Day-7 retention ≥ 25%
+> **Genre:** Linear puzzle progression (Honk-style) — NOT a daily/Wordle-style game
 
 ---
 
 ## Product Overview
 
-**ParkIQ** is a Wordle-style daily parking puzzle game running inside Reddit as a Devvit Interactive Post. Players view a top-down parking scenario and pick the correct escape maneuver from 4 options (A/B/C/D) within a 60-second timer.
+**ParkIQ** is a driving puzzle game running inside Reddit as a Devvit Interactive Post. The player drives a car out of a tight parking scenario using on-screen controls. There is no daily gating, no calendar logic, no leaderboard, and no streak system. The core loop is pure linear progression, similar to Reddit games like Honk:
 
-### Core Gameplay Loop
-1. Player opens the Reddit Interactive Post → today's parking diagram loads (top-down view with player car, obstacle cars, bay lines)
-2. Player taps one of 4 answer buttons to pick the escape direction
-3. **Wrong answer:** collision animation (car moves into obstacle, impact starburst, shake), one-line explanation appears, correct answer revealed
-4. **Correct answer:** 4-step swipeable card sequence shows escape path with green arrows, then stat pills (answer, streak, time) and SHARE RESULT button
-5. Player taps SHARE RESULT → Wordle-style text card (puzzle # + 🟩/🟥 blocks + parkiq.app) copied to clipboard
-6. On next visit: "Already Played Today" screen shows streak and countdown to tomorrow's puzzle
+```
+Load current puzzle
+      ↓
+Play
+      ↓
+Crash? → Instant restart (no menu, no scene change)
+      ↓
+Win? → Unlock next puzzle → Load immediately
+      ↓
+(after puzzle 15) → Brief "You cleared all puzzles!" celebration → loop back to puzzle 1
+```
+
+**Retention hook:** "one more puzzle" compulsion loop — not "come back tomorrow."
+
+### Core Gameplay Loop (current — authoritative)
+1. Player opens the Reddit Interactive Post → splash screen shows "Tap to Start"
+2. Tap triggers expanded mode → `game.tsx` loads → fetch the player's current puzzle index (defaults to 1 for new players)
+3. PuzzleScene loads the puzzle at that index (player car, static obstacle cars, bay lines, green exit zone). **No timer.**
+4. Player uses on-screen controls (forward/reverse/left/right) to drive toward the exit zone without hitting obstacles
+5. **Collision** (car overlaps an obstacle): car instantly reverts to its previous position, `crunch.mp3` plays (try/catch guarded), screen flashes red briefly, car resets to spawn position. **No scene change, no menu, unlimited instant retries.**
+6. **Exit zone reached:** `success.mp3` plays, the backend records progress (`puzzleIndex + 1`), and the **next puzzle loads immediately in the same flow** — no lock screen, no "already played" gate, no waiting.
+7. **After puzzle 15:** show a brief "You cleared all puzzles!" celebration, then loop back to puzzle 1 (index wraps: `(index % 15) + 1` or equivalent). This keeps the game evergreen for repeat play.
 
 ### Target Audience
-Car enthusiasts, learner drivers, and petrolheads aged 17–35 who consume driving content on social media.
+Car enthusiasts, learner drivers, and petrolheads aged 17–35 who consume driving content on social media, browsing Reddit casually.
+
+---
+
+## What Is Scrapped — Do Not Build or Reference
+
+```
+✗ WrongAnswerScene — deleted
+✗ CorrectScene — deleted
+✗ ResultScene — deleted
+✗ AlreadyPlayedScene — deleted (no daily gate to show)
+✗ LeaderboardScene — deleted (no leaderboard)
+✗ Share card / clipboard mechanic
+✗ Multiple choice A/B/C/D answer buttons
+✗ Quiz mechanic of any kind (correctAnswer, options, wrongPaths, AnswerOption type)
+✗ Arcade physics on PlayerCar (no physics engine at all)
+✗ Wordle-style emoji share blocks
+✗ postMessage bridge (using HTTP fetch instead)
+✗ Daily puzzle rotation (getTodaysPuzzle(serverDate), LAUNCH_DATE mod 15 logic)
+✗ Streak system (streak:{userId}, lastPlayed:{userId})
+✗ Leaderboard (leaderboard:{date}, score:{date}:{userId}, result:{userId}:{date})
+✗ 60-second countdown timer / "Time's Up!" failure state
+✗ Calendar/serverDate-driven puzzle selection of any kind
+```
+
+If any epic/story description elsewhere implies rebuilding one of the above, that description is stale — follow this list instead.
 
 ---
 
 ## Epic Build Order (Strict)
 
-Epics must be built in this order (some overlap — Epic 6 Story 1 first, rest of Epic 6 after Epic 4):
-
 ```
-EPIC 1: Game Renderer        ← build first, everything depends on it
-EPIC 6: Devvit Integration   ← Story 1 first (before Epic 1); Stories 2–3 after Epic 4
-EPIC 2: Puzzle Engine        ← requires renderer + Devvit shell
-EPIC 3: Feedback System      ← requires puzzle engine
-EPIC 4: Streak + Retention   ← requires Redis bridge from Epic 6 Story 2
-EPIC 5: Share Card           ← requires feedback system + streak
+EPIC 1: Game Renderer          ← built, working
+EPIC 6: Devvit Integration     ← Story 1 done; Story 2 simplified (see below)
+EPIC 2: Puzzle Engine          ← rework in progress (index-based, not date-based)
+EPIC 7: Drive Mechanic         ← built, working (movement/collision/exit detection)
+EPIC 9: Linear Progression     ← CURRENT FOCUS — replaces Epic 4 entirely
+EPIC 8: Pixel Art Visual Style ← queued, independent of Epic 9
 ```
 
-### Epic 1 — Game Renderer
-Establish Phaser 4 inside a React component at 390×844px.
+*(Epic 3 "Feedback System" and Epic 5 "Share Card" were already fully superseded — see "What Is Scrapped." Epic 4 "Streak + Retention" is now fully removed, replaced by Epic 9.)*
 
+### Epic 9 — Linear Progression (replaces Epic 4)
 | Story | Summary |
 |---|---|
-| 1-1 | Phaser 4 Setup — blank dark canvas in Reddit webview |
-| 1-2 | Car Components — top-down geometric car shapes (no images) |
-| 1-3 | Parking Grid — road, bay lines, pillars for 3 environments |
-| 1-4 | Scene Manager — 4 Phaser scenes with data-passing transitions |
+| 9-1 | Backend simplification — remove streak/leaderboard/daily Redis keys and endpoints, add `puzzleIndex:{userId}` |
+| 9-2 | Puzzle engine rework — replace `getTodaysPuzzle(serverDate)` with `getPuzzleByIndex(index)`, add wraparound at 15 |
+| 9-3 | Scene flow rewire — remove timer, remove AlreadyPlayedScene routing, wire win → immediate next-puzzle load in PuzzleScene |
+| 9-4 | Completion celebration — brief "You cleared all puzzles!" screen after puzzle 15, then loop to puzzle 1 |
+| 9-5 | Delete LeaderboardScene and all leaderboard UI/entry points (e.g. any HUD icon linking to it) |
 
-### Epic 2 — Puzzle Engine
-Puzzle schema, JSON data, daily rotation.
-
+### Epic 2 — Puzzle Engine (revised)
 | Story | Summary |
 |---|---|
-| 2-1 | Puzzle Schema + Data — TS interfaces + 15 hand-authored puzzles |
-| 2-2 | Puzzle Renderer — diagram, question, 60s timer, 4 answer buttons |
-| 2-3 | Daily Rotation — puzzle index = days since June 29, 2026 mod 15 |
+| 2-1 | Puzzle Schema + Data — TS types + 15 hand-authored puzzles with real `col/row/angle/exitZone` geometry (content-authoring task, still pending) |
+| 2-2 | Puzzle Renderer — diagram + driving controls (no timer UI) |
+| 2-3 | ~~Daily Rotation~~ → superseded by Epic 9-2's index-based selection |
 
-### Epic 3 — Feedback System
-Wrong-answer collision animation + correct-answer step sequence.
-
+### Epic 6 — Devvit Integration (revised)
 | Story | Summary |
 |---|---|
-| 3-1 | Wrong Answer — car→obstacle (400ms), impact (200ms), shake (200ms), explanation |
-| 3-2 | Correct Answer — 4 swipeable cards with green arrows, stat pills, SHARE RESULT |
-| 3-3 | Sound Effects — crunch.mp3, success.mp3, tick.mp3 (gated behind user gesture) |
+| 6-1 | Devvit Setup — done |
+| 6-2 | Redis + HTTP Bridge — simplified to a single `puzzleIndex:{userId}` read/write via plain `fetch` calls (no postMessage bridge, no streak/leaderboard writes) |
+| 6-3 | Public Post — production deploy, public subreddit, Devpost video — done LAST |
 
-### Epic 4 — Streak + Retention
-Daily streak counter + leaderboard. Targets "Best Use of Retention Mechanics" prize ($3,000).
+### Epic 7 — Drive Mechanic (unchanged, already working)
+Movement, collision detection, and exit-zone detection are already built and verified — see Movement/Collision specs below. Only the *consequence* of reaching the exit zone changes under Epic 9 (immediate next puzzle instead of a lock screen).
 
+### Epic 8 — Pixel Art Visual Style (queued, independent)
 | Story | Summary |
 |---|---|
-| 4-1 | Streak Logic — Redis `streak:{userId}`, `lastPlayed:{userId}` |
-| 4-2 | Leaderboard — score = 100 base + 50 speed + 25 first-attempt, top-10 sorted set |
-| 4-3 | Already Played — skip puzzle if played today, show streak + countdown |
-
-### Epic 5 — Share Card
-Wordle-style shareable text card (viral growth mechanism).
-
-| Story | Summary |
-|---|---|
-| 5-1 | Share Card Generation — `generateShareText()` produces formatted text |
-| 5-2 | Copy to Clipboard — `navigator.clipboard.writeText()`, "Copied! ✓" feedback |
-
-### Epic 6 — Devvit Integration
-Get ParkIQ running as a live Reddit Interactive Post.
-
-| Story | Summary |
-|---|---|
-| 6-1 | Devvit Setup — Node 22, CLI auth, template, test subreddit — **done BEFORE Epic 1** |
-| 6-2 | Redis + Message Bridge — postMessage bridge, Redis read/write — after Epic 3 |
-| 6-3 | Public Post — production deploy, public subreddit, Devpost video — **done LAST** |
+| 8-1 | Rendering config — `pixelArt: true`, crisper SVG scaling, thicker bay lines |
+| 8-2+ | Further asset/style passes — scoped separately as needed |
 
 ---
 
@@ -96,182 +114,292 @@ Get ParkIQ running as a live Reddit Interactive Post.
 
 ```
 parkiq/
-├── devvit.json              # Devvit app config (name ≤16 chars)
+├── devvit.json
 ├── package.json
 ├── vite.config.ts
-├── eslint.config.js
-├── tsconfig.json
 ├── src/
-│   ├── client/              # React frontend
-│   │   ├── splash.html      # Inline/feed view entry
-│   │   ├── splash.tsx       # Splash screen React component
-│   │   ├── game.html        # Expanded view entry (Phaser lives here)
-│   │   ├── game.tsx         # Game React component
-│   │   ├── index.css        # Global styles (Tailwind)
-│   │   ├── global.ts        # Global type/config constants
-│   │   └── hooks/           # React hooks
-│   ├── server/              # Hono backend
-│   │   ├── index.ts         # Server entry point
-│   │   ├── core/post.ts     # Post core logic
-│   │   └── routes/          # Route handlers
-│   │       ├── api.ts       # /api/* endpoints
-│   │       ├── menu.ts      # Internal menu endpoints
-│   │       ├── forms.ts     # Internal form endpoints
-│   │       └── triggers.ts  # Internal trigger endpoints
-│   └── shared/
-│       └── api.ts           # Shared types between client/server
-├── tools/                   # TypeScript project references
-│   ├── tsconfig.base.json
-│   ├── tsconfig.client.json
-│   ├── tsconfig.server.json
-│   ├── tsconfig.shared.json
-│   └── tsconfig.vite.json
-└── docs/                    # PRD, epics, tech specs
+│   ├── client/
+│   │   ├── splash.html / splash.tsx   # "Tap to Start"
+│   │   ├── game.html / game.tsx       # Phaser mounts here
+│   │   ├── index.css / global.ts
+│   │   └── hooks/
+│   ├── server/
+│   │   ├── index.ts
+│   │   └── routes/api.ts              # SIMPLIFIED — see API Endpoints below
+│   ├── shared/api.ts
+│   ├── lib/
+│   │   ├── puzzle-engine.ts           # getPuzzleByIndex(), wraparound logic
+│   │   └── devvit-client.ts           # fetch helpers
+│   └── game/
+│       ├── PhaserGame.tsx
+│       ├── components/
+│       │   ├── CarSprite.ts           # obstacle cars — unchanged
+│       │   ├── ObstacleCar.ts         # unchanged
+│       │   └── ParkingGrid.ts         # unchanged
+│       ├── scenes/
+│       │   └── PuzzleScene.ts         # ONLY remaining scene — everything happens here
+│       │       (AlreadyPlayedScene.ts and LeaderboardScene.ts are DELETED under Epic 9)
+│       └── puzzles/
+│           ├── puzzle-types.ts
+│           └── puzzle-data.ts
+└── public/assets/{sprites,sounds}/
 ```
 
-### Entrypoint Architecture (devvit.json)
-- **`post.entrypoints.default`** → `splash.html` (inline/feed view, lightweight)
-- **`post.entrypoints.game`** → `game.html` (expanded view, heavy deps)
-- **`server.entry`** → `dist/server/index.cjs`
-- **Menu items:** registered under `menu.items` with internal endpoints
-- **Forms/Triggers:** registered under `forms` and `triggers` objects
-
 ### Client-Server Communication
-- Plain `fetch` calls from client to Hono routes (no tRPC/RPC layer)
-- Shared types in `/src/shared/api.ts` ensure consistency
-- Devvit also uses a `postMessage` bridge between backend and webview for:
-  - `USER_DATA` (userId, streak, lastPlayed, serverDate)
-  - `PUZZLE_COMPLETE` (timeTaken, wasCorrect, shareBlocks)
-  - `GET_LEADERBOARD` / `LEADERBOARD_DATA`
+Plain `fetch` calls only — no postMessage bridge, no tRPC/RPC layer.
+
+---
+
+## API Endpoints (revised — Epic 9)
+
+```
+GET  /api/progress
+  → { userId, puzzleIndex }
+  (replaces /api/user-data; drop serverDate entirely — no longer needed)
+
+POST /api/puzzle-complete
+  → body: { puzzleId: number }
+  → writes: puzzleIndex:{userId} = puzzleId + 1 (wrap to 1 if puzzleId was 15)
+  → returns: { puzzleIndex }
+
+DELETE (no longer exist):
+  ✗ /api/leaderboard
+  ✗ /api/result-today
+```
+
+### Redis Key Patterns (revised)
+| Key | Type | Purpose |
+|---|---|---|
+| `puzzleIndex:{userId}` | integer | The puzzle the player should currently see (1–15, wraps) |
+
+All other keys (`streak:*`, `lastPlayed:*`, `score:*`, `leaderboard:*`, `result:*`) are removed.
 
 ---
 
 ## Devvit/Reddit-Specific Rules
-
-- **App name** ≤16 characters (`parkiqgame` in devvit.json)
+- App name ≤16 characters (`parkiqgame`)
 - Use `navigateTo` from `@devvit/web/client` instead of `window.location`
-- No `window.alert` — use `showToast` or `showForm` from `@devvit/web/client`
+- No `window.alert` — use Phaser text overlays
 - No geolocation, camera, microphone, or notification APIs
-- No inline `<script>` tags in HTML — use separate `.ts`/`.tsx` files
-- This project uses **Devvit Web only** — do NOT use `@devvit/public-api` or blocks
-
-### Redis Key Patterns
-| Key | Type | Purpose |
-|---|---|---|
-| `streak:{userId}` | integer | Current streak count |
-| `lastPlayed:{userId}` | ISO date | Last puzzle completion |
-| `score:{date}:{userId}` | integer | Daily score |
-| `leaderboard:{date}` | sorted set | Daily top 10 |
-| `result:{userId}:{date}` | JSON string | Share blocks |
+- No inline `<script>` tags in HTML
+- **Devvit Web only** — do NOT use `@devvit/public-api` or blocks
+- Audio/Clipboard APIs require a user gesture — wrap audio in try/catch, never crash on failure
 
 ---
 
-## Coding Standards
+## Critical Phaser 4 API Rules
 
-### TypeScript Config (strict mode)
-- `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`
-- Project references in `tools/tsconfig.*.json`
+```
+REMOVED in Phaser 4 — will crash if used:
+✗ setTintFill() → use: setTint(c).setTintMode(Phaser.TintModes.FILL)
+✗ GeometryMask → use: Mask Filter or Stencil container
+✗ Arcade Physics on PlayerCar → we use direct image translation only, no physics engine
 
-### ESLint
-- `@typescript-eslint/no-floating-promises: error` — all async calls must be awaited or explicitly voided
-- Lint with: `npm run lint`
+COORDINATE SYSTEM FOR GRAPHICS:
+Always: scene.add.graphics({ x, y }), then draw in LOCAL coords from (0,0)
+NEVER mix absolute canvas coords with local draw calls
 
-### Prettier
-- Single quotes, ES5 trailing commas
-- Format with: `npm run prettier`
+TINTING SVG:
+this.load.svg('car', 'assets/sprites/car-top-down.svg', { width: 32, height: 64 })
+const img = scene.add.image(x, y, 'car')
+img.setTint(0xE8320A).setTintMode(Phaser.TintModes.FILL)
+img.setScale(2.5)
+```
 
-### Naming & Style
-- Prefer **type aliases** over interfaces
-- Prefer **named exports** over default exports
-- **Never** cast TypeScript types (no `as any`)
-- When adding a new menu/form endpoint, register it in `devvit.json`
-
-### Phaser 4 Config
+### Phaser Game Config
 ```typescript
 const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,       // WebGL preferred, Canvas fallback
-  width: 390,              // Mobile-first
+  type: Phaser.AUTO,
+  width: 390,
   height: 844,
   backgroundColor: '#0F0F0F',
+  pixelArt: true,           // Epic 8
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
   }
 }
 ```
+Note: the mount container has aspect-ratio-constrained CSS (`min(100vw, calc(100vh * 390/844))`, flex-centered) — do not revert this when touching the Phaser config.
 
-### Visual Constants
+---
+
+## Visual Constants
+
 ```typescript
 COLORS = {
-  background: '#0F0F0F',  playerCar: '#E8320A',  obstacleCar: '#6B7280',
-  exitZone: '#22C55E',    wrongPath: '#EF4444',  correctPath: '#22C55E',
-  bayLines: '#FFFFFF',    pillar: '#1F2937',     uiAccent: '#E8320A',
-  textPrimary: '#FFFFFF', textMuted: '#6B7280',  cardBg: '#1C1C1E',  buttonBg: '#2A2A2A',
+  background:  '#0F0F0F',
+  playerCar:   '#E8320A',
+  obstacleCar: '#6B7280',
+  exitZone:    '#22C55E',
+  bayLines:    '#FFFFFF',
+  pillar:      '#1F2937',
+  uiAccent:    '#E8320A',
+  textPrimary: '#FFFFFF',
+  textMuted:   '#6B7280',
+  cardBg:      '#1C1C1E',
+  buttonBg:    '#2A2A2A',
 }
-GRID = { unitPx: 48,  carWidth: 2,  carLength: 4,  bayWidth: 2.5,  bayLength: 5 }
+
+GRID = { unitPx: 48, carWidth: 2, carLength: 4, bayWidth: 2.5, bayLength: 5 }
+```
+
+### Environment Theming
+```
+street:      road #1C1C1E, lines #FFFFFF, pillar #1F2937
+garage:      road #111827, lines #FBBF24 (yellow), pillar #374151
+rooftop:     road #D1D5DB (light concrete), lines #FFFFFF, pillar #9CA3AF
+underground: road #0F172A (very dark), lines #E8320A (red warning), pillar #1E293B
 ```
 
 ---
 
-## Build, Test & Dev Commands
+## Grid Coordinate System (authoritative)
 
+```
+Grid origin:  x = 51, y = 120  (centered on 390px canvas)
+Grid size:    288 × 288px = 6 columns × 6 rows
+Grid unit:    48px
+
+Conversion (grid col/row → pixel, cell center):
+  pixelX = 51 + (col * 48) + 24
+  pixelY = 120 + (row * 48) + 24
+
+Columns: 0–5 (left to right) · Rows: 0–5 (top to bottom, Row 0 = top/near exit usually)
+```
+
+All car, obstacle, and exit zone positions in puzzle JSON use grid units (col/row), never raw pixels. All game objects (player car, obstacles, grid) share one container-local coordinate space — no world-to-local conversion needed anywhere.
+
+---
+
+## Puzzle JSON Schema (authoritative)
+
+```typescript
+type Puzzle = {
+  id: number                // 1–15, doubles as progression index
+  type: 'parallel' | 'garage' | 'reverse_bay'
+  theme: 'street' | 'garage' | 'rooftop' | 'underground'
+  difficulty: 1 | 2 | 3 | 4 | 5
+  question: string          // shown as scene subtitle
+  environment: 'street' | 'garage' | 'open_lot'
+  playerCar: { col: number; row: number; angle: number }  // angle: 0=up,90=right,180=down,270=left
+  obstacles: Array<{ type: 'sedan' | 'suv' | 'pillar' | 'wall'; col: number; row: number; angle: number }>
+  exitZone: { col: number; row: number; direction: 'top' | 'bottom' | 'left' | 'right' }
+  escapeSteps: Array<{ step: number; description: string }>  // retained, currently unused by UI
+  expertTip: string
+}
+```
+Note: `shareBlocks`, `correctAnswer`, `options`, `wrongPaths`, `AnswerOption` are quiz-era dead fields — do not use, safe to remove from the type entirely during Epic 2-1's schema rework.
+
+### Difficulty Design Rules (progression order = difficulty order)
+```
+Puzzles 1–5   (parallel, street theme):     2–3 moves, player angle 0°, 2–3 obstacles, wide lanes
+Puzzles 6–10  (garage, garage/underground): 4–6 moves, player angle 90°/270°, pillars, tighter lanes
+Puzzles 11–15 (reverse_bay, rooftop):       7+ moves, player angle 180° (must reverse first), tight clearances
+```
+
+### Rendering Order (Z-order)
+```
+1 (bottom): ParkingGrid background · 2: Exit zone (green, pulsing) · 3: Obstacle cars
+4: Pillar/wall rectangles · 5: Player car · 6 (top): HUD (puzzle name, controls — no timer)
+```
+
+---
+
+## PlayerCar Movement Spec (authoritative — unchanged, already working)
+
+- **No physics engine.** Plain `Phaser.GameObjects.Image`, no Arcade Physics body, no velocity/momentum/drag.
+- Car is a child of the same container as ParkingGrid/obstacles, sharing container-local pixel coordinates.
+- Tint `#E8320A`, scale `1.35 * 1.08` (pre-pixel-art; Epic 8 adjusts to `{width:32,height:64}` load + `.setScale(2.5)`).
+
+| Input | Effect | Formula |
+|---|---|---|
+| Forward | Translate in facing direction | `dx = sin(rad)*MOVE_SPEED*dt`, `dy = -cos(rad)*MOVE_SPEED*dt` |
+| Reverse | Translate opposite | same, `moveDir = -1` |
+| Left | Rotate CCW | `angle -= ROTATION_SPEED*dt` |
+| Right | Rotate CW | `angle += ROTATION_SPEED*dt` |
+
+`0° = facing up`. `MOVE_SPEED = 120 px/s`, `ROTATION_SPEED = 90 deg/s`. All motion scaled by `dt`. Instant stop on release — no coasting. Multi-key inputs apply simultaneously. Applied via direct `setPosition()`/`setAngle()`.
+
+---
+
+## Collision and Win Spec (authoritative — revised for Epic 9)
+
+### Collision Detection (unchanged)
+1. Compute candidate position from input.
+2. Build a `Phaser.Geom.Rectangle` (72×144) at the candidate position.
+3. For each obstacle (excluding pillars/walls' own static rects), build its rectangle.
+4. `Phaser.Geom.Rectangle.Overlaps()` — if ANY overlap, reject candidate (car stays put; rotation still applies).
+5. On overlap: revert position, play `crunch.mp3` (try/catch), flash red 200ms, reset to spawn. **No scene change, no menu, instant retry — this is now the ONLY failure state, since the timer is removed.**
+
+### Exit Zone Detection (revised — no more lock screen)
+- Exit zone is a `Phaser.Geom.Rectangle` in container-local coordinates, derived from the puzzle's `exitZone` col/row/direction.
+- On overlap: play `success.mp3`, call `POST /api/puzzle-complete` with `{ puzzleId }`, then **immediately load the next puzzle** in PuzzleScene (in-place reinit, not a scene transition to a separate screen).
+- If `puzzleId === 15`: show a brief "You cleared all puzzles!" celebration overlay, then wrap to puzzle 1.
+- Guard against double-fire with a boolean flag (e.g. `exited`), same pattern as prior collision guard.
+
+### Timer — REMOVED
+There is no time limit and no "Time's Up!" state. Failure is only ever a collision, and it never ends the session — it just resets the car in place.
+
+### Coordinate Space
+All geometry (player car, obstacles, exit zone) uses the same container-local pixel space — no conversion needed.
+
+---
+
+## Coding Standards
+- TypeScript strict mode: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`
+- ESLint: `@typescript-eslint/no-floating-promises: error`
+- Prettier: single quotes, ES5 trailing commas
+- Prefer type aliases over interfaces, named exports over default exports, never cast types (no `as any`)
+
+---
+
+## Build, Test & Dev Commands
 | Command | Purpose |
 |---|---|
 | `npm run dev` | Start playtest with Devvit |
 | `npm run build` | Vite build |
-| `npm run type-check` | `tsc --build` (project references) |
-| `npm run lint` | ESLint on `src/**/*.{ts,tsx}` |
-| `npm run prettier` | Prettier formatting |
+| `npm run type-check` | `tsc --build` |
+| `npm run lint` | ESLint |
 | `npm run deploy` | Type-check + lint + `devvit upload` |
 | `npm run launch` | Deploy + `devvit publish` |
 
 ---
 
-## Commit & PR Guidelines
-
-- Commits are single-line and concise
-- Dependency updates: `Bump <package> from <old> to <new> (#PR)`
-- Manual commits: short and descriptive
-- PR numbers included in parentheses at end
-
----
-
 ## Definition of Done (mandatory per story)
-A story is NOT complete until:
-1. Every IPC/API handler referenced is implemented with real logic — not a stub, not mock data
-2. The screen's data comes from an actual upstream source — never a hardcoded placeholder
+1. Every API handler referenced is implemented with real logic — not a stub, not mock data
+2. Data comes from an actual upstream source — never a hardcoded placeholder
 3. The relevant test case has been run and the ACTUAL output is pasted — not "this should work"
-4. If something can't be fully implemented this pass, the screen must show "Not yet implemented" — never fake success
+4. If something can't be fully implemented this pass, show "Not yet implemented" — never fake success
 
 ## Sequencing Rule
-Implement and verify one story at a time. Do not start the next until the current one's Definition of Done is explicitly confirmed. If asked to "build all screens," stop and ask for confirmation before skipping verification.
+Implement and verify one story at a time. Do not start the next until the current one's Definition of Done is explicitly confirmed.
 
 ## Reporting Requirement
 End every story with:
+```
 VERIFIED:
 - Handler(s) touched: [list]
 - Real data source confirmed: [yes/no + how]
 - Test run: [what you actually ran]
 - Result: [actual output, not assumption]
+```
 
-
+---
 
 ## Out of Scope (MVP)
-
-- AI puzzle generation (Claude API)
-- User-submitted scenarios
-- Premium / payments / push notifications
-- Standalone PWA / Next.js build
-- Supabase or any external database
-- Admin dashboard
-- Trailer / forklift / large vehicle types
-- WebGL-only rendering (Canvas fallback required)
+- AI puzzle generation, user-submitted scenarios, premium/payments/push notifications
+- Standalone PWA / Next.js build, Supabase or any external database, admin dashboard
 - Multiplayer or real-time features
+- WrongAnswerScene / CorrectScene / ResultScene / AlreadyPlayedScene / LeaderboardScene (all deleted)
+- Share card / clipboard mechanic, multiple choice quiz mechanic, Arcade physics on PlayerCar
+- postMessage bridge (using HTTP fetch instead)
+- **Daily/calendar-based puzzle rotation** (replaced by linear index progression)
+- **Streak and leaderboard systems** (replaced by "one more puzzle" loop)
+- **60-second timer / time-based failure state** (removed — collision is the only failure state)
 
 ---
 
 ## Key Links
-
 - Devvit docs: https://developers.reddit.com/docs/llms.txt
 - Devvit template: https://github.com/reddit/devvit-template-react
-- Launch date (puzzle index base): **June 29, 2026**

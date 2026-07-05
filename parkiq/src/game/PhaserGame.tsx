@@ -1,9 +1,6 @@
 import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
-import { CorrectScene } from './scenes/CorrectScene';
 import { PuzzleScene } from './scenes/PuzzleScene';
-import { ResultScene } from './scenes/ResultScene';
-import { WrongAnswerScene } from './scenes/WrongAnswerScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { AlreadyPlayedScene } from './scenes/AlreadyPlayedScene';
 import { getTodaysPuzzle } from '../lib/puzzle-engine';
@@ -68,15 +65,8 @@ export const PhaserGame = () => {
         audio: {
           disableWebAudio: false,
         },
-        physics: {
-          default: 'arcade',
-          arcade: {
-            gravity: { x: 0, y: 0 },
-            debug: false,
-          },
-        },
         // PuzzleScene is started manually with puzzle data (below), not auto-started
-        scene: [WrongAnswerScene, CorrectScene, ResultScene, LeaderboardScene, AlreadyPlayedScene],
+        scene: [LeaderboardScene, AlreadyPlayedScene],
       };
 
       const game = new Phaser.Game(config);

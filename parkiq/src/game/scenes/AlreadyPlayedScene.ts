@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { getGameState } from '../PhaserGame';
 import { getTodaysPuzzle } from '../../lib/puzzle-engine';
-import { getResultToday } from '../../lib/devvit-client';
 
 // ──────────────────────────────────────────────────────────
 //  Layout Constants
@@ -12,7 +11,6 @@ const PUZZLE_NUM_Y = 54;
 const TITLE_Y = 220;
 const STREAK_Y = 280;
 const COUNTDOWN_Y = 340;
-const SHARE_BTN_Y = 680;
 const TOMORROW_Y = 730;
 
 // ──────────────────────────────────────────────────────────
@@ -113,10 +111,6 @@ export class AlreadyPlayedScene extends Phaser.Scene {
       loop: true,
     });
 
-    // ── SHARE RESULT button ─────────────────────────────
-
-    this.renderShareButton();
-
     // ── "Come back tomorrow!" ───────────────────────────
 
     this.add
@@ -163,73 +157,6 @@ export class AlreadyPlayedScene extends Phaser.Scene {
     }
 
     this.countdownText.setText(`Next puzzle in ${this.formatCountdown(remaining)}`);
-  }
-
-  // ==========================================================
-  //  SHARE RESULT BUTTON
-  // ==========================================================
-
-  private renderShareButton(): void {
-    const btn = this.add
-      .text(195, SHARE_BTN_Y, 'SHARE RESULT', {
-        fontSize: '15px',
-        color: '#FFFFFF',
-        backgroundColor: '#E8320A',
-        padding: { x: 28, y: 14 },
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(10);
-
-    btn.on('pointerdown', () => {
-      // Disable button to prevent double-taps
-      btn.disableInteractive();
-
-      void getResultToday().then((data) => {
-        if (data.shareBlocks && data.shareBlocks.length > 0) {
-          const blocks = data.shareBlocks.join('');
-          const puzzleNum = getTodaysPuzzle(this.serverDate).id;
-          const shareText = `ParkIQ #${puzzleNum}\n${blocks}\nparkiq.app`;
-
-          void navigator.clipboard.writeText(shareText).then(() => {
-            btn.setText('Copied! ✓');
-            btn.setStyle({ backgroundColor: '#22C55E' });
-          }).catch(() => {
-            // Fallback: show the text directly
-            btn.setText('Copy failed');
-            btn.setStyle({ backgroundColor: '#EF4444' });
-            btn.setInteractive({ useHandCursor: true });
-          });
-        } else {
-          // No result found — show temporary message
-          btn.setText('No result yet');
-          btn.setStyle({ backgroundColor: '#6B7280' });
-          setTimeout(() => {
-            btn.setText('SHARE RESULT');
-            btn.setStyle({ backgroundColor: '#E8320A' });
-            btn.setInteractive({ useHandCursor: true });
-          }, 2000);
-        }
-      }).catch(() => {
-        btn.setText('Error loading');
-        btn.setStyle({ backgroundColor: '#EF4444' });
-        setTimeout(() => {
-          btn.setText('SHARE RESULT');
-          btn.setStyle({ backgroundColor: '#E8320A' });
-          btn.setInteractive({ useHandCursor: true });
-        }, 2000);
-      });
-    });
-
-    // Hover effect
-    btn.on('pointerover', () => {
-      btn.setStyle({ backgroundColor: '#ff4422' });
-    });
-
-    btn.on('pointerout', () => {
-      btn.setStyle({ backgroundColor: '#E8320A' });
-    });
   }
 
   override update(): void {
