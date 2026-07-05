@@ -6,7 +6,7 @@ import { PhaserGame } from '../game/PhaserGame';
 
 export const App = () => {
   return (
-    <div className="w-full h-full overflow-hidden bg-[#0F0F0F]">
+    <div className="w-full h-full flex items-center justify-center">
       <PhaserGame />
     </div>
   );

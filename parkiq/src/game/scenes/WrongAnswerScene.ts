@@ -68,10 +68,7 @@ export class WrongAnswerScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.svg('car', 'assets/sprites/car-top-down.svg', {
-      width: 72,
-      height: 144,
-    });
+    // 'car' texture is loaded by PuzzleScene — do not reload it here
     this.load.audio('crunch', 'assets/sounds/crunch.mp3');
   }
 

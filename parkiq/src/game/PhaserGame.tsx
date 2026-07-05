@@ -62,9 +62,18 @@ export const PhaserGame = () => {
         scale: {
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH,
+          width: 390,
+          height: 844,
         },
         audio: {
           disableWebAudio: false,
+        },
+        physics: {
+          default: 'arcade',
+          arcade: {
+            gravity: { x: 0, y: 0 },
+            debug: false,
+          },
         },
         // PuzzleScene is started manually with puzzle data (below), not auto-started
         scene: [WrongAnswerScene, CorrectScene, ResultScene, LeaderboardScene, AlreadyPlayedScene],
@@ -98,7 +107,11 @@ export const PhaserGame = () => {
   return (
     <div
       ref={containerRef}
-      className="w-full h-full flex items-center justify-center bg-[#0F0F0F]"
+      style={{
+        width: 'min(100vw, calc(100vh * 390 / 844))',
+        height: 'min(100vh, calc(100vw * 844 / 390))',
+        backgroundColor: '#0F0F0F',
+      }}
     />
   );
 };

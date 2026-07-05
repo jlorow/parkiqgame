@@ -1,575 +1,342 @@
-# Epic: Drive Mechanic
+I actually think this is the right moment to adjust the Epic. The new information fundamentally changes the implementation strategy, and it's much cheaper to fix the roadmap now than halfway through.
 
-## Epic Goal
+One thing I do want to push back on slightly: I **would not rewrite Stories 1 and 2**. They're already implemented, tested, and they leave the codebase in a good state. Rewriting those stories would create documentation drift between your Git history and your implementation plan.
 
-Transform ParkIQ from a multiple-choice parking quiz into a **micro driving puzzle** where the player performs the escape manoeuvre using simple on-screen driving controls.
+Instead, I'd version the Epic:
 
-The redesign must preserve the existing backend, puzzle rotation, leaderboard, streak, and Devvit integration while replacing the interaction model with real-time player input, collision feedback, and satisfying animations.
+* **Epic: Drive Mechanic v2**
+* Stories 1–2: Completed (as implemented)
+* Stories 3 onward: Revised based on the new player-physics architecture.
 
----
-
-## Success Criteria
-
-By the end of this epic:
-
-* Players no longer answer A/B/C/D questions.
-* Players drive the car using on-screen controls.
-* The parking scene occupies the majority of the screen.
-* Collisions fail the puzzle.
-* Escaping reaches the existing completion flow.
-* Existing Redis, leaderboard and streak systems continue to work unchanged.
-* All gameplay runs inside Phaser 4 Arcade Physics on Devvit Web.
+I think that's the most maintainable approach.
 
 ---
 
-# Story 1 — Redesign the Puzzle Screen Layout
+# Epic: Drive Mechanic (v2)
+
+## Story 1 — Gameplay Layout Redesign ✅ Completed
+
+**Status:** Complete
+
+Purpose:
+
+* Remove quiz layout.
+* Make the parking scene the visual focus.
+* Prepare the screen for interactive controls.
+
+Files:
+
+* `parkiq/src/game/scenes/PuzzleScene.ts`
+
+Deliverables:
+
+* Large parking scene.
+* Simplified HUD.
+* Objective text.
+* Placeholder controls.
+
+---
+
+## Story 2 — Interactive Driving Controls ✅ Completed
+
+**Status:** Complete
+
+Purpose:
+
+* Replace placeholders with real touch controls.
+* Create reusable `DrivingControls`.
+* Improve UI polish.
+* Add steering preview.
+
+Files:
+
+* `parkiq/src/game/components/DrivingControls.ts`
+* `parkiq/src/game/scenes/PuzzleScene.ts`
+
+Deliverables:
+
+* Interactive control pad.
+* Press animations.
+* Steering preview.
+* Idle animation.
+* HUD improvements.
+
+---
+
+# Story 3 — Player Vehicle (Physics Foundation)
+
+This is where the architecture changes.
 
 ## Goal
 
-Convert the current quiz layout into a game layout without changing gameplay yet.
+Replace the static player image with a dedicated Arcade Physics vehicle.
 
-This story establishes the visual foundation for every remaining story.
+Obstacle cars remain static.
 
----
-
-### Files
-
-Modify
-
-```
-src/game/scenes/PuzzleScene.ts
-```
-
-Minor updates if required
-
-```
-src/game/PhaserGame.tsx
-```
+The player becomes the only physics-driven object.
 
 ---
 
-### Scope
-
-Remove:
-
-* answer buttons
-* answer text blocks
-* long scenario description
-
-Introduce:
-
-* large gameplay area
-* compact HUD
-* timer
-* move counter placeholder
-* control panel placeholder
-* larger parking diagram
-* exit zone indicator
-
-The player car and obstacle cars remain static.
-
-No movement yet.
-
----
-
-### Acceptance Criteria
-
-* Parking scene fills approximately 70% of screen height.
-* HUD fits comfortably in portrait mode.
-* Text reduced to one concise objective.
-* Controls appear but are disabled.
-* Existing puzzle loading still works.
-* Existing puzzle rendering unchanged.
-
----
-
-### Depends On
-
-None.
-
----
-
-# Story 2 — Steering Control System
-
-## Goal
-
-Replace answer selection with interactive driving controls.
-
-Introduce a reusable control layer independent of puzzle logic.
-
----
-
-### Files
-
-Modify
+### Create
 
 ```
-src/game/scenes/PuzzleScene.ts
+parkiq/src/game/components/PlayerCar.ts
 ```
 
-Create (if appropriate)
+Responsibilities:
 
-```
-src/game/components/DrivingControls.ts
-```
+* create physics image
+* configure damping
+* drag
+* acceleration
+* steering
+* braking
+* expose update()
 
-or equivalent reusable UI component.
+PuzzleScene should never contain driving mathematics.
 
 ---
 
-### Scope
+### PuzzleScene
 
-Implement:
+Replace:
 
-* Left steering
-* Right steering
-* Forward
-* Reverse
+```
+CarSprite(player)
+```
 
-Controls should work via pointer events.
+with
 
-No keyboard support required.
+```
+PlayerCar
+```
 
-Steering should modify steering angle.
+Obstacle cars continue using:
 
-Movement should advance the vehicle while pressed.
+```
+CarSprite
+```
+
+---
+
+### Implement
+
+Forward
+
+Reverse
+
+Steering
+
+Natural deceleration
+
+Maximum speed
+
+Rotation interpolation
+
+Acceleration curve
+
+Reverse speed limiter
+
+Steering only while moving
+
+Movement bounds
+
+---
+
+### Camera
+
+Static.
+
+Do not follow the player.
+
+---
+
+### Polish (implemented, not optional)
+
+* wheel steering animation
+* gentle engine idle vibration
+* exhaust dust particles when accelerating
+* tire marks that fade after 2–3 seconds
+* slight camera impulse when changing direction
+* easing on acceleration and braking
+
+---
+
+### Result
+
+At the end of Story 3:
+
+The player can freely drive around the parking area.
 
 No collisions yet.
 
 ---
 
-### Acceptance Criteria
-
-* Controls respond immediately.
-* Car rotates smoothly.
-* Car translates smoothly.
-* Steering feels responsive.
-* Controls work on touch devices.
-* No answer buttons remain.
-
----
-
-### Depends On
-
-Story 1
-
----
-
-# Story 3 — Vehicle Movement Model
-
-## Goal
-
-Introduce a simple arcade driving model appropriate for a puzzle game.
-
-This is **not** a driving simulator.
-
----
-
-### Files
-
-Modify
-
-```
-src/game/scenes/PuzzleScene.ts
-```
-
-Potential helper
-
-```
-src/game/components/CarController.ts
-```
-
----
-
-### Scope
-
-Implement
-
-* forward movement
-* reverse movement
-* steering while moving
-* turning radius
-* steering reset behaviour
-* move counting
-
-Movement should feel deliberate rather than fast.
-
-No drifting.
-
-No inertia simulation.
-
----
-
-### Acceptance Criteria
-
-* Car follows believable arcs.
-* Reverse works.
-* Steering behaves consistently.
-* Movement remains deterministic.
-* Move counter increments correctly.
-
----
-
-### Depends On
-
-Story 2
-
----
-
-# Story 4 — Collision & Escape Logic
-
-## Goal
-
-Turn movement into gameplay.
-
-The player either escapes or crashes.
-
----
-
-### Files
-
-Modify
-
-```
-src/game/scenes/PuzzleScene.ts
-```
-
----
-
-### Scope
-
-Enable Arcade Physics.
-
-Create:
-
-* player body
-* obstacle bodies
-* exit trigger
-
-Implement:
-
-Obstacle collision
-
-↓
-
-Failure
-
-Exit overlap
-
-↓
-
-Success
-
-No scoring changes yet.
-
----
-
-### Acceptance Criteria
-
-* Car cannot pass through obstacles.
-* Collision immediately ends the puzzle.
-* Exit zone completes the puzzle.
-* Puzzle state cannot continue after completion.
-
----
-
-### Depends On
-
-Story 3
-
----
-
-# Story 5 — Failure Experience
-
-## Goal
-
-Replace the quiz explanation screen with an animated crash outcome.
-
----
-
-### Files
-
-Replace
-
-```
-src/game/scenes/WrongAnswerScene.ts
-```
-
----
-
-### Scope
-
-Display:
-
-* crashed vehicle
-* impact animation
-* camera shake
-* red flash
-* collision marker
-* correct escape path overlay
-* streak information
-* next puzzle countdown
-
-Player cannot continue today's puzzle.
-
----
-
-### Acceptance Criteria
-
-* Scene clearly communicates failure.
-* Correct route is understandable visually.
-* Countdown information still functions.
-* Existing daily-play restriction remains intact.
-
----
-
-### Depends On
-
-Story 4
-
----
-
-# Story 6 — Success Experience
-
-## Goal
-
-Reward successful driving with a satisfying completion sequence.
-
----
-
-### Files
-
-Replace
-
-```
-src/game/scenes/CorrectScene.ts
-```
-
----
-
-### Scope
-
-Animate:
-
-* vehicle exiting
-* particle celebration
-* score reveal
-* move count
-* completion time
-* streak increase
-
-Reuse existing backend completion logic.
-
-No share card.
-
----
-
-### Acceptance Criteria
-
-* Success feels rewarding.
-* Statistics are readable.
-* Existing completion API continues working.
-* Streak updates correctly.
-
----
-
-### Depends On
-
-Story 4
-
----
-
-# Story 7 — Results Flow Simplification
-
-## Goal
-
-Remove the legacy share-card concept and make the result flow purely gameplay focused.
-
----
-
-### Files
-
-Replace
-
-```
-src/game/scenes/ResultScene.ts
-```
-
-Modify if required
-
-```
-src/game/scenes/AlreadyPlayedScene.ts
-```
-
----
-
-### Scope
-
-Remove:
-
-* share card
-* clipboard functionality
-* emoji grids
-* share button
-
-Provide:
-
-* today's result
-* score
-* leaderboard shortcut
-* play tomorrow messaging
-
----
-
-### Acceptance Criteria
-
-* No share functionality remains.
-* Flow feels consistent with new gameplay.
-* Existing navigation still works.
-
----
-
-### Depends On
-
-Story 6
-
----
-
-# Story 8 — Scoring & Game State Integration
-
-## Goal
-
-Connect the new gameplay loop to the existing scoring infrastructure.
-
----
-
-### Files
-
-Modify
-
-```
-src/game/scenes/PuzzleScene.ts
-```
-
-Potential updates
-
-```
-src/lib/devvit-client.ts
-```
-
-only if interface adjustments are genuinely required.
-
----
-
-### Scope
-
-Implement:
-
-Correct escape
-
-↓
-
-Base score
-
-*
-
-Speed bonus
-
-*
-
-Efficiency bonus
-
-Failure
-
-↓
-
-Zero score
-
-Ensure API payloads remain compatible.
-
-Fix the incorrect scoring behaviour for failed attempts.
-
----
-
-### Acceptance Criteria
-
-* Failed runs score zero.
-* Successful runs calculate bonuses correctly.
-* Leaderboard updates without backend changes.
-* Existing Redis schema remains unchanged.
-
----
-
-### Depends On
-
-Story 6
-
----
-
-# Story 9 — Gameplay Polish & Feel
-
-## Goal
-
-Elevate the experience through animation, feedback, and visual refinement without expanding gameplay scope.
-
----
-
-### Files
-
-Modify
-
-```
-src/game/scenes/PuzzleScene.ts
-src/game/scenes/WrongAnswerScene.ts
-src/game/scenes/CorrectScene.ts
-```
-
-Minor updates if needed
-
-```
-src/game/components/CarSprite.ts
-```
-
----
-
-### Scope
+# Story 4 — World Physics & Environment
 
 Add:
 
-* smooth vehicle interpolation
-* steering animation
-* brake light feedback (if practical with current assets)
-* collision particles
-* success particles
-* subtle camera zoom
+Arcade Physics
+
+World bounds
+
+Obstacle colliders
+
+Exit trigger
+
+Invisible parking boundaries
+
+---
+
+### Implement
+
+Player vs obstacle
+
+Player vs wall
+
+Player vs exit
+
+Sliding collision response
+
+No object pushing
+
+No obstacle movement
+
+---
+
+### Feedback
+
+Collision:
+
 * screen shake
-* sound integration using existing audio assets
-* UI transitions
-* button press animations
-* consistent spacing, colors, and rounded panel styling
+* impact particles
+* crunch sound
+* red flash
+* car rebounds slightly
 
-No new gameplay mechanics.
+Exit:
 
----
-
-### Acceptance Criteria
-
-* Controls feel responsive.
-* Animations are smooth on the target canvas (390×844).
-* Existing crunch/success sounds are used appropriately.
-* UI presents a cohesive visual style aligned with the redesigned ParkIQ identity.
-* Gameplay remains performant within Devvit Web using Phaser 4 WebGL.
+* green pulse
+* particles
+* smooth slowdown
 
 ---
 
-# Epic Completion Definition
+# Story 5 — Success & Failure
 
-The epic is complete when:
+Replace both result scenes.
 
-* ✅ The quiz mechanic has been completely removed.
-* ✅ Players solve puzzles by driving rather than selecting answers.
-* ✅ The parking scene is the primary focus of the screen.
-* ✅ Steering controls are intuitive on mobile.
-* ✅ Collision and escape outcomes are clearly communicated through animation and feedback.
-* ✅ Existing backend systems (Redis, streaks, leaderboards, daily puzzle rotation, APIs) continue to function without architectural changes.
-* ✅ The experience feels like a lightweight mobile driving puzzle rather than a questionnaire, while remaining achievable within the existing Phaser 4.2.0 and Devvit Web constraints.
+Wrong:
+
+Drive into obstacle
+
+↓
+
+Immediate collision
+
+↓
+
+Overlay
+
+↓
+
+Tomorrow countdown
+
+↓
+
+Current streak
+
+Correct:
+
+Reach exit
+
+↓
+
+Drive through exit
+
+↓
+
+Confetti
+
+↓
+
+Score animation
+
+↓
+
+Streak animation
+
+---
+
+# Story 6 — Scoring & Daily Flow
+
+Fix:
+
+Wrong = 0
+
+Correct scoring
+
+Move bonus
+
+Speed bonus
+
+Timer bonus
+
+Leaderboard submission
+
+Already played flow
+
+---
+
+# Story 7 — Final Polish
+
+Implement—not suggest:
+
+## UI
+
+* icon-only controls
+* consistent spacing
+* 8px spacing system
+* rounded panels
+* soft shadows
+* improved typography hierarchy
+* subtle gradients
+* vignette
+* orange accent consistency
+
+## Gameplay
+
+* smoother steering interpolation
+* easing everywhere
+* particles
+* polished transitions
+* fade scene changes
+* timer pulse
+* button ripple
+* richer audio feedback
+
+## Accessibility
+
+* larger touch targets
+* improved contrast
+* safe margins for portrait
+* eliminate overlapping UI
+
+---
+
+## One important architectural rule I'd add
+
+From Story 3 onward, **PuzzleScene should stop growing**.
+
+It should become an orchestrator only:
+
+```
+PuzzleScene
+│
+├── PlayerCar
+├── DrivingControls
+├── ParkingGrid
+├── HUD
+├── EffectsManager
+└── PuzzleLoader
+```

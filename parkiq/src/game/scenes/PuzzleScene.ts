@@ -1,56 +1,94 @@
 import Phaser from 'phaser';
 import type { Puzzle } from '../puzzles/puzzle-types';
 import { createParkingGrid } from '../components/ParkingGrid';
-import { createCarSprite } from '../components/CarSprite';
 import { createObstacleCar } from '../components/ObstacleCar';
+import { DrivingControls } from '../components/DrivingControls';
+import type { DrivingInputState } from '../components/DrivingControls';
 import { getTodaysPuzzle } from '../../lib/puzzle-engine';
 import { puzzleComplete } from '../../lib/devvit-client';
 
-/** Grid unit constant from knowledge.md */
+// ──────────────────────────────────────────────────────────
+//  Layout Constants
+// ──────────────────────────────────────────────────────────/** Grid-unit constant from knowledge.md */
 const UNIT_PX = 48;
 
-/** Grid origin in scene coordinates (top-left of the 288×288 diagram card) */
-const GRID_X = 51;
-const GRID_Y = 120;
+/** Parking scene container scale */
+const CONTAINER_SCALE = 1.35;
+/** Container X: centers the scaled 288×288 grid in 390px width */
+const CONTAINER_X = 1;
+/** Container Y: snug below the HUD */
+const CONTAINER_Y = 52;
+/** Car offset within container: col + 1, row + 2 */
+const CONTAINER_OFFSET_X = 1;
+const CONTAINER_OFFSET_Y = 2;
 
-/**
- * Car centre formula (user-specified):
- *   pixel_x = GRID_X + (col * 48) + 48
- *   pixel_y = GRID_Y + (row * 48) + 96
- *
- * CarSprite internally does config.{x,y} * UNIT_PX, so we compute:
- *   config.x = (GRID_X + col*48 + 48) / UNIT_PX = col + GRID_X/48 + 1
- *   config.y = (GRID_Y + row*48 + 96) / UNIT_PX = row + GRID_Y/48 + 2
- */
-const GRID_OFFSET_X = GRID_X / UNIT_PX + 1;
-const GRID_OFFSET_Y = GRID_Y / UNIT_PX + 2;
+/** HUD */
+const HUD_Y = 16;
+const PARKIQ_FONT = '20px';
+const HUD_MUTED_FONT = '13px';
+const TIMER_FONT = '20px';
 
-/** Layout constants */
-const TOP_BAR_Y = 24;
-const PUZZLE_NUM_Y = 54;
-const GRID_WH = 288;
-const QUESTION_Y = 424;
-const TIMER_Y = 488;
-const BUTTON_START_Y = 536;
-const BUTTON_SPACING = 56;
+/** Objective text */
+const OBJECTIVE_Y = 458;
+
+/** Parking card behind the grid — edge-to-edge with subtle padding */
+const CARD_X = 0;
+const CARD_Y = CONTAINER_Y - 6;
+const CARD_W = 390;
+const CARD_H = 288 * CONTAINER_SCALE + 12;
+const CARD_RADIUS = 14;
+
+/** Driving controls */
+const CONTROLS_CENTER_X = 195;
+const CONTROLS_CENTER_Y = 590;
+
+/** Timer pulse scale during last 10 seconds */
+const TIMER_PULSE_SCALE = 1.15;
+const TIMER_PULSE_DURATION = 400;
+
+// ──────────────────────────────────────────────────────────
+//  Movement & Collision Constants
+// ──────────────────────────────────────────────────────────
+
+/** Forward/reverse speed in container-local px/s */
+const MOVE_SPEED = 120;
+/** Left/right rotation speed in degrees/s */
+const ROTATION_SPEED = 90;
+/** Visual scale for the player car image */
+const PLAYER_CAR_SCALE = 1.35 * 1.08;
+/** Base car sprite dimensions (SVG load size) */
+const CAR_W = 72;
+const CAR_H = 144;
+
+// ──────────────────────────────────────────────────────────
+//  Scene
+// ──────────────────────────────────────────────────────────
 
 export class PuzzleScene extends Phaser.Scene {
-  /** The active puzzle being rendered */
   private puzzle!: Puzzle;
-
-  /** Timer display text object */
   private timerText!: Phaser.GameObjects.Text;
-
-  /** Remaining seconds on the countdown */
   private secondsRemaining = 60;
-
-  /** Whether an answer has already been submitted (prevents double-taps) */
   private answered = false;
-
-  /** Timer event reference for cleanup */
   private timerEvent!: Phaser.Time.TimerEvent;
+  /** Whether we are currently in the last-10-seconds pulse state */
+  private isTimerPulsing = false;
 
-  /** WebAudio context — guaranteed by audio: { disableWebAudio: false } config */
+  /** Player car — plain Image inside the parking container (no physics) */
+  private playerCarImage!: Phaser.GameObjects.Image;
+  /** Logical car position/orientation in container-local space (pixels, degrees) */
+  private carX = 0;
+  private carY = 0;
+  private carAngle = 0;
+
+  /** Driving input pad */
+  private drivingControls!: DrivingControls;
+
+  // ── Debug instrumentation ──────────────────────────────
+  private frameCount = 0;
+  private debugText!: Phaser.GameObjects.Text;
+  private inputText!: Phaser.GameObjects.Text;
+  private playerCarStatusText!: Phaser.GameObjects.Text;
+
   private get webAudio(): Phaser.Sound.WebAudioSoundManager {
     return this.sound as Phaser.Sound.WebAudioSoundManager;
   }
@@ -69,53 +107,247 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Reset state for this play-through
     this.answered = false;
     this.secondsRemaining = 60;
+    this.isTimerPulsing = false;
 
-    // Receive puzzle from scene data or silently fall back to today's puzzle
     const data = this.scene.settings.data as { puzzle?: Puzzle } | undefined;
     this.puzzle = data?.puzzle ?? getTodaysPuzzle(new Date());
 
-    // One-time scene-wide listener to unlock audio on first tap anywhere
     this.input.once('pointerdown', () => {
       void this.webAudio.context.resume();
     });
 
-    this.renderTopBar();
-    this.renderParkingGrid();
-    this.renderQuestion();
-    this.renderTimer();
-    this.renderAnswerButtons();
+    // Construction order (per spec): background → HUD → objective → controls → grid → obstacles → PlayerCar → timer
+    // NOTE: Objective + controls are created BEFORE the Container because Phaser 4 WebGL
+    // does not render scene objects created after a Container. Depths are set correctly so
+    // they render on top visually despite being created earlier.
+    this.renderBackground();
+    this.renderParkingCard();
+    this.renderHUD();
+    this.renderObjective();
+    this.renderControls();
+
+    // Debug overlay (created before Container to avoid Phaser 4 WebGL render issue)
+    this.debugText = this.add
+      .text(4, 4, '', {
+        fontSize: '11px',
+        color: '#00FF00',
+        fontStyle: 'bold',
+        backgroundColor: '#000000aa',
+        padding: { x: 3, y: 2 },
+      })
+      .setOrigin(0, 0)
+      .setDepth(100);
+
+    this.inputText = this.add
+      .text(4, 44, '', {
+        fontSize: '11px',
+        color: '#FFFF00',
+        fontStyle: 'bold',
+        backgroundColor: '#000000aa',
+        padding: { x: 3, y: 2 },
+      })
+      .setOrigin(0, 0)
+      .setDepth(100);
+
+    this.playerCarStatusText = this.add
+      .text(4, 84, '', {
+        fontSize: '11px',
+        color: '#00FFFF',
+        fontStyle: 'bold',
+        backgroundColor: '#000000aa',
+        padding: { x: 3, y: 2 },
+      })
+      .setOrigin(0, 0)
+      .setDepth(100);
+
+    this.renderParkingScene();
+
+    // Clean up player car image when scene shuts down
+    this.events.once('shutdown', () => {
+      this.playerCarImage.destroy();
+    });
+
   }
 
   // ──────────────────────────────────────────────────────────
-  //  Top Bar
+  //  Background — subtle vertical gradient + vignette
   // ──────────────────────────────────────────────────────────
 
-  private renderTopBar(): void {
-    // "PARKIQ" — left-aligned
+  private renderBackground(): void {
+    const W = 390;
+    const H = 844;
+    const steps = 32;
+    const stepH = Math.ceil(H / steps);
+
+    const bg = this.add.graphics();
+    bg.setDepth(0);
+
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      /** Dark at top → slightly lighter at bottom */
+      const c = Math.floor(0x0f + (0x1a - 0x0f) * t);
+      const color = (c << 16) | (c << 8) | c;
+      bg.fillStyle(color, 1);
+      bg.fillRect(0, i * stepH, W, stepH);
+    }
+
+    // Vignette: semi-transparent black edges
+    const vig = this.add.graphics();
+    vig.setDepth(1);
+    vig.fillStyle(0x000000, 0.25);
+    vig.fillRect(0, 0, W, 18);           // top
+    vig.fillRect(0, H - 18, W, 18);      // bottom
+    vig.fillRect(0, 0, 10, H);           // left
+    vig.fillRect(W - 10, 0, 10, H);      // right
+  }
+
+  // ──────────────────────────────────────────────────────────
+  //  Parking Card — rounded card behind the grid
+  // ──────────────────────────────────────────────────────────
+
+  private renderParkingCard(): void {
+    const card = this.add.graphics();
+    card.setDepth(3);
+
+    // Drop shadow (offset down-right, blurred via lower alpha)
+    card.fillStyle(0x000000, 0.2);
+    card.fillRoundedRect(CARD_X + 3, CARD_Y + 4, CARD_W, CARD_H, CARD_RADIUS);
+
+    // Card body
+    card.fillStyle(0x1c1c1e, 1);
+    card.fillRoundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, CARD_RADIUS);
+
+    // Thin border with uiAccent at low opacity
+    card.lineStyle(1, 0xe8320a, 0.15);
+    card.strokeRoundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, CARD_RADIUS);
+  }
+
+  // ──────────────────────────────────────────────────────────
+  //  Parking Scene — Container with grid + obstacle cars + player car
+  //  ALL game objects are children of the same container so they share
+  //  a single coordinate space (container-local pixels).
+  // ──────────────────────────────────────────────────────────
+
+  private renderParkingScene(): void {
+    const pc = this.puzzle.playerCar;
+
+    // Store initial car state in container-local pixel coords
+    this.carX = (pc.x + CONTAINER_OFFSET_X) * UNIT_PX;
+    this.carY = (pc.y + CONTAINER_OFFSET_Y) * UNIT_PX;
+    this.carAngle = pc.angle;
+
+    const container = this.add.container(CONTAINER_X, CONTAINER_Y);
+    container.setScale(CONTAINER_SCALE);
+    container.setDepth(5);
+
+    // Grid (local position 0,0 within container)
+    const grid = createParkingGrid(this, {
+      x: 0,
+      y: 0,
+      width: 288,
+      height: 288,
+      environment: this.puzzle.environment,
+    });
+    container.add(grid);
+
+    // Obstacle cars (skip pillars/walls — rendered by ParkingGrid)
+    for (const obs of this.puzzle.obstacles) {
+      if (obs.type === 'pillar' || obs.type === 'wall') continue;
+      const obsImg = createObstacleCar(
+        this,
+        obs.x + CONTAINER_OFFSET_X,
+        obs.y + CONTAINER_OFFSET_Y,
+        obs.angle,
+      );
+      obsImg.setDepth(1);
+      container.add(obsImg);
+    }
+
+    // Player car — plain Image added as a child of the SAME container.
+    // Position in container-local pixel coordinates (same space as obstacles).
+    const carImg = this.add.image(this.carX, this.carY, 'car');
+    carImg.setTint(0xe8320a).setTintMode(Phaser.TintModes.FILL);
+    carImg.setAngle(this.carAngle);
+    carImg.setOrigin(0.5, 0.5);
+    carImg.setScale(PLAYER_CAR_SCALE);
+    carImg.setDepth(50);
+    container.add(carImg);
+    this.playerCarImage = carImg;
+
+    console.log('PLAYER_CAR_SPAWN', {
+      puzzleId: this.puzzle.id,
+      containerLocalX: this.carX,
+      containerLocalY: this.carY,
+      angle: this.carAngle,
+      containerParent: container,
+    });
+  }
+
+
+
+  // ──────────────────────────────────────────────────────────
+  //  Objective Text
+  // ──────────────────────────────────────────────────────────
+
+  private renderObjective(): void {
     this.add
-      .text(20, TOP_BAR_Y, 'PARKIQ', {
-        fontSize: '20px',
+      .text(195, OBJECTIVE_Y, 'Drive out without hitting another car.', {
+        fontSize: '14px',
         color: '#FFFFFF',
+        fontStyle: 'bold',
+        align: 'center',
+        wordWrap: { width: 320 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(10);
+  }
+
+  // ──────────────────────────────────────────────────────────
+  //  HUD — PARKIQ (orange), Puzzle #, Timer, Leaderboard
+  // ──────────────────────────────────────────────────────────
+
+  private renderHUD(): void {
+    // "PARKIQ" — bold orange, left-aligned
+    this.add
+      .text(20, HUD_Y, 'PARKIQ', {
+        fontSize: PARKIQ_FONT,
+        color: '#E8320A',
         fontStyle: 'bold',
       })
       .setDepth(10);
 
-    // "PUZZLE #N" — centered
+    // "PUZZLE #N" — muted grey, centered
     this.add
-      .text(195, PUZZLE_NUM_Y, `PUZZLE #${this.puzzle.id}`, {
-        fontSize: '14px',
+      .text(195, HUD_Y + 2, `PUZZLE #${this.puzzle.id}`, {
+        fontSize: HUD_MUTED_FONT,
         color: '#6B7280',
       })
       .setOrigin(0.5, 0)
       .setDepth(10);
 
-    // "🏆" — leaderboard icon, right-aligned
+    // Timer — right-aligned, white (turns orange in last 10s)
+    this.timerText = this.add
+      .text(370, HUD_Y, this.formatTime(this.secondsRemaining), {
+        fontSize: TIMER_FONT,
+        color: '#FFFFFF',
+        fontStyle: 'bold',
+      })
+      .setOrigin(1, 0)
+      .setDepth(10);
+
+    this.timerEvent = this.time.addEvent({
+      delay: 1000,
+      callback: this.onTimerTick,
+      callbackScope: this,
+      loop: true,
+    });
+
+    // Leaderboard trophy icon (below timer)
     const trophy = this.add
-      .text(370, TOP_BAR_Y, '🏆', {
-        fontSize: '20px',
+      .text(370, HUD_Y + 22, '🏆', {
+        fontSize: '14px',
       })
       .setOrigin(1, 0)
       .setInteractive({ useHandCursor: true })
@@ -126,115 +358,191 @@ export class PuzzleScene extends Phaser.Scene {
     });
 
     trophy.on('pointerover', () => {
-      trophy.setStyle({ fontSize: '22px' });
+      trophy.setStyle({ fontSize: '16px' });
     });
 
     trophy.on('pointerout', () => {
-      trophy.setStyle({ fontSize: '20px' });
+      trophy.setStyle({ fontSize: '14px' });
     });
   }
 
   // ──────────────────────────────────────────────────────────
-  //  Parking Diagram (Grid + Car Sprites)
+  //  Driving Controls
   // ──────────────────────────────────────────────────────────
 
-  private renderParkingGrid(): void {
-    // Create the background grid card
-    createParkingGrid(this, {
-      x: GRID_X,
-      y: GRID_Y,
-      width: GRID_WH,
-      height: GRID_WH,
-      environment: this.puzzle.environment,
-    });
+  private renderControls(): void {
+    this.drivingControls = new DrivingControls(
+      this,
+      CONTROLS_CENTER_X,
+      CONTROLS_CENTER_Y,
+      'crunch',
+    );
+  }
 
-    // Place the player car
-    const pc = this.puzzle.playerCar;
-    const playerCar = createCarSprite(this, {
-      x: pc.x + GRID_OFFSET_X,
-      y: pc.y + GRID_OFFSET_Y,
-      angle: pc.angle,
-      type: 'player',
-    });
-    playerCar.setDepth(1);
+  // ──────────────────────────────────────────────────────────
+  //  Update — deterministic image-based movement (no physics)
+  // ──────────────────────────────────────────────────────────
 
-    // Place obstacle cars (sedan, suv, pillar, wall)
-    for (const obs of this.puzzle.obstacles) {
-      if (obs.type === 'pillar' || obs.type === 'wall') {
-        // Pillars and walls are structural — rendered by ParkingGrid.
-        // Skip them here to avoid double-rendering.
-        continue;
-      }
-      const car = createObstacleCar(this, obs.x + GRID_OFFSET_X, obs.y + GRID_OFFSET_Y, obs.angle);
-      car.setDepth(1);
+  override update(_time: number, delta: number): void {
+    if (this.answered) return;
+
+    const input: DrivingInputState = this.drivingControls.getState();
+    const dt = delta / 1000; // seconds
+
+    // ── 1. Rotation (LEFT / RIGHT) ────────────────────────
+    if (input.left) {
+      this.carAngle -= ROTATION_SPEED * dt;
     }
+    if (input.right) {
+      this.carAngle += ROTATION_SPEED * dt;
+    }
+
+    // ── 2. Compute candidate movement (FORWARD / REVERSE) ──
+    let moveDir = 0; // -1 = reverse, 0 = none, +1 = forward
+    if (input.forward) moveDir = 1;
+    else if (input.reverse) moveDir = -1;
+
+    let candidateX = this.carX;
+    let candidateY = this.carY;
+
+    if (moveDir !== 0) {
+      const rad = Phaser.Math.DegToRad(this.carAngle);
+      const step = MOVE_SPEED * dt * moveDir;
+      candidateX += Math.sin(rad) * step;
+      candidateY += -Math.cos(rad) * step;
+    }
+
+    // ── 3. Obstacle collision — reject candidate if overlapping any obstacle ──
+    const canMove = !this.checkCollision(candidateX, candidateY);
+
+    if (canMove) {
+      this.carX = candidateX;
+      this.carY = candidateY;
+    }
+
+    // ── 4. Apply to image ─────────────────────────────────
+    this.playerCarImage.setPosition(this.carX, this.carY);
+    this.playerCarImage.setAngle(this.carAngle);
+
+    // ── 5. Exit zone check ────────────────────────────────
+    if (this.checkExitReached(this.carX, this.carY)) {
+      console.log('EXIT_REACHED');
+    }
+
+    // ── 6. Debug overlay ──────────────────────────────────
+    this.debugText.setText(
+      `Car: (${this.carX.toFixed(0)}, ${this.carY.toFixed(0)}) angle=${this.carAngle.toFixed(0)}`
+    );
+    this.inputText.setText(
+      `FWD:${input.forward} LEFT:${input.left} RIGHT:${input.right} REV:${input.reverse}`
+    );
+    this.playerCarStatusText.setText(
+      `moveDir=${moveDir} canMove=${canMove} obstacles=${this.puzzle.obstacles.filter(o => o.type !== 'pillar' && o.type !== 'wall').length}`
+    );
   }
 
   // ──────────────────────────────────────────────────────────
-  //  Question Text
+  //  Collision Detection (container-local coordinates)
+  //  All geometry is in the same coordinate space as grid/obstacles
+  //  — no world-to-local conversion needed.
   // ──────────────────────────────────────────────────────────
 
-  private renderQuestion(): void {
-    this.add
-      .text(195, QUESTION_Y, this.puzzle.question, {
-        fontSize: '16px',
-        color: '#FFFFFF',
-        fontStyle: 'bold',
-        wordWrap: { width: 300 },
-        align: 'center',
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(10);
+  /** Check if a rectangle at (cx, cy) overlaps any obstacle car. */
+  private checkCollision(cx: number, cy: number): boolean {
+    // Player car rect (centered at origin 0.5, 0.5)
+    const playerRect = new Phaser.Geom.Rectangle(
+      cx - CAR_W / 2,
+      cy - CAR_H / 2,
+      CAR_W,
+      CAR_H,
+    );
+
+    for (const obs of this.puzzle.obstacles) {
+      if (obs.type === 'pillar' || obs.type === 'wall') continue;
+      // Obstacle car position in container-local coords
+      const ox = (obs.x + CONTAINER_OFFSET_X) * UNIT_PX;
+      const oy = (obs.y + CONTAINER_OFFSET_Y) * UNIT_PX;
+      const obsRect = new Phaser.Geom.Rectangle(
+        ox - CAR_W / 2,
+        oy - CAR_H / 2,
+        CAR_W,
+        CAR_H,
+      );
+      if (Phaser.Geom.Rectangle.Overlaps(playerRect, obsRect)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if the car has reached the exit zone.
+   * The exit is defined as the bottom-right quadrant of the parking grid.
+   */
+  private checkExitReached(cx: number, cy: number): boolean {
+    // Exit zone: bottom-right area of the 288×288 grid (local coords)
+    const EXIT_X = 192;
+    const EXIT_Y = 192;
+    const EXIT_W = 96;
+    const EXIT_H = 96;
+
+    const carRect = new Phaser.Geom.Rectangle(
+      cx - CAR_W / 2,
+      cy - CAR_H / 2,
+      CAR_W,
+      CAR_H,
+    );
+    const exitRect = new Phaser.Geom.Rectangle(EXIT_X, EXIT_Y, EXIT_W, EXIT_H);
+
+    return Phaser.Geom.Rectangle.Overlaps(carRect, exitRect);
   }
 
   // ──────────────────────────────────────────────────────────
   //  Timer
   // ──────────────────────────────────────────────────────────
 
-  private renderTimer(): void {
-    this.timerText = this.add
-      .text(195, TIMER_Y, this.formatTime(this.secondsRemaining), {
-        fontSize: '24px',
-        color: '#FFFFFF',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(10);
-
-    // Tick every second
-    this.timerEvent = this.time.addEvent({
-      delay: 1000,
-      callback: this.onTimerTick,
-      callbackScope: this,
-      loop: true,
-    });
-  }
-
   private onTimerTick(): void {
     if (this.answered) return;
 
-    // Check BEFORE decrementing: play tick only if context is already unlocked
-    if (this.secondsRemaining <= 10 && this.webAudio.context.state === 'running') {
+    if (this.secondsRemaining <= 10) {
       this.timerText.setColor('#E8320A');
-      try {
-        this.sound.play('tick');
-      } catch {
-        // Audio context may still be locked — silently skip
+
+      // Start pulsing when we first enter the last-10-seconds zone
+      if (!this.isTimerPulsing) {
+        this.isTimerPulsing = true;
+        this.tweens.add({
+          targets: this.timerText,
+          scale: TIMER_PULSE_SCALE,
+          duration: TIMER_PULSE_DURATION,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+
+      // Tick sound
+      if (this.webAudio.context.state === 'running') {
+        try {
+          this.sound.play('tick');
+        } catch {
+          // silently skip
+        }
       }
     }
 
     this.secondsRemaining -= 1;
 
     if (this.secondsRemaining <= 0) {
-      // Timer expired — treat as wrong answer
       this.secondsRemaining = 0;
       this.timerText.setText('0:00');
-      // Play crunch at expiry moment only if context is already unlocked
+      // Stop pulse tween
+      this.tweens.killTweensOf(this.timerText);
+      this.timerText.setScale(1);
       if (this.webAudio.context.state === 'running') {
         try {
           this.sound.play('crunch');
         } catch {
-          // Audio context may still be locked — silently skip
+          // silently skip
         }
       }
       this.handleAnswer('E');
@@ -250,86 +558,33 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // ──────────────────────────────────────────────────────────
-  //  Answer Buttons (plain interactive text — NO containers)
-  // ──────────────────────────────────────────────────────────
-
-  private renderAnswerButtons(): void {
-    const letters = ['A', 'B', 'C', 'D'] as const;
-    const options = this.puzzle.options;
-
-    for (let i = 0; i < letters.length; i++) {
-      const letter = letters[i]!;
-      const optionText = options[letter];
-      const y = BUTTON_START_Y + i * BUTTON_SPACING;
-
-      const label = `${letter}: ${optionText}`;
-
-      const btn = this.add
-        .text(195, y, label, {
-          fontSize: '15px',
-          color: '#FFFFFF',
-          backgroundColor: '#2A2A2A',
-          padding: { x: 20, y: 15 },
-          wordWrap: { width: 280 },
-        })
-        .setOrigin(0.5, 0)
-        .setInteractive({ useHandCursor: true })
-        .setDepth(10);
-
-      btn.on('pointerdown', () => {
-        if (this.answered) return;
-        this.webAudio.context.resume().then(() => {
-          // audio context is now unlocked
-        }).catch(() => {
-          // ignore if already unlocked
-        });
-        this.handleAnswer(letter);
-      });
-
-      // Hover effect
-      btn.on('pointerover', () => {
-        if (!this.answered) {
-          btn.setStyle({ backgroundColor: '#3A3A3A' });
-        }
-      });
-
-      btn.on('pointerout', () => {
-        btn.setStyle({ backgroundColor: '#2A2A2A' });
-      });
-    }
-  }
-
-  // ──────────────────────────────────────────────────────────
-  //  Answer Handling
+  //  Answer Handling (preserved for timer expiry)
   // ──────────────────────────────────────────────────────────
 
   private handleAnswer(answer: string): void {
     if (this.answered) return;
     this.answered = true;
 
-    // Stop the timer
     this.timerEvent.destroy();
 
-    // Calculate time taken (60 - remaining = actual seconds used)
+    // Scene transitions immediately — no need to stop physics here
+
     const timeTaken = 60 - this.secondsRemaining;
-
-    // Determine if the answer is correct
     const isCorrect = answer === this.puzzle.correctAnswer;
-
-    // Send puzzle-complete to server with shareBlocks from puzzle data
     const shareBlocks = this.puzzle.shareBlocks ?? [];
+
     void puzzleComplete({
       timeTaken,
       wasCorrect: isCorrect,
       shareBlocks,
       puzzleId: this.puzzle.id,
-    }).then((result) => {
-      console.log('[handleAnswer] puzzleComplete result:', result);
-      // Result (streak, score) can be used by CorrectScene if needed
-    }).catch((error) => {
-      console.error('[handleAnswer] puzzleComplete failed:', error);
-      // Game continues even if API fails (fallback to defaults)
-    });
+    })
+      .then((result) => {
+        console.log('[handleAnswer] puzzleComplete result:', result);
+      })
+      .catch((error) => {
+        console.error('[handleAnswer] puzzleComplete failed:', error);
+      });
 
     if (isCorrect) {
       void this.scene.start('CorrectScene', {
@@ -342,9 +597,5 @@ export class PuzzleScene extends Phaser.Scene {
         puzzle: this.puzzle,
       });
     }
-  }
-
-  override update(): void {
-    // No per-frame logic needed
   }
 }
