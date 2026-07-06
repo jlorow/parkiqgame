@@ -92,11 +92,6 @@ export class PuzzleScene extends Phaser.Scene {
   /** Driving input pad */
   private drivingControls!: DrivingControls;
 
-  // ── Debug instrumentation ──────────────────────────────
-  private debugText!: Phaser.GameObjects.Text;
-  private inputText!: Phaser.GameObjects.Text;
-  private playerCarStatusText!: Phaser.GameObjects.Text;
-
   private get webAudio(): Phaser.Sound.WebAudioSoundManager {
     return this.sound as Phaser.Sound.WebAudioSoundManager;
   }
@@ -138,40 +133,6 @@ export class PuzzleScene extends Phaser.Scene {
     this.renderHUD();
     this.renderObjective();
     this.renderControls();
-
-    // Debug overlay (created before Container to avoid Phaser 4 WebGL render issue)
-    this.debugText = this.add
-      .text(4, 4, '', {
-        fontSize: '11px',
-        color: '#00FF00',
-        fontStyle: 'bold',
-        backgroundColor: '#000000aa',
-        padding: { x: 3, y: 2 },
-      })
-      .setOrigin(0, 0)
-      .setDepth(100);
-
-    this.inputText = this.add
-      .text(4, 44, '', {
-        fontSize: '11px',
-        color: '#FFFF00',
-        fontStyle: 'bold',
-        backgroundColor: '#000000aa',
-        padding: { x: 3, y: 2 },
-      })
-      .setOrigin(0, 0)
-      .setDepth(100);
-
-    this.playerCarStatusText = this.add
-      .text(4, 84, '', {
-        fontSize: '11px',
-        color: '#00FFFF',
-        fontStyle: 'bold',
-        backgroundColor: '#000000aa',
-        padding: { x: 3, y: 2 },
-      })
-      .setOrigin(0, 0)
-      .setDepth(100);
 
     this.renderParkingScene();
 
@@ -289,14 +250,6 @@ export class PuzzleScene extends Phaser.Scene {
     carImg.setDepth(50);
     container.add(carImg);
     this.playerCarImage = carImg;
-
-    console.log('PLAYER_CAR_SPAWN', {
-      puzzleId: this.puzzle.id,
-      containerLocalX: this.carX,
-      containerLocalY: this.carY,
-      angle: this.carAngle,
-      containerParent: container,
-    });
   }
 
 
@@ -456,28 +409,14 @@ export class PuzzleScene extends Phaser.Scene {
         wasCorrect: true,
         shareBlocks: this.puzzle.shareBlocks ?? [],
         puzzleId: this.puzzle.id,
-      })
-        .then((result) => {
-          console.log('[exit] puzzleComplete result:', result);
-        })
-        .catch((error) => {
-          console.error('[exit] puzzleComplete failed:', error);
-        });
+      }).catch((error) => {
+        console.error('[exit] puzzleComplete failed:', error);
+      });
 
       this.timerEvent.destroy();
       void this.scene.start('AlreadyPlayedScene');
     }
 
-    // ── 6. Debug overlay ──────────────────────────────────
-    this.debugText.setText(
-      `Car: (${this.carX.toFixed(0)}, ${this.carY.toFixed(0)}) angle=${this.carAngle.toFixed(0)}`
-    );
-    this.inputText.setText(
-      `FWD:${input.forward} LEFT:${input.left} RIGHT:${input.right} REV:${input.reverse}`
-    );
-    this.playerCarStatusText.setText(
-      `moveDir=${moveDir} canMove=${canMove} obstacles=${this.puzzle.obstacles.filter(o => o.type !== 'pillar' && o.type !== 'wall').length}`
-    );
   }
 
   // ──────────────────────────────────────────────────────────

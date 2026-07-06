@@ -19,6 +19,8 @@ export type PuzzleCompletePayload = {
 export type PuzzleCompleteResponse = {
   streak: number;
   score: number;
+  /** The next puzzle the player should see (1–15, wraps). Added in Story 9-1. */
+  puzzleIndex?: number;
 };
 
 export type LeaderboardEntry = {
@@ -33,6 +35,19 @@ export type LeaderboardData = {
 
 export type ResultTodayResponse = {
   shareBlocks: string[] | null;
+};
+
+// ──────────────────────────────────────────────────────────
+//  Progress Types (Story 9-1)
+// ──────────────────────────────────────────────────────────
+
+/**
+ * Response from GET /api/progress.
+ * puzzleIndex defaults to 1 for new players; wraps from 15 → 1.
+ */
+export type ProgressResponse = {
+  userId: string;
+  puzzleIndex: number;
 };
 
 // ──────────────────────────────────────────────────────────

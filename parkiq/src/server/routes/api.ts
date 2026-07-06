@@ -8,6 +8,7 @@ import type {
   PuzzleCompleteResponse,
   LeaderboardData,
   ResultTodayResponse,
+  ProgressResponse,
 } from '../../shared/api';
 
 type ErrorResponse = {
@@ -18,8 +19,74 @@ type ErrorResponse = {
 export const api = new Hono();
 
 // ──────────────────────────────────────────────────────────
-//  GET /api/init (legacy counter endpoint)
+//  Puzzle Index Helpers (Story 9-1)
 // ──────────────────────────────────────────────────────────
+
+const MAX_PUZZLE_ID = 15;
+
+/**
+ * Read the current puzzleIndex for a user.
+ * Defaults to 1 if no key exists (new player).
+ */
+async function getPuzzleIndex(userId: string): Promise<number> {
+  try {
+    const raw = await redis.get(`puzzleIndex:${userId}`);
+    return raw ? parseInt(raw, 10) : 1;
+  } catch (error) {
+    console.error(`Failed to read puzzleIndex for ${userId}:`, error);
+    return 1;
+  }
+}
+
+/**
+ * Write a puzzleIndex value for a user.
+ */
+async function setPuzzleIndex(userId: string, index: number): Promise<void> {
+  try {
+    await redis.set(`puzzleIndex:${userId}`, index.toString());
+    console.log(`[redis] puzzleIndex:${userId} = ${index}`);
+  } catch (error) {
+    console.error(`Failed to write puzzleIndex for ${userId}:`, error);
+  }
+}
+
+/**
+ * Compute the next puzzle index after completing puzzleId.
+ * Wraps to 1 if puzzleId === MAX_PUZZLE_ID (15).
+ */
+function nextPuzzleIndex(puzzleId: number): number {
+  return puzzleId >= MAX_PUZZLE_ID ? 1 : puzzleId + 1;
+}
+
+function resolveUserId(userId: string | undefined | null): string {
+  return userId ?? 'anonymous';
+}
+
+// ──────────────────────────────────────────────────────────
+//  GET /api/progress (Story 9-1)
+//  Returns the user's current puzzleIndex (default 1 for new players).
+// ──────────────────────────────────────────────────────────
+
+api.get('/progress', async (c) => {
+  try {
+    const user = await reddit.getCurrentUser();
+    const userId = resolveUserId(user?.id);
+
+    const puzzleIndex = await getPuzzleIndex(userId);
+
+    console.log(
+      `[progress] userId=${userId}, puzzleIndex=${puzzleIndex}`
+    );
+
+    return c.json<ProgressResponse>({ userId, puzzleIndex });
+  } catch (error) {
+    console.error('API progress Error:', error);
+    return c.json<ProgressResponse>(
+      { userId: 'anonymous', puzzleIndex: 1 },
+      200
+    );
+  }
+});
 
 api.get('/init', async (c) => {
   const { postId } = context;
@@ -196,17 +263,7 @@ api.post('/puzzle-complete', async (c) => {
     }
 
     const user = await reddit.getCurrentUser();
-    const userId = user?.id;
-
-    if (!userId) {
-      return c.json<ErrorResponse>(
-        {
-          status: 'error',
-          message: 'userId not found',
-        },
-        401
-      );
-    }
+    const userId = resolveUserId(user?.id);
 
     // Calculate score: 100 base + 50 if timeTaken < 10 + 25 if wasCorrect on first attempt
     let score = 100;
@@ -306,9 +363,15 @@ api.post('/puzzle-complete', async (c) => {
       console.error(`Failed to write result for ${userId}:`, error);
     }
 
+    // ── Story 9-1: puzzleIndex progression ─────────────────
+    // Compute and persist the next puzzle index (wrap to 1 at 15).
+    const nextIndex = nextPuzzleIndex(puzzleId);
+    await setPuzzleIndex(userId, nextIndex);
+
     const response: PuzzleCompleteResponse = {
       streak,
       score,
+      puzzleIndex: nextIndex,
     };
 
     console.log(`[puzzle-complete] response: ${JSON.stringify(response)}`);

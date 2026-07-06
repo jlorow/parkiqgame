@@ -175,7 +175,6 @@ export class DrivingControls {
     // ── Events ─────────────────────────────────────────
 
     gfx.on('pointerdown', () => {
-      console.log('BUG3_POINTERDOWN_FIRED', { id: def.id, btnX, btnY });
       this.state[def.id] = true;
 
       // Scale down
@@ -204,9 +203,6 @@ export class DrivingControls {
     const handleUp = () => {
       if (!this.state[def.id]) return;
       this.state[def.id] = false;
-
-      // HYPOTHESIS A: log specifically when forward button is released
-      if (def.id === 'forward') console.log('FORWARD_RELEASED');
 
       // Animate back
       this.scene.tweens.killTweensOf([gfx, text]);
