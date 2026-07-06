@@ -14,24 +14,24 @@ import { puzzleComplete, getProgress } from '../../lib/devvit-client';
 const UNIT_PX = 48;
 const CONTAINER_SCALE = 1.35;
 const CONTAINER_X = 1;
-const CONTAINER_Y = 52;
+const CONTAINER_Y = 30;
 const CONTAINER_OFFSET_X = 1;
 const CONTAINER_OFFSET_Y = 2;
 
-const HUD_Y = 16;
+const HUD_Y = 8;
 const PARKIQ_FONT = '20px';
 const HUD_MUTED_FONT = '13px';
 
-const OBJECTIVE_Y = 458;
+const OBJECTIVE_Y = 430;
 
 const CARD_X = 0;
 const CARD_Y = CONTAINER_Y - 6;
 const CARD_W = 390;
-const CARD_H = 288 * CONTAINER_SCALE + 12;
+const CARD_H = 760;
 const CARD_RADIUS = 14;
 
 const CONTROLS_CENTER_X = 195;
-const CONTROLS_CENTER_Y = 590;
+const CONTROLS_CENTER_Y = CARD_Y + CARD_H - 128;
 
 // ──────────────────────────────────────────────────────────
 //  Movement & Collision Constants
@@ -283,11 +283,6 @@ export class PuzzleScene extends Phaser.Scene {
       exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY + 8);
       exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY - 8);
       exitGfx.lineTo(exitZoneCenterX + 18, exitZoneCenterY + 8);
-      // Perspective lines suggesting road continues beyond
-      exitGfx.moveTo(exitPixelX + 12, exitPixelY + 96);
-      exitGfx.lineTo(exitPixelX + 4, exitPixelY);
-      exitGfx.moveTo(exitPixelX + 84, exitPixelY + 96);
-      exitGfx.lineTo(exitPixelX + 92, exitPixelY);
     } else if (ez.direction === 'bottom') {
       exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY - 8);
       exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY + 8);
@@ -312,33 +307,6 @@ export class PuzzleScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
-
-    // ── Exit zone — environment connection (road continues beyond) ─
-    const envConn = this.add.graphics();
-    envConn.setDepth(4);
-    container.add(envConn);
-    const ezDir = ez.direction;
-    envConn.lineStyle(2, 0x22c55e, 0.2);
-    envConn.beginPath();
-    if (ezDir === 'top') {
-      // Perspective road lines converging upward from exit zone
-      envConn.moveTo(exitZoneCenterX - 18, exitPixelY + 96);
-      envConn.lineTo(exitZoneCenterX - 8, -8);
-      envConn.moveTo(exitZoneCenterX + 18, exitPixelY + 96);
-      envConn.lineTo(exitZoneCenterX + 8, -8);
-      // Light gateway posts
-      envConn.lineStyle(1, 0x22c55e, 0.15);
-      envConn.moveTo(exitZoneCenterX - 40, exitPixelY + 96);
-      envConn.lineTo(exitZoneCenterX - 40, -8);
-      envConn.moveTo(exitZoneCenterX + 40, exitPixelY + 96);
-      envConn.lineTo(exitZoneCenterX + 40, -8);
-    } else if (ezDir === 'right') {
-      envConn.moveTo(exitPixelX, exitZoneCenterY - 18);
-      envConn.lineTo(exitPixelX + 96 + 40, exitZoneCenterY - 8);
-      envConn.moveTo(exitPixelX, exitZoneCenterY + 18);
-      envConn.lineTo(exitPixelX + 96 + 40, exitZoneCenterY + 8);
-    }
-    envConn.strokePath();
 
     // ── Themed foreground elements framing the grid ────────────
     const foreGfx = this.add.graphics();

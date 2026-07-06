@@ -70,8 +70,9 @@ EPIC 1: Game Renderer          ← built, working
 EPIC 6: Devvit Integration     ← Story 1 done; Story 2 simplified (see below)
 EPIC 2: Puzzle Engine          ← rework in progress (index-based, not date-based)
 EPIC 7: Drive Mechanic         ← built, working (movement/collision/exit detection)
-EPIC 9: Linear Progression     ← CURRENT FOCUS — replaces Epic 4 entirely
-EPIC 8: Pixel Art Visual Style ← queued, independent of Epic 9
+EPIC 9: Linear Progression     ← done — replaced Epic 4 entirely
+EPIC 8: Pixel Art Visual Style ← Story 8-1 done, rest deferred into Epic 10
+EPIC 10: Visual Foundation & Rendering Architecture ← CURRENT FOCUS
 ```
 
 *(Epic 3 "Feedback System" and Epic 5 "Share Card" were already fully superseded — see "What Is Scrapped." Epic 4 "Streak + Retention" is now fully removed, replaced by Epic 9.)*
@@ -84,6 +85,30 @@ EPIC 8: Pixel Art Visual Style ← queued, independent of Epic 9
 | 9-3 | Scene flow rewire — remove timer, remove AlreadyPlayedScene routing, wire win → immediate next-puzzle load in PuzzleScene |
 | 9-4 | Completion celebration — brief "You cleared all puzzles!" screen after puzzle 15, then loop to puzzle 1 |
 | 9-5 | Delete LeaderboardScene and all leaderboard UI/entry points (e.g. any HUD icon linking to it) |
+
+### Epic 10 — Visual Foundation & Rendering Architecture
+**Goal:** Bring ParkIQ's gameplay presentation in line with the approved visual mockups by restructuring rendering architecture, layout, and UI, while preserving all gameplay mechanics and puzzle geometry.
+
+**Non-Goals (do NOT touch under this epic):** gameplay logic, puzzle JSON, collision hitbox sizes, UNIT_PX, or any verified puzzle-data.ts geometry; driving mechanics (movement formulas, rotation speed, etc.)
+
+**Confirmed findings from the architecture audit already run (do not re-audit from scratch — build on these):**
+1. **Real gameplay bug**: `checkCollision()` only tests obstacle rectangles — there is NO boundary/edge check against the grid or playfield. The player car can currently be driven straight out of the parking lot into the HUD/controls. Fix under Story 10.3.
+2. Street theme draws trees twice (once in `ParkingGrid.ts`, once in `PuzzleScene.ts`'s `foreGfx`) — duplicate, uncoordinated, cosmetic-only.
+3. Playfield occupies only ~46% of the vertical screen; ~21% is confirmed unused empty space below the controls.
+4. Theme visuals are split across three uncoordinated locations (`renderThemeEnvironment` full-screen backdrop, `foreGfx` in `renderParkingScene`, `drawThemeDecorations` in `ParkingGrid.ts`) with no shared palette constants.
+5. `DrivingControls` is not a Phaser Container — drawn at absolute scene coordinates, can't be repositioned/scaled as a unit.
+6. Known layout metrics (reference, don't re-derive): canvas 390×844; container origin (1,52) scaled 1.35×; grid 288×288 unscaled (388.8×388.8 on screen); card ~y46–447; controls centered at (195,590); ~176px unused below controls.
+7. **Zoom ceiling is mathematically capped, confirmed during Story 10.1**: the grid already renders at 388.8-389.8px on a 390px-wide canvas (0.05-1% margin). Any zoom beyond ~1% clips real gameplay content (obstacles/road surface in the rightmost column) — confirmed via exact pixel math, not assumption. The "feels zoomed out / less tense" complaint from visual review CANNOT be solved by scaling the grid further, regardless of implementation technique (container scale, camera zoom, or otherwise) — the constraint is the fixed 390px canvas width, not the scaling method. Story 10.4/10.5 must solve this through environment density (surrounding decoration, tighter visual spacing illusions, thinner lines) rather than raw scale.
+
+| Story | Goal | Deliverables |
+|---|---|---|
+| 10.1 | Visual Layout Architecture | New playfield proportions (target playfield ≥70% of vertical screen), HUD sizing, control positioning, card sizing, spacing, eliminate unused dead space. No art/texture changes yet. |
+| 10.2 | Rendering Pipeline | Merge the three uncoordinated theme-drawing locations into one single environment renderer, one draw order, one owner per visual element. |
+| 10.3 | Movement Bounds | Add real boundary clamping so the player car can never leave the playfield — fixes the confirmed bug above. Visible playfield boundary must exactly match the gameplay boundary. |
+| 10.4 | Environment Rendering | Replace the flat parking-lot-as-entire-scene approach with believable themed locations where the parking area sits inside a larger environment, not the other way around. |
+| 10.5 | Visual Polish | Shadows, lighting, props, exit styling, final theme detail pass. |
+
+Sequence strictly in this order (Sequencing Rule applies per-story within this epic too).
 
 ### Epic 2 — Puzzle Engine (revised)
 | Story | Summary |
@@ -317,104 +342,7 @@ Puzzles 11–15 (reverse_bay, rooftop):       7+ moves, player angle 180° (must
 1 (bottom): ParkingGrid background · 2: Exit zone (green, pulsing) · 3: Obstacle cars
 4: Pillar/wall rectangles · 5: Player car · 6 (top): HUD (puzzle name, controls — no timer)
 ```
------------------
-New Knowledge Section
-Visual Architecture Principles
 
-The approved mockups are the source of truth for the game's visual architecture.
-
-When implementing visuals, optimize for matching the approved game feel rather than preserving the current renderer structure.
-
-Priority order:
-
-Gameplay correctness
-Layout
-Visual hierarchy
-Theme richness
-Decorative polish
-
-The renderer should never sacrifice gameplay accuracy, but gameplay correctness alone is not considered sufficient completion if the approved visual direction is not met.
-
-Single Rendering Pipeline
-
-Theme rendering must come from a single coordinated pipeline.
-
-Avoid splitting environment rendering across multiple independent systems.
-
-Preferred order:
-
-Theme Base
-↓
-
-Ground Surface
-
-↓
-
-Parking Surface
-
-↓
-
-Parking Bays
-
-↓
-
-Curbs / Sidewalks
-
-↓
-
-Theme Props
-
-↓
-
-Exit
-
-↓
-
-Vehicles
-
-↓
-
-Effects
-
-↓
-
-HUD
-
-↓
-
-Controls
-
-Every visual element should have one owner.
-
-Layout Principles
-
-The parking lot is the primary gameplay surface.
-
-The playfield should visually dominate the screen.
-
-Controls belong to the gameplay card, not as isolated floating widgets.
-
-Avoid unused vertical space.
-
-Theme Philosophy
-
-Themes should feel like different locations.
-
-Changing only colors is insufficient.
-
-Each theme should communicate place through:
-
-surface
-props
-surrounding environment
-lighting
-edge treatment
-exit styling
-Gameplay Boundary Rule
-
-Players must never be able to drive outside the playable parking lot.
-
-Visible playfield boundaries and gameplay boundaries must always match.
 ---
 
 ## PlayerCar Movement Spec (authoritative — unchanged, already working)
@@ -489,6 +417,20 @@ Before writing any code, run: `git checkout -b feature/<name>` — adjust `<name
 ## Sequencing Rule
 Implement and verify one story at a time. Do not start the next until the current one's Definition of Done is explicitly confirmed.
 
+## Visual Architecture Principles (Epic 10)
+The approved mockups are the source of truth for visual architecture. When implementing visuals, optimize for matching the approved game feel rather than preserving the current renderer structure. Priority order: (1) gameplay correctness, (2) layout, (3) visual hierarchy, (4) theme richness, (5) decorative polish. Gameplay correctness must never be sacrificed, but it alone is not sufficient completion if the approved visual direction isn't met.
+
+**Single rendering pipeline**: theme rendering must come from one coordinated pipeline, not split across multiple independent systems. Preferred draw order: Theme Base → Ground Surface → Parking Surface → Parking Bays → Curbs/Sidewalks → Theme Props → Exit → Vehicles → Effects → HUD → Controls. Every visual element has exactly one owner.
+
+**Layout principles**: the parking lot is the primary gameplay surface and should visually dominate the screen. Controls belong to the gameplay card, not as isolated floating widgets. Avoid unused vertical space.
+
+**Theme philosophy**: themes must feel like different locations, not just different colors. Each theme should communicate place through surface, props, surrounding environment, lighting, edge treatment, and exit styling.
+
+**Gameplay boundary rule**: players must never be able to drive outside the playable parking lot. Visible playfield boundaries and gameplay boundaries must always match exactly.
+
+## Screenshot Validation Rule (mandatory for any visual story)
+Any story that materially changes gameplay presentation (layout, UI, rendering, environment, controls, or theme visuals) is NOT complete until the implementation is compared side-by-side against the approved mockup(s). Completion requires identifying remaining visual differences, not merely confirming the code compiles or a feature was technically added. "Done" means "the game now looks and behaves like the approved design," not "the requested feature was implemented." A passing type-check/build is necessary but never sufficient for a visual story.
+
 ## Scope Discipline (mandatory)
 Do not add, rename, remove, or modify any type/interface field, config value, data schema, or API contract beyond what the current task explicitly requests — even if it seems related, helpful, or like an obvious next step. If something additional seems necessary to complete the task correctly, STOP and report what and why in your response — do not implement it preemptively. Unrequested additions have caused real build breakage in this project (e.g. a premature `exitZone` field added to `puzzle-types.ts` broke type-check across all 15 puzzles). When in doubt, do less, not more.
 
@@ -496,11 +438,6 @@ Do not add, rename, remove, or modify any type/interface field, config value, da
 Not everything in the Definition of Done can be confirmed by the agent. Split verification into two explicit buckets in every report:
 - **Agent-verifiable** (must paste real output): grep results, type-check/build output, console logs, network/fetch responses, file existence checks.
 - **Human-only** (must be explicitly deferred, never claimed as "confirmed"): visual correctness (does it look right, is it centered, does a flash actually render), game feel (does movement feel responsive, does a collision feel abrupt or well-paced), and anything requiring eyes on the actual running game in the real Devvit/Reddit environment. For these, describe exactly what was implemented and what the human should look for — do not assert it "works" or is "confirmed" without a human having actually observed it running.
-
-
-Screenshot Validation Rule
-
-Any story that materially changes gameplay presentation (layout, UI, rendering, environment, controls, or theme visuals) is not complete until the implementation is compared side-by-side against the approved mockup(s). Completion requires identifying remaining visual differences, not merely confirming that the code compiles or new features were added.
 
 ## Reporting Requirement
 End every story with:
