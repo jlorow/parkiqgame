@@ -372,6 +372,9 @@ All geometry (player car, obstacles, exit zone) uses the same container-local pi
 3. The relevant test case has been run and the ACTUAL output is pasted — not "this should work"
 4. If something can't be fully implemented this pass, show "Not yet implemented" — never fake success
 
+## Git Branching Rule (mandatory)
+Before writing any code, run: `git checkout -b feature/<name>` — adjust `<name>` to match the current prompt/epic/story (e.g. `feature/epic9-story9-5-cleanup`). Freebuff executes this git command in the project terminal before implementing anything, every time, with no exceptions. This must be the first action taken in response to any task prompt, before Step 0/audit work begins.
+
 ## Sequencing Rule
 Implement and verify one story at a time. Do not start the next until the current one's Definition of Done is explicitly confirmed.
 

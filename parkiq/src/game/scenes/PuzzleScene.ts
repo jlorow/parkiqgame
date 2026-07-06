@@ -302,17 +302,7 @@ export class PuzzleScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(10);
 
-    const trophy = this.add
-      .text(370, HUD_Y, '🏆', { fontSize: '14px' })
-      .setOrigin(1, 0)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(10);
 
-    trophy.on('pointerdown', () => {
-      void this.scene.start('LeaderboardScene');
-    });
-    trophy.on('pointerover', () => { trophy.setStyle({ fontSize: '16px' }); });
-    trophy.on('pointerout', () => { trophy.setStyle({ fontSize: '14px' }); });
   }
 
   // ──────────────────────────────────────────────────────────
@@ -395,12 +385,10 @@ export class PuzzleScene extends Phaser.Scene {
     // 2. POST /api/puzzle-complete
     const result = await puzzleComplete({
       timeTaken: this.elapsedSeconds,
-      wasCorrect: true,
-      shareBlocks: this.puzzle.shareBlocks ?? [],
       puzzleId: this.puzzle.id,
     }).catch((error: unknown) => {
       console.error('[exit] puzzleComplete failed:', error);
-      return { streak: 0, score: 0, puzzleIndex: this.puzzle.id >= 15 ? 1 : this.puzzle.id + 1 };
+      return { puzzleIndex: this.puzzle.id >= 15 ? 1 : this.puzzle.id + 1 };
     });
 
     // 3. If puzzle 15 cleared — show celebration overlay briefly
@@ -409,7 +397,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
     // 4. Load next puzzle in place
-    const nextIndex = result.puzzleIndex ?? (this.puzzle.id >= 15 ? 1 : this.puzzle.id + 1);
+    const nextIndex = result.puzzleIndex;
     this.loadNextPuzzleInPlace(nextIndex);
   }
 
