@@ -14,6 +14,7 @@ export const PhaserGame = () => {
       width: 390,
       height: 844,
       backgroundColor: '#0F0F0F',
+      pixelArt: true,
       parent: containerRef.current,
       scale: {
         mode: Phaser.Scale.FIT,

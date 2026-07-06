@@ -1,7 +1,18 @@
 import { GameObjects, Scene } from 'phaser';
+import type { PuzzleTheme } from '../puzzles/puzzle-types';
 
 /**
- * Structural configuration for generating the top-down parking grid card.
+ * ParkingGrid — owns the gameplay surface only.
+ *
+ * Responsibilities:
+ *  - Road surface fill
+ *  - Bay lines / stall dividers / centreline
+ *  - Curb border
+ *
+ * Does NOT own:
+ *  - Theme decorations (trees, pipes, building silhouettes) → ThemeRenderer
+ *  - Pillars drawn as gameplay obstacles → PuzzleScene
+ *  - Cars, shadows, exit zone, UI
  */
 export interface ParkingGridConfig {
   x: number;
@@ -9,63 +20,77 @@ export interface ParkingGridConfig {
   width: number;
   height: number;
   environment: 'street' | 'garage' | 'open_lot';
+  theme: PuzzleTheme;
 }
 
+type ThemeColors = {
+  road: number;
+  lines: number;
+  pillar: number;
+  pillarOutline: number;
+  sidewalk: number;
+};
+
+const THEME_COLORS: Record<PuzzleTheme, ThemeColors> = {
+  street:       { road: 0x1c1c1e, lines: 0xffffff, pillar: 0x1f2937, pillarOutline: 0x374151, sidewalk: 0x2a2a2d },
+  garage:       { road: 0x111827, lines: 0xfbbf24, pillar: 0x374151, pillarOutline: 0x4b5563, sidewalk: 0x1a2332 },
+  rooftop:      { road: 0xd1d5db, lines: 0xffffff, pillar: 0x9ca3af, pillarOutline: 0xb0b5bd, sidewalk: 0xbcc0c7 },
+  underground:  { road: 0x0f172a, lines: 0xe8320a, pillar: 0x1e293b, pillarOutline: 0x334155, sidewalk: 0x131d33 },
+};
+
 /**
- * Renders an optimized top-down orthogonal parking grid using vector paths.
+ * Creates the parking surface and bay lines.
  *
- * CRITICAL: The graphics object is positioned at (x, y) via scene.add.graphics({ x, y }).
- * All internal draw calls use LOCAL coordinates (0,0) → (width, height).
- * Never mix absolute scene coordinates with local draw calls — this causes
- * the "double-translation" bug where geometry renders outside the viewport.
+ * CRITICAL: Graphics positioned at (x, y) — all draw calls use LOCAL coords (0,0).
+ * Never mix absolute scene coordinates with local draw calls.
  */
 export function createParkingGrid(
   scene: Scene,
-  config: ParkingGridConfig
+  config: ParkingGridConfig,
 ): GameObjects.Graphics {
-  const { x, y, width, height, environment } = config;
+  const { x, y, width, height, environment, theme } = config;
+  const colors = THEME_COLORS[theme]!;
 
-  // Position at (x,y) — all drawing below uses local coords (0,0)
   const graphics = scene.add.graphics({ x, y });
 
-  // 1. Asphalt road surface — always first (bottom layer)
-  graphics.fillStyle(0x1c1c1e, 1);
+  // 1. Road surface
+  graphics.fillStyle(colors.road, 0.92);
   graphics.fillRect(0, 0, width, height);
 
-  // 2. Environment-specific elements
+  // 2. Layout lines
   switch (environment) {
     case 'street':
-      drawStreetLayout(graphics, width, height);
+      drawStreetLayout(graphics, width, height, colors);
       break;
     case 'garage':
-      drawGarageLayout(graphics, width, height);
+      drawGarageLayout(graphics, width, height, colors);
       break;
     case 'open_lot':
-      drawOpenLotLayout(graphics, width, height);
+      drawOpenLotLayout(graphics, width, height, colors);
       break;
   }
+
+  // 3. Curb border
+  graphics.lineStyle(2, colors.sidewalk, 0.6);
+  graphics.strokeRect(0, 0, width, height);
 
   return graphics;
 }
 
-/**
- * Street layout: centre driving lane flanked by top and bottom parking stalls.
- * Horizontal border lines at y=96 and y=192 divide stalls from lane.
- * Vertical stall lines every 48px, split to avoid crossing the lane.
- * Dashed centreline at y=144.
- */
+// ── Layout functions ────────────────────────────────────────
+
 function drawStreetLayout(
   gfx: GameObjects.Graphics,
   width: number,
-  height: number
+  height: number,
+  colors: ThemeColors,
 ): void {
   const unitPx = 48;
   const laneTopY = 96;
   const laneBottomY = 192;
   const centrelineY = 144;
 
-  // Horizontal lane border lines
-  gfx.lineStyle(2, 0xffffff, 1);
+  gfx.lineStyle(2, colors.lines, 0.85);
   gfx.beginPath();
   gfx.moveTo(0, laneTopY);
   gfx.lineTo(width, laneTopY);
@@ -73,8 +98,7 @@ function drawStreetLayout(
   gfx.lineTo(width, laneBottomY);
   gfx.strokePath();
 
-  // Vertical stall lines — skip boundary (start at unitPx, stop before width)
-  gfx.lineStyle(2, 0xffffff, 1);
+  gfx.lineStyle(2, colors.lines, 0.85);
   gfx.beginPath();
   for (let lineX = unitPx; lineX < width; lineX += unitPx) {
     gfx.moveTo(lineX, 0);
@@ -85,7 +109,7 @@ function drawStreetLayout(
   gfx.strokePath();
 
   // Dashed centreline
-  gfx.lineStyle(1, 0xffffff, 0.4);
+  gfx.lineStyle(1, colors.lines, 0.35);
   gfx.beginPath();
   const dashLen = 12;
   const gapLen = 12;
@@ -95,22 +119,29 @@ function drawStreetLayout(
     gfx.lineTo(Math.min(cx + dashLen, width), centrelineY);
   }
   gfx.strokePath();
+
+  // Cosmetic half-unit lines
+  gfx.lineStyle(1, colors.lines, 0.15);
+  gfx.beginPath();
+  const halfPx = unitPx / 2;
+  for (let lineX = halfPx; lineX < width; lineX += unitPx) {
+    gfx.moveTo(lineX, 0);
+    gfx.lineTo(lineX, laneTopY);
+    gfx.moveTo(lineX, laneBottomY);
+    gfx.lineTo(lineX, height);
+  }
+  gfx.strokePath();
 }
 
-/**
- * Garage layout: full-height vertical stall lines + 2 structural pillars.
- * Pillars centred at 25% and 75% of width, sitting between bay lines.
- * Pillar dimensions: 24px wide × 48px tall, vertically centred.
- */
 function drawGarageLayout(
   gfx: GameObjects.Graphics,
   width: number,
-  height: number
+  height: number,
+  colors: ThemeColors,
 ): void {
   const unitPx = 48;
 
-  // Vertical stall lines — internal only (start at unitPx, stop before width)
-  gfx.lineStyle(2, 0xffffff, 1);
+  gfx.lineStyle(2, colors.lines, 0.85);
   gfx.beginPath();
   for (let lineX = unitPx; lineX < width; lineX += unitPx) {
     gfx.moveTo(lineX, 0);
@@ -118,40 +149,50 @@ function drawGarageLayout(
   }
   gfx.strokePath();
 
-  // Pillars — drawn AFTER lines so they render on top
-  // Width=24px sits cleanly between bay lines (12px clearance each side)
-  // Height=48px, vertically centred
   const pillarW = 24;
   const pillarH = 48;
-  const leftPillarX = width * 0.25 - pillarW / 2;  // centre at 72px
-  const rightPillarX = width * 0.75 - pillarW / 2; // centre at 216px
-  const pillarY = (height - pillarH) / 2;           // vertically centred
+  const leftPillarX = width * 0.25 - pillarW / 2;
+  const rightPillarX = width * 0.75 - pillarW / 2;
+  const pillarY = (height - pillarH) / 2;
 
-  // Fill
-  gfx.fillStyle(0x1f2937, 1);
+  gfx.fillStyle(colors.pillar, 1);
   gfx.fillRect(leftPillarX, pillarY, pillarW, pillarH);
   gfx.fillRect(rightPillarX, pillarY, pillarW, pillarH);
 
-  // Outline border (adds 3D structural depth)
-  gfx.lineStyle(2, 0x374151, 1);
+  gfx.lineStyle(2, colors.pillarOutline, 1);
   gfx.strokeRect(leftPillarX, pillarY, pillarW, pillarH);
   gfx.strokeRect(rightPillarX, pillarY, pillarW, pillarH);
+
+  gfx.lineStyle(1, colors.lines, 0.15);
+  gfx.beginPath();
+  const halfPx = unitPx / 2;
+  for (let lineX = halfPx; lineX < width; lineX += unitPx) {
+    gfx.moveTo(lineX, 0);
+    gfx.lineTo(lineX, height);
+  }
+  gfx.strokePath();
 }
 
-/**
- * Open lot layout: horizontal parking lines spanning full width.
- * Lines at internal intervals only (start at unitPx, stop before height).
- */
 function drawOpenLotLayout(
   gfx: GameObjects.Graphics,
   width: number,
-  height: number
+  height: number,
+  colors: ThemeColors,
 ): void {
   const unitPx = 48;
 
-  gfx.lineStyle(2, 0xffffff, 1);
+  gfx.lineStyle(2, colors.lines, 0.85);
   gfx.beginPath();
   for (let lineY = unitPx; lineY < height; lineY += unitPx) {
+    gfx.moveTo(0, lineY);
+    gfx.lineTo(width, lineY);
+  }
+  gfx.strokePath();
+
+  gfx.lineStyle(1, colors.lines, 0.15);
+  gfx.beginPath();
+  const halfPx = unitPx / 2;
+  for (let lineY = halfPx; lineY < height; lineY += unitPx) {
     gfx.moveTo(0, lineY);
     gfx.lineTo(width, lineY);
   }
@@ -160,14 +201,12 @@ function drawOpenLotLayout(
 
 /**
  * Optional: bake the grid into a static GPU texture for performance.
- * Use this instead of createParkingGrid() once the grid is visually confirmed
- * correct — reduces rendering overhead to a single batched draw call.
  */
 export function getOrCreateBakedGrid(
   scene: Scene,
-  config: ParkingGridConfig
+  config: ParkingGridConfig,
 ): GameObjects.Image {
-  const key = `baked_grid_${config.environment}_${config.width}x${config.height}`;
+  const key = `baked_grid_${config.theme}_${config.environment}_${config.width}x${config.height}`;
 
   if (!scene.textures.exists(key)) {
     const vectorGrid = createParkingGrid(scene, config);

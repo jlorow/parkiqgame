@@ -102,11 +102,11 @@ EPIC 8: Pixel Art Visual Style ← queued, independent of Epic 9
 ### Epic 7 — Drive Mechanic (unchanged, already working)
 Movement, collision detection, and exit-zone detection are already built and verified — see Movement/Collision specs below. Only the *consequence* of reaching the exit zone changes under Epic 9 (immediate next puzzle instead of a lock screen).
 
-### Epic 8 — Pixel Art Visual Style (queued, independent)
+### Epic 8 — Pixel Art Visual Style (Story 8-1 DONE, rest deferred)
 | Story | Summary |
 |---|---|
-| 8-1 | Rendering config — `pixelArt: true`, crisper SVG scaling, thicker bay lines |
-| 8-2+ | Further asset/style passes — scoped separately as needed |
+| 8-1 | ✅ DONE — `pixelArt: true`, SVG scaled to 2.5x, bay lines 3px, obstacle cars now correctly sized to match player car. Note: this is config-only — the car still reads as an aliased vector shape, not genuine hand-drawn pixel art, since `pixelArt: true` disables smoothing but doesn't redraw the asset. |
+| 8-2+ | DEFERRED — real pixel-art sprite assets (car, tiles) needed for the actual visual style from the reference mood images. Revisit after other epics/content work are complete, time permitting before deploy. |
 
 ---
 
@@ -241,8 +241,9 @@ COLORS = {
   buttonBg:    '#2A2A2A',
 }
 
-GRID = { unitPx: 48, carWidth: 2, carLength: 4, bayWidth: 2.5, bayLength: 5 }
+GRID = { unitPx: 48, carWidth: 1.5, carLength: 3, bayWidth: 2.5, bayLength: 5 }
 ```
+Note: `carWidth`/`carLength` corrected to match the verified 72×144px collision hitbox (72/48=1.5, 144/48=3). An earlier version of this file stated `carWidth: 2, carLength: 4`, which was wrong and contradicted the actual collision code — see Car Footprint note below.
 
 ### Environment Theming
 ```
@@ -254,21 +255,34 @@ underground: road #0F172A (very dark), lines #E8320A (red warning), pillar #1E29
 
 ---
 
-## Grid Coordinate System (authoritative)
+## Grid Coordinate System (authoritative — verified against live code)
 
 ```
-Grid origin:  x = 51, y = 120  (centered on 390px canvas)
-Grid size:    288 × 288px = 6 columns × 6 rows
-Grid unit:    48px
+Grid size:    288 × 288px = 6 columns × 6 rows, 48px per unit — verified correct
+Container:    positioned at (CONTAINER_X=1, CONTAINER_Y=52) in scene-root pixels,
+              scaled by CONTAINER_SCALE=1.35
+Offsets:      CONTAINER_OFFSET_X=1, CONTAINER_OFFSET_Y=2 (grid-unit offsets,
+              added before multiplying by UNIT_PX — NOT scene-root pixel offsets)
+UNIT_PX:      48
 
-Conversion (grid col/row → pixel, cell center):
-  pixelX = 51 + (col * 48) + 24
-  pixelY = 120 + (row * 48) + 24
+Conversion (grid col/row → container-local pixel, cell top-left reference):
+  pixelX = (col + CONTAINER_OFFSET_X) * UNIT_PX
+  pixelY = (row + CONTAINER_OFFSET_Y) * UNIT_PX
 
 Columns: 0–5 (left to right) · Rows: 0–5 (top to bottom, Row 0 = top/near exit usually)
 ```
 
-All car, obstacle, and exit zone positions in puzzle JSON use grid units (col/row), never raw pixels. All game objects (player car, obstacles, grid) share one container-local coordinate space — no world-to-local conversion needed anywhere.
+⚠️ This replaces an earlier incorrect version of this section that stated an absolute origin of `(51, 120)` with a `+24` cell-center adjustment — that formula was never real, it was written during a documentation merge without checking the actual code. The formula above is the real one, verified directly against `PuzzleScene.ts`.
+
+All car, obstacle, and exit zone positions in puzzle JSON use grid units (col/row), never raw pixels. All game objects (player car, obstacles, grid) share one container-local coordinate space via the formula above — no world-to-local conversion needed anywhere.
+
+### Car Footprint (authoritative — verified against live collision code)
+```
+CAR_W = 72px, CAR_H = 144px  (the ONLY correct value — used by collision,
+                               and now matched exactly by the visual sprite scale)
+In grid units: 1.5 columns wide, 3 rows long
+```
+⚠️ The car is **1.5 grid columns wide**, not a clean whole number. A single empty column (48px) is narrower than the car — the car needs at least 2 full columns of lateral clearance to fit without overlapping when centered on a column boundary. Do not assume "1 empty column = enough room" when designing puzzle geometry.
 
 ---
 
@@ -303,7 +317,104 @@ Puzzles 11–15 (reverse_bay, rooftop):       7+ moves, player angle 180° (must
 1 (bottom): ParkingGrid background · 2: Exit zone (green, pulsing) · 3: Obstacle cars
 4: Pillar/wall rectangles · 5: Player car · 6 (top): HUD (puzzle name, controls — no timer)
 ```
+-----------------
+New Knowledge Section
+Visual Architecture Principles
 
+The approved mockups are the source of truth for the game's visual architecture.
+
+When implementing visuals, optimize for matching the approved game feel rather than preserving the current renderer structure.
+
+Priority order:
+
+Gameplay correctness
+Layout
+Visual hierarchy
+Theme richness
+Decorative polish
+
+The renderer should never sacrifice gameplay accuracy, but gameplay correctness alone is not considered sufficient completion if the approved visual direction is not met.
+
+Single Rendering Pipeline
+
+Theme rendering must come from a single coordinated pipeline.
+
+Avoid splitting environment rendering across multiple independent systems.
+
+Preferred order:
+
+Theme Base
+↓
+
+Ground Surface
+
+↓
+
+Parking Surface
+
+↓
+
+Parking Bays
+
+↓
+
+Curbs / Sidewalks
+
+↓
+
+Theme Props
+
+↓
+
+Exit
+
+↓
+
+Vehicles
+
+↓
+
+Effects
+
+↓
+
+HUD
+
+↓
+
+Controls
+
+Every visual element should have one owner.
+
+Layout Principles
+
+The parking lot is the primary gameplay surface.
+
+The playfield should visually dominate the screen.
+
+Controls belong to the gameplay card, not as isolated floating widgets.
+
+Avoid unused vertical space.
+
+Theme Philosophy
+
+Themes should feel like different locations.
+
+Changing only colors is insufficient.
+
+Each theme should communicate place through:
+
+surface
+props
+surrounding environment
+lighting
+edge treatment
+exit styling
+Gameplay Boundary Rule
+
+Players must never be able to drive outside the playable parking lot.
+
+Visible playfield boundaries and gameplay boundaries must always match.
 ---
 
 ## PlayerCar Movement Spec (authoritative — unchanged, already working)
@@ -385,6 +496,11 @@ Do not add, rename, remove, or modify any type/interface field, config value, da
 Not everything in the Definition of Done can be confirmed by the agent. Split verification into two explicit buckets in every report:
 - **Agent-verifiable** (must paste real output): grep results, type-check/build output, console logs, network/fetch responses, file existence checks.
 - **Human-only** (must be explicitly deferred, never claimed as "confirmed"): visual correctness (does it look right, is it centered, does a flash actually render), game feel (does movement feel responsive, does a collision feel abrupt or well-paced), and anything requiring eyes on the actual running game in the real Devvit/Reddit environment. For these, describe exactly what was implemented and what the human should look for — do not assert it "works" or is "confirmed" without a human having actually observed it running.
+
+
+Screenshot Validation Rule
+
+Any story that materially changes gameplay presentation (layout, UI, rendering, environment, controls, or theme visuals) is not complete until the implementation is compared side-by-side against the approved mockup(s). Completion requires identifying remaining visual differences, not merely confirming that the code compiles or new features were added.
 
 ## Reporting Requirement
 End every story with:

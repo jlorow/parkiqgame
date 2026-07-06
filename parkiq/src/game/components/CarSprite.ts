@@ -48,6 +48,7 @@ export function createCarSprite(
   //   image.setTint(color).setTintMode(Phaser.TintModes.FILL)
   image.setTint(tint).setTintMode(Phaser.TintModes.FILL);
   image.setAngle(config.angle);
+  image.setScale(2.25);
 
   return image;
 }
