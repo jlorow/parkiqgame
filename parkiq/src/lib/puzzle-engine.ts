@@ -32,3 +32,10 @@ export function getTodaysPuzzle(serverDate: Date): Puzzle {
 
   return puzzles[index]!;
 }
+
+export function getPuzzleByIndex(index: number): Puzzle {
+  const clamped = index < 1 ? 1 : ((index - 1) % 15) + 1;
+  const puzzle = puzzles.find((p) => p.id === clamped);
+  if (!puzzle) throw new Error(`No puzzle found for id ${clamped}`);
+  return puzzle;
+}

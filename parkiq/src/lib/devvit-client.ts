@@ -4,6 +4,7 @@ import type {
   PuzzleCompleteResponse,
   LeaderboardData,
   ResultTodayResponse,
+  ProgressResponse,
 } from '../shared/api';
 
 /**
@@ -107,6 +108,28 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
     return {
       entries: [],
     };
+  }
+}
+
+/**
+ * Fetch helper: GET /api/progress
+ * Returns: { userId, puzzleIndex }
+ *
+ * Falls back to puzzleIndex: 1 if the API call fails.
+ */
+export async function getProgress(): Promise<ProgressResponse> {
+  try {
+    const response = await fetch('/api/progress');
+    if (!response.ok) {
+      console.error(`getProgress: HTTP ${response.status}`);
+      return { userId: 'anonymous', puzzleIndex: 1 };
+    }
+    const data: ProgressResponse = await response.json();
+    console.log('[getProgress]', data);
+    return data;
+  } catch (error) {
+    console.error('[getProgress] Error:', error);
+    return { userId: 'anonymous', puzzleIndex: 1 };
   }
 }
 

@@ -375,6 +375,14 @@ All geometry (player car, obstacles, exit zone) uses the same container-local pi
 ## Sequencing Rule
 Implement and verify one story at a time. Do not start the next until the current one's Definition of Done is explicitly confirmed.
 
+## Scope Discipline (mandatory)
+Do not add, rename, remove, or modify any type/interface field, config value, data schema, or API contract beyond what the current task explicitly requests — even if it seems related, helpful, or like an obvious next step. If something additional seems necessary to complete the task correctly, STOP and report what and why in your response — do not implement it preemptively. Unrequested additions have caused real build breakage in this project (e.g. a premature `exitZone` field added to `puzzle-types.ts` broke type-check across all 15 puzzles). When in doubt, do less, not more.
+
+## Agent-Verifiable vs. Human-Only Verification
+Not everything in the Definition of Done can be confirmed by the agent. Split verification into two explicit buckets in every report:
+- **Agent-verifiable** (must paste real output): grep results, type-check/build output, console logs, network/fetch responses, file existence checks.
+- **Human-only** (must be explicitly deferred, never claimed as "confirmed"): visual correctness (does it look right, is it centered, does a flash actually render), game feel (does movement feel responsive, does a collision feel abrupt or well-paced), and anything requiring eyes on the actual running game in the real Devvit/Reddit environment. For these, describe exactly what was implemented and what the human should look for — do not assert it "works" or is "confirmed" without a human having actually observed it running.
+
 ## Reporting Requirement
 End every story with:
 ```
