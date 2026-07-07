@@ -43,6 +43,9 @@ const ROTATION_SPEED = 90;
 const PLAYER_CAR_SCALE = 2.25;
 const CAR_W = 72;
 const CAR_H = 144;
+const CAR_HALF_W = CAR_W / 2;
+const CAR_HALF_H = CAR_H / 2;
+const GRID_PX = 6 * UNIT_PX;
 
 // ──────────────────────────────────────────────────────────
 //  Scene
@@ -608,7 +611,11 @@ export class PuzzleScene extends Phaser.Scene {
       candidateY += -Math.cos(rad) * step;
     }
 
-    // ── 3. Collision — reject candidate if overlapping any obstacle ──
+    // ── 3. Boundary clamp — keep car's full rect inside the 288×288 grid ──
+    candidateX = Math.max(CAR_HALF_W, Math.min(candidateX, GRID_PX - CAR_HALF_W));
+    candidateY = Math.max(CAR_HALF_H, Math.min(candidateY, GRID_PX - CAR_HALF_H));
+
+    // ── 4. Collision — reject candidate if overlapping any obstacle ──
     const canMove = !this.checkCollision(candidateX, candidateY);
 
     if (canMove) {
@@ -620,7 +627,7 @@ export class PuzzleScene extends Phaser.Scene {
       this.resetToSpawn();
     }
 
-    // ── 4. Apply to image & shadow ──────────────────────────
+    // ── 5. Apply to image & shadow ──────────────────────────
     this.playerCarImage.setPosition(this.carX, this.carY);
     this.playerCarImage.setAngle(this.carAngle);
     this.playerCarShadow.clear();
@@ -633,7 +640,7 @@ export class PuzzleScene extends Phaser.Scene {
       8,
     );
 
-    // ── 5. Exit zone check — win flow (Step 3) ─────────────
+    // ── 6. Exit zone check — win flow ──────────────────────
     if (!this.exited && this.checkExitReached(this.carX, this.carY)) {
       this.exited = true;
       void this.handleWin();
