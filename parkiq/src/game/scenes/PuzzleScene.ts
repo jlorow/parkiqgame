@@ -34,6 +34,15 @@ const CARD_BOTTOM = CARD_Y + CARD_H;
 const CONTROLS_CENTER_X = 195;
 const CONTROLS_CENTER_Y = CARD_Y + CARD_H - 128;
 
+// Per-theme card tint — translucent fill that lets the depth-2 backdrop show through.
+const CARD_TINT: Record<PuzzleTheme, number> = {
+  street: 0x141428,
+  garage: 0x0c1420,
+  underground: 0x080c18,
+  rooftop: 0x1c1c34,
+};
+const CARD_ALPHA = 0.55;
+
 // ──────────────────────────────────────────────────────────
 //  Movement & Collision Constants
 // ──────────────────────────────────────────────────────────
@@ -80,6 +89,8 @@ export class PuzzleScene extends Phaser.Scene {
   private playerCarShadow!: Phaser.GameObjects.Graphics;
   /** Themed environment scene — drawn at depth 2, rebuilt on puzzle change */
   private themeEnvGfx: Phaser.GameObjects.Graphics | null = null;
+  /** Theme-tinted parking card — drawn at depth 3, rebuilt on theme change */
+  private cardGfx: Phaser.GameObjects.Graphics | null = null;
   /** Silent elapsed-time counter — no UI, only used for timeTaken in puzzleComplete() */
   private elapsedSeconds = 0;
   private elapsedEvent!: Phaser.Time.TimerEvent;
@@ -132,7 +143,6 @@ export class PuzzleScene extends Phaser.Scene {
     });
 
     this.renderDefaultBackground();
-    this.renderParkingCard();
 
     // Puzzle loads asynchronously — render static chrome first, then fetch progress
     void this.loadAndRender();
@@ -147,6 +157,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.puzzle = getPuzzleByIndex(puzzleIndex);
 
     this.renderEnvironment();
+    this.renderParkingCard(this.puzzle.theme);
     this.renderHUD();
     this.renderObjective();
     this.renderControls();
@@ -543,12 +554,18 @@ export class PuzzleScene extends Phaser.Scene {
   //  Parking Card
   // ──────────────────────────────────────────────────────────
 
-  private renderParkingCard(): void {
+  private renderParkingCard(theme?: PuzzleTheme): void {
+    // Destroy previous card if exists (for puzzle-to-puzzle transitions)
+    if (this.cardGfx) {
+      this.cardGfx.destroy();
+    }
     const card = this.add.graphics();
+    this.cardGfx = card;
     card.setDepth(3);
     card.fillStyle(0x000000, 0.2);
     card.fillRoundedRect(CARD_X + 3, CARD_Y + 4, CARD_W, CARD_H, CARD_RADIUS);
-    card.fillStyle(0x1c1c1e, 1);
+    const fillColor = theme ? CARD_TINT[theme] : 0x141428;
+    card.fillStyle(fillColor, CARD_ALPHA);
     card.fillRoundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, CARD_RADIUS);
     card.lineStyle(1, 0xe8320a, 0.15);
     card.strokeRoundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, CARD_RADIUS);
@@ -855,8 +872,9 @@ export class PuzzleScene extends Phaser.Scene {
     // Update HUD puzzle number
     this.puzzleNumberText.setText(`PUZZLE #${this.puzzle.id}`);
 
-    // Redraw themed environment for the new theme
+    // Redraw themed environment and card tint for the new theme
     this.renderEnvironment();
+    this.renderParkingCard(this.puzzle.theme);
 
     // Reset state
     this.exited = false;

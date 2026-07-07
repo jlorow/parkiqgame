@@ -53,8 +53,8 @@ export function createParkingGrid(
 
   const graphics = scene.add.graphics({ x, y });
 
-  // 1. Road surface
-  graphics.fillStyle(colors.road, 0.92);
+  // 1. Road surface — transparent so the theme-tinted card and backdrop show through
+  graphics.fillStyle(colors.road, 0.20);
   graphics.fillRect(0, 0, width, height);
 
   // 2. Layout lines
