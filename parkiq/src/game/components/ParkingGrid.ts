@@ -1,5 +1,7 @@
 import { GameObjects, Scene } from 'phaser';
 import type { PuzzleTheme } from '../puzzles/puzzle-types';
+import { THEME_GRID_COLORS } from '../config/ThemeRegistry';
+import type { ThemeGridColors } from '../config/ThemeRegistry';
 
 /**
  * ParkingGrid — owns the gameplay surface only.
@@ -23,20 +25,7 @@ export interface ParkingGridConfig {
   theme: PuzzleTheme;
 }
 
-type ThemeColors = {
-  road: number;
-  lines: number;
-  pillar: number;
-  pillarOutline: number;
-  sidewalk: number;
-};
-
-const THEME_COLORS: Record<PuzzleTheme, ThemeColors> = {
-  street:       { road: 0x1c1c1e, lines: 0xffffff, pillar: 0x1f2937, pillarOutline: 0x374151, sidewalk: 0x2a2a2d },
-  garage:       { road: 0x111827, lines: 0xfbbf24, pillar: 0x374151, pillarOutline: 0x4b5563, sidewalk: 0x1a2332 },
-  rooftop:      { road: 0xd1d5db, lines: 0xffffff, pillar: 0x9ca3af, pillarOutline: 0xb0b5bd, sidewalk: 0xbcc0c7 },
-  underground:  { road: 0x0f172a, lines: 0xe8320a, pillar: 0x1e293b, pillarOutline: 0x334155, sidewalk: 0x131d33 },
-};
+const THEME_COLORS = THEME_GRID_COLORS;
 
 /**
  * Creates the parking surface and bay lines.
@@ -83,7 +72,7 @@ function drawStreetLayout(
   gfx: GameObjects.Graphics,
   width: number,
   height: number,
-  colors: ThemeColors,
+  colors: ThemeGridColors,
 ): void {
   const unitPx = 48;
   const laneTopY = 96;
@@ -137,7 +126,7 @@ function drawGarageLayout(
   gfx: GameObjects.Graphics,
   width: number,
   height: number,
-  colors: ThemeColors,
+  colors: ThemeGridColors,
 ): void {
   const unitPx = 48;
 
@@ -177,7 +166,7 @@ function drawOpenLotLayout(
   gfx: GameObjects.Graphics,
   width: number,
   height: number,
-  colors: ThemeColors,
+  colors: ThemeGridColors,
 ): void {
   const unitPx = 48;
 

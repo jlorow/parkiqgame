@@ -6,6 +6,7 @@ import { DrivingControls } from '../components/DrivingControls';
 import type { DrivingInputState } from '../components/DrivingControls';
 import { getPuzzleByIndex } from '../../lib/puzzle-engine';
 import { puzzleComplete, getProgress } from '../../lib/devvit-client';
+import { CARD_TINT, THEME_FLAT_COLORS } from '../config/ThemeRegistry';
 
 // ──────────────────────────────────────────────────────────
 //  Layout Constants
@@ -34,13 +35,6 @@ const CARD_BOTTOM = CARD_Y + CARD_H;
 const CONTROLS_CENTER_X = 195;
 const CONTROLS_CENTER_Y = CARD_Y + CARD_H - 128;
 
-// Per-theme card tint — translucent fill that lets the depth-2 backdrop show through.
-const CARD_TINT: Record<PuzzleTheme, number> = {
-  street: 0x141428,
-  garage: 0x0c1420,
-  underground: 0x080c18,
-  rooftop: 0x1c1c34,
-};
 const CARD_ALPHA = 0.55;
 
 // ──────────────────────────────────────────────────────────
@@ -72,7 +66,6 @@ const CLAMP_MAX_Y = 311;
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
 const ROW0_CENTER = (0 + CONTAINER_OFFSET_Y) * UNIT_PX;
-const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
 const CLAMP_MIN_X = COL0_CENTER - CAR_HALF_W_LOCAL;
 const CLAMP_MAX_X = COL5_CENTER + CAR_HALF_W_LOCAL;
 const CLAMP_MIN_Y = ROW0_CENTER - CAR_HALF_H_LOCAL;
@@ -567,7 +560,7 @@ export class PuzzleScene extends Phaser.Scene {
     const fillColor = theme ? CARD_TINT[theme] : 0x141428;
     card.fillStyle(fillColor, CARD_ALPHA);
     card.fillRoundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, CARD_RADIUS);
-    card.lineStyle(1, 0xe8320a, 0.15);
+    card.lineStyle(1, THEME_FLAT_COLORS.playerCarTint, 0.15);
     card.strokeRoundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, CARD_RADIUS);
   }
 
@@ -608,16 +601,16 @@ export class PuzzleScene extends Phaser.Scene {
     const exitZoneCenterY = exitPixelY + 48;
     const exitGfx = this.add.graphics();
 
-    // Green fill (slightly fainter to let the new details pop)
-    exitGfx.fillStyle(0x22c55e, 0.25);
+    // Exit zone fill / border / chevron — sourced from ThemeRegistry
+    exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.25);
     exitGfx.fillRect(exitPixelX, exitPixelY, 96, 96);
 
     // Bright border — reads as a gate frame
-    exitGfx.lineStyle(2, 0x22c55e, 0.6);
+    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.6);
     exitGfx.strokeRect(exitPixelX, exitPixelY, 96, 96);
 
     // Chevron arrows pointing in the exit direction
-    exitGfx.lineStyle(2, 0x22c55e, 0.5);
+    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.5);
     exitGfx.beginPath();
     if (ez.direction === 'top') {
       // Upward-pointing chevron (^)
@@ -681,7 +674,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.playerCarShadow = playerShadow;
 
     const carImg = this.add.image(this.carX, this.carY, 'car');
-    carImg.setTint(0xe8320a).setTintMode(Phaser.TintModes.FILL);
+    carImg.setTint(THEME_FLAT_COLORS.playerCarTint).setTintMode(Phaser.TintModes.FILL);
     carImg.setAngle(this.carAngle);
     carImg.setOrigin(0.5, 0.5);
     carImg.setScale(PLAYER_CAR_SCALE);

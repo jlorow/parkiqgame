@@ -1,11 +1,16 @@
 import Phaser from 'phaser';
 
+import { THEME_FLAT_COLORS } from '../config/ThemeRegistry';
+
 /** Grid-unit constants from knowledge.md */
 const UNIT_PX = 48;
 
-/** Tint colours from knowledge.md COLORS constant */
-const PLAYER_TINT = 0xe8320a;
-const OBSTACLE_TINT = 0x6b7280;
+/**
+ * Tint colours sourced from ThemeRegistry.
+ * obstacleCarTint is flagged as "not yet updated" — keep original value for now.
+ */
+const PLAYER_TINT = THEME_FLAT_COLORS.playerCarTint;
+const OBSTACLE_TINT = THEME_FLAT_COLORS.obstacleCarTint;
 
 export interface CarConfig {
   /** Grid X position (multiplied by UNIT_PX to get pixel position) */

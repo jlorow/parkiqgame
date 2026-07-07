@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { THEME_FLAT_COLORS } from '../config/ThemeRegistry';
 
 // ──────────────────────────────────────────────────────────
 //  Types
@@ -26,9 +27,9 @@ type ButtonDef = {
 // ──────────────────────────────────────────────────────────
 
 const BUTTON_RADIUS = 35; // 70px diameter
-const BUTTON_COLOR = 0xe8320a;
+const BUTTON_COLOR = THEME_FLAT_COLORS.dpadAccentColor;
 const BUTTON_DARK = 0xc42808;
-const GLOW_COLOR = 0xe8320a;
+const GLOW_COLOR = THEME_FLAT_COLORS.dpadAccentColor;
 const ICON_COLOR = '#FFFFFF';
 const ICON_SIZE = '24px';
 const SHADOW_ALPHA = 0.25;
