@@ -45,7 +45,19 @@ const CAR_W = 72;
 const CAR_H = 144;
 const CAR_HALF_W = CAR_W / 2;
 const CAR_HALF_H = CAR_H / 2;
-const GRID_PX = 6 * UNIT_PX;
+
+// Boundary clamp — derived from grid coordinate system:
+// pixelX = (col + CONTAINER_OFFSET_X) * UNIT_PX → col 0-5: 48 to 288
+// pixelY = (row + CONTAINER_OFFSET_Y) * UNIT_PX → row 0-5: 96 to 336
+// Then offset by half-car to let car's far edge reach each cell center.
+const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
+const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
+const ROW0_CENTER = (0 + CONTAINER_OFFSET_Y) * UNIT_PX;
+const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
+const CLAMP_MIN_X = COL0_CENTER - CAR_HALF_W;
+const CLAMP_MAX_X = COL5_CENTER + CAR_HALF_W;
+const CLAMP_MIN_Y = ROW0_CENTER - CAR_HALF_H;
+const CLAMP_MAX_Y = ROW5_CENTER + CAR_HALF_H;
 
 // ──────────────────────────────────────────────────────────
 //  Scene
@@ -611,9 +623,9 @@ export class PuzzleScene extends Phaser.Scene {
       candidateY += -Math.cos(rad) * step;
     }
 
-    // ── 3. Boundary clamp — keep car's full rect inside the 288×288 grid ──
-    candidateX = Math.max(CAR_HALF_W, Math.min(candidateX, GRID_PX - CAR_HALF_W));
-    candidateY = Math.max(CAR_HALF_H, Math.min(candidateY, GRID_PX - CAR_HALF_H));
+    // ── 3. Boundary clamp — keep car's far edge within outermost cell centers ──
+    candidateX = Math.max(CLAMP_MIN_X, Math.min(candidateX, CLAMP_MAX_X));
+    candidateY = Math.max(CLAMP_MIN_Y, Math.min(candidateY, CLAMP_MAX_Y));
 
     // ── 4. Collision — reject candidate if overlapping any obstacle ──
     const canMove = !this.checkCollision(candidateX, candidateY);
