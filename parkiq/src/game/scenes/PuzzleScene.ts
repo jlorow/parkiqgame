@@ -49,15 +49,24 @@ const CAR_HALF_H = CAR_H / 2;
 // Boundary clamp — derived from grid coordinate system:
 // pixelX = (col + CONTAINER_OFFSET_X) * UNIT_PX → col 0-5: 48 to 288
 // pixelY = (row + CONTAINER_OFFSET_Y) * UNIT_PX → row 0-5: 96 to 336
-// Then offset by half-car to let car's far edge reach each cell center.
+// Then offset by scale-corrected half-car to let car's far edge
+// reach each cell center in container-local coordinates.
+const CAR_HALF_W_LOCAL = CAR_HALF_W / CONTAINER_SCALE;
+const CAR_HALF_H_LOCAL = CAR_HALF_H / CONTAINER_SCALE;
+
+// Bottom clamp derived from the car's rendered edge in world space.
+// Car rendered bottom = CONTAINER_Y + (CLAMP_MAX_Y × CONTAINER_SCALE) + CAR_HALF_H
+// Must be ≤ D-pad forward ▲ button top edge (543) − 20px clearance.
+// (30 + CLAMP_MAX_Y × 1.35) + 72 ≤ 523 → CLAMP_MAX_Y ≤ 311
+const CLAMP_MAX_Y = 311;
+
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
 const ROW0_CENTER = (0 + CONTAINER_OFFSET_Y) * UNIT_PX;
 const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
-const CLAMP_MIN_X = COL0_CENTER - CAR_HALF_W;
-const CLAMP_MAX_X = COL5_CENTER + CAR_HALF_W;
-const CLAMP_MIN_Y = ROW0_CENTER - CAR_HALF_H;
-const CLAMP_MAX_Y = ROW5_CENTER + CAR_HALF_H;
+const CLAMP_MIN_X = COL0_CENTER - CAR_HALF_W_LOCAL;
+const CLAMP_MAX_X = COL5_CENTER + CAR_HALF_W_LOCAL;
+const CLAMP_MIN_Y = ROW0_CENTER - CAR_HALF_H_LOCAL;
 
 // ──────────────────────────────────────────────────────────
 //  Scene
@@ -235,13 +244,57 @@ export class PuzzleScene extends Phaser.Scene {
   // ── Theme backdrop helpers (Theme Base + Ground Surface) ────────
 
   private drawStreetBackdrop(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
-    // Sky gradient (y=0-120)
+    // Downtown Night sky gradient (y=0-120) — deeper purple-blue
     for (let y = 0; y < 120; y++) {
       const t = y / 120;
-      const r = Math.floor(0x0a + (0x1a - 0x0a) * t);
-      const c = (r << 16) | (r << 8) | r;
-      gfx.fillStyle(c, 0.8 + 0.2 * (1 - t));
+      const r = Math.floor(0x08 + (0x15 - 0x08) * t);
+      const g = Math.floor(0x08 + (0x12 - 0x08) * t);
+      const b = Math.floor(0x14 + (0x22 - 0x14) * t);
+      const color = (r << 16) | (g << 8) | b;
+      gfx.fillStyle(color, 0.9);
       gfx.fillRect(0, y, W, 1);
+    }
+    // Stars in the sky
+    gfx.fillStyle(0xffffff, 0.5);
+    const starPositions = [
+      { x: 30, y: 15 }, { x: 80, y: 8 }, { x: 150, y: 25 },
+      { x: 200, y: 12 }, { x: 260, y: 20 }, { x: 320, y: 10 },
+      { x: 350, y: 28 }, { x: 110, y: 35 }, { x: 290, y: 5 },
+    ];
+    for (const s of starPositions) {
+      gfx.fillRect(s.x, s.y, 2, 2);
+    }
+    // Building silhouettes above the card (y=0-52) — Downtown skyline
+    gfx.fillStyle(0x0d0d1a, 0.85);
+    const skylineBuildings = [
+      { x: 0, w: 32, h: 44 }, { x: 34, w: 26, h: 35 },
+      { x: 62, w: 18, h: 48 }, { x: 82, w: 38, h: 30 },
+      { x: 122, w: 22, h: 42 }, { x: 146, w: 30, h: 36 },
+      { x: 178, w: 36, h: 46 }, { x: 216, w: 16, h: 28 },
+      { x: 234, w: 28, h: 40 }, { x: 264, w: 20, h: 50 },
+      { x: 286, w: 34, h: 32 }, { x: 322, w: 24, h: 44 },
+      { x: 348, w: 42, h: 38 },
+    ];
+    for (const b of skylineBuildings) {
+      gfx.fillRect(b.x, 52 - b.h, b.w, b.h);
+    }
+    // Lit windows on buildings
+    gfx.fillStyle(0xfbbf24, 0.4);
+    const litWindows: Array<{ x: number; y: number }> = [
+      { x: 8, y: 18 }, { x: 16, y: 30 },
+      { x: 40, y: 14 }, { x: 48, y: 24 },
+      { x: 90, y: 16 }, { x: 100, y: 26 }, { x: 108, y: 10 },
+      { x: 130, y: 20 }, { x: 138, y: 32 },
+      { x: 155, y: 14 }, { x: 165, y: 26 },
+      { x: 188, y: 12 }, { x: 198, y: 22 }, { x: 206, y: 34 },
+      { x: 244, y: 16 }, { x: 252, y: 28 },
+      { x: 272, y: 10 }, { x: 280, y: 22 },
+      { x: 296, y: 18 }, { x: 306, y: 28 },
+      { x: 330, y: 12 }, { x: 340, y: 24 },
+      { x: 358, y: 16 }, { x: 370, y: 28 }, { x: 380, y: 36 },
+    ];
+    for (const w of litWindows) {
+      gfx.fillRect(w.x, 52 - w.y, 3, 3);
     }
     // Sandy/beige ground below card (y=CARD_BOTTOM-844)
     for (let y = CARD_BOTTOM; y < H; y++) {
@@ -253,8 +306,8 @@ export class PuzzleScene extends Phaser.Scene {
       gfx.fillStyle(color, 1);
       gfx.fillRect(0, y, W, 1);
     }
-    // Grass line at top of ground area
-    gfx.fillStyle(0x1a4a1a, 0.4);
+    // Curb edge at top of ground area
+    gfx.fillStyle(0x4a3728, 0.5);
     gfx.fillRect(0, CARD_BOTTOM - 5, W, 6);
   }
 
@@ -277,9 +330,17 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private drawUndergroundBackdrop(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
-    // Upper wall
+    // Upper wall — concrete with formwork texture
     gfx.fillStyle(0x060a0f, 1);
     gfx.fillRect(0, 0, W, 52);
+    // Formwork lines on the wall
+    gfx.lineStyle(1, 0x1a2332, 0.3);
+    gfx.beginPath();
+    for (let ly = 0; ly < 44; ly += 6) {
+      gfx.moveTo(0, ly);
+      gfx.lineTo(W, ly);
+    }
+    gfx.strokePath();
     // Red/white warning stripe at top of card
     for (let sx = 0; sx < W; sx += 8) {
       const isRed = Math.floor(sx / 8) % 2 === 0;
@@ -304,7 +365,7 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private drawRooftopBackdrop(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
-    // Sky gradient behind building silhouettes
+    // Sky gradient behind building silhouettes — dusk colors
     for (let y = 0; y < 60; y++) {
       const t = y / 60;
       const r = Math.floor(0x0a + (0x2a - 0x0a) * t);
@@ -314,27 +375,35 @@ export class PuzzleScene extends Phaser.Scene {
       gfx.fillStyle(color, 1);
       gfx.fillRect(0, y, W, 1);
     }
-    // Building silhouettes at top of card area
+    // Building silhouettes at top of card area — richer skyline
     gfx.fillStyle(0x1a1a2e, 0.7);
     const buildings = [
-      { x: 0, w: 50, h: 42 }, { x: 55, w: 30, h: 32 },
-      { x: 90, w: 44, h: 44 }, { x: 140, w: 26, h: 28 },
-      { x: 172, w: 38, h: 36 }, { x: 218, w: 48, h: 48 },
-      { x: 270, w: 20, h: 24 }, { x: 295, w: 95, h: 38 },
+      { x: 0, w: 36, h: 42 }, { x: 38, w: 22, h: 30 },
+      { x: 62, w: 44, h: 46 }, { x: 108, w: 18, h: 24 },
+      { x: 128, w: 30, h: 38 }, { x: 160, w: 24, h: 28 },
+      { x: 186, w: 36, h: 44 }, { x: 224, w: 20, h: 32 },
+      { x: 246, w: 42, h: 48 }, { x: 290, w: 18, h: 22 },
+      { x: 310, w: 34, h: 36 }, { x: 346, w: 44, h: 40 },
     ];
     for (const b of buildings) {
       gfx.fillRect(b.x, 52 - b.h, b.w, b.h);
     }
-    // A few lit windows
-    gfx.fillStyle(0x4a6741, 0.3);
+    // More lit windows — warm orange glow
+    gfx.fillStyle(0xfbbf24, 0.35);
     const windows: Array<{ x: number; y: number }> = [
-      { x: 16, y: 22 }, { x: 32, y: 30 },
-      { x: 100, y: 18 }, { x: 114, y: 26 },
-      { x: 182, y: 24 }, { x: 196, y: 20 },
-      { x: 230, y: 14 }, { x: 244, y: 22 }, { x: 254, y: 34 },
+      { x: 8, y: 18 }, { x: 18, y: 28 }, { x: 28, y: 36 },
+      { x: 44, y: 14 }, { x: 52, y: 22 },
+      { x: 72, y: 10 }, { x: 82, y: 20 }, { x: 92, y: 30 }, { x: 100, y: 40 },
+      { x: 136, y: 16 }, { x: 146, y: 28 },
+      { x: 168, y: 12 }, { x: 178, y: 22 },
+      { x: 196, y: 14 }, { x: 206, y: 24 }, { x: 214, y: 34 },
+      { x: 232, y: 10 }, { x: 242, y: 20 },
+      { x: 256, y: 14 }, { x: 268, y: 24 }, { x: 278, y: 36 },
+      { x: 318, y: 16 }, { x: 330, y: 26 },
+      { x: 356, y: 18 }, { x: 368, y: 28 }, { x: 380, y: 34 },
     ];
     for (const w of windows) {
-      gfx.fillRect(w.x, 52 - w.y, 4, 4);
+      gfx.fillRect(w.x, 52 - w.y, 3, 3);
     }
     // Lower light concrete
     gfx.fillStyle(0x9ca3af, 0.35);
@@ -375,6 +444,27 @@ export class PuzzleScene extends Phaser.Scene {
         foreGfx.fillCircle(gx, 285, 3);
         foreGfx.fillCircle(gx + 10, 287, 2);
       }
+      // Two more trees at top corners
+      this.drawTree(foreGfx, 24, 12);
+      this.drawTree(foreGfx, 264, 12);
+      // Crosswalk stripes near exit zone (white painted bars)
+      foreGfx.fillStyle(0xffffff, 0.3);
+      for (let cx = 0; cx < 288; cx += 14) {
+        foreGfx.fillRect(cx, 38, 8, 4);
+      }
+      // Lamppost on left side
+      foreGfx.fillStyle(0x4a5568, 0.7);
+      foreGfx.fillRect(10, 60, 3, 60);
+      foreGfx.fillStyle(0xfbbf24, 0.6);
+      foreGfx.fillCircle(11, 58, 4);
+      // Sidewalk paving grid at bottom edge
+      foreGfx.lineStyle(1, 0x6b7280, 0.15);
+      foreGfx.beginPath();
+      for (let px = 0; px < 288; px += 16) {
+        foreGfx.moveTo(px, 280);
+        foreGfx.lineTo(px, 288);
+      }
+      foreGfx.strokePath();
     } else if (theme === 'garage') {
       // Concrete beam at top edge
       foreGfx.fillStyle(0x374151, 0.4);
@@ -384,6 +474,16 @@ export class PuzzleScene extends Phaser.Scene {
       foreGfx.moveTo(0, 5);
       foreGfx.lineTo(288, 5);
       foreGfx.strokePath();
+      // Shopping cart at bottom-left
+      foreGfx.lineStyle(2, 0x9ca3af, 0.5);
+      foreGfx.strokeRect(20, 260, 18, 14);
+      foreGfx.fillStyle(0x9ca3af, 0.4);
+      foreGfx.fillCircle(23, 274, 3);
+      foreGfx.fillCircle(35, 274, 3);
+      // Barrier blocks at edge
+      foreGfx.fillStyle(0xfbbf24, 0.5);
+      foreGfx.fillRect(248, 270, 14, 10);
+      foreGfx.fillRect(266, 270, 14, 10);
     } else if (theme === 'underground') {
       // Overhead pipe segments at top edge
       foreGfx.fillStyle(0x4a5568, 0.5);
@@ -391,6 +491,19 @@ export class PuzzleScene extends Phaser.Scene {
       foreGfx.fillRect(55, -2, 6, 10);
       foreGfx.fillRect(135, -2, 6, 10);
       foreGfx.fillRect(215, -2, 6, 10);
+      // Large overhead rectangular duct running across
+      foreGfx.fillStyle(0x6b7280, 0.35);
+      foreGfx.fillRect(80, -6, 120, 8);
+      foreGfx.fillStyle(0x4a5568, 0.3);
+      foreGfx.fillRect(80, -6, 120, 2);
+      // Drainage grate at bottom-right corner
+      foreGfx.lineStyle(1, 0x4a5568, 0.3);
+      foreGfx.beginPath();
+      for (let gx = 230; gx < 260; gx += 4) {
+        foreGfx.moveTo(gx, 278);
+        foreGfx.lineTo(gx, 288);
+      }
+      foreGfx.strokePath();
     } else if (theme === 'rooftop') {
       // Safety railing at bottom edge
       foreGfx.lineStyle(2, 0x6b7280, 0.45);
@@ -402,7 +515,28 @@ export class PuzzleScene extends Phaser.Scene {
         foreGfx.lineTo(px, 285);
       }
       foreGfx.strokePath();
+      // AC unit / ventilator box at top-right
+      foreGfx.fillStyle(0x6b7280, 0.5);
+      foreGfx.fillRect(234, 250, 22, 14);
+      foreGfx.lineStyle(1, 0x9ca3af, 0.4);
+      foreGfx.strokeRect(234, 250, 22, 14);
+      foreGfx.fillStyle(0x4a5568, 0.4);
+      foreGfx.fillRect(238, 253, 6, 4);
+      foreGfx.fillRect(246, 253, 6, 4);
+      // Potted plants along the railing
+      this.drawPottedPlant(foreGfx, 20, 280);
+      this.drawPottedPlant(foreGfx, 268, 280);
     }
+  }
+
+  /** Small potted plant: brown pot + green leaves */
+  private drawPottedPlant(gfx: Phaser.GameObjects.Graphics, x: number, y: number): void {
+    gfx.fillStyle(0x8b5e3c, 1);
+    gfx.fillRect(x - 3, y - 4, 6, 4);
+    gfx.fillStyle(0x4ade80, 0.7);
+    gfx.fillCircle(x, y - 8, 4);
+    gfx.fillCircle(x - 3, y - 6, 3);
+    gfx.fillCircle(x + 3, y - 6, 3);
   }
 
   // ──────────────────────────────────────────────────────────

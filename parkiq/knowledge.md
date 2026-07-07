@@ -99,6 +99,7 @@ EPIC 10: Visual Foundation & Rendering Architecture ← CURRENT FOCUS
 5. `DrivingControls` is not a Phaser Container — drawn at absolute scene coordinates, can't be repositioned/scaled as a unit.
 6. Known layout metrics (reference, don't re-derive): canvas 390×844; container origin (1,52) scaled 1.35×; grid 288×288 unscaled (388.8×388.8 on screen); card ~y46–447; controls centered at (195,590); ~176px unused below controls.
 7. **Zoom ceiling is mathematically capped, confirmed during Story 10.1**: the grid already renders at 388.8-389.8px on a 390px-wide canvas (0.05-1% margin). Any zoom beyond ~1% clips real gameplay content (obstacles/road surface in the rightmost column) — confirmed via exact pixel math, not assumption. The "feels zoomed out / less tense" complaint from visual review CANNOT be solved by scaling the grid further, regardless of implementation technique (container scale, camera zoom, or otherwise) — the constraint is the fixed 390px canvas width, not the scaling method. Story 10.4/10.5 must solve this through environment density (surrounding decoration, tighter visual spacing illusions, thinner lines) rather than raw scale.
+8. **Known open issue, confirmed during Story 10.4 review, not yet scoped**: the parking card (depth 3, solid `0x1c1c1e` fill, Y=24–784) currently covers almost the entire theme environment backdrop drawn at depth 2 — only thin sky/ground strips above and below the card are visible on screen. Story 10.4's environment richness (skyline, crosswalk, props, etc.) is real in the code but effectively invisible to the player until this layering is resolved. Needs a design decision before implementation: theme-colored/semi-transparent card vs. moving richness into the card's own draw layer. Tracked for the next environment-visibility story.
 
 | Story | Goal | Deliverables |
 |---|---|---|
@@ -284,7 +285,7 @@ underground: road #0F172A (very dark), lines #E8320A (red warning), pillar #1E29
 
 ```
 Grid size:    288 × 288px = 6 columns × 6 rows, 48px per unit — verified correct
-Container:    positioned at (CONTAINER_X=1, CONTAINER_Y=52) in scene-root pixels,
+Container:    positioned at (CONTAINER_X=1, CONTAINER_Y=30) in scene-root pixels,
               scaled by CONTAINER_SCALE=1.35
 Offsets:      CONTAINER_OFFSET_X=1, CONTAINER_OFFSET_Y=2 (grid-unit offsets,
               added before multiplying by UNIT_PX — NOT scene-root pixel offsets)
@@ -308,6 +309,39 @@ CAR_W = 72px, CAR_H = 144px  (the ONLY correct value — used by collision,
 In grid units: 1.5 columns wide, 3 rows long
 ```
 ⚠️ The car is **1.5 grid columns wide**, not a clean whole number. A single empty column (48px) is narrower than the car — the car needs at least 2 full columns of lateral clearance to fit without overlapping when centered on a column boundary. Do not assume "1 empty column = enough room" when designing puzzle geometry.
+
+### Container-Scale Coordinate Frame (authoritative — lesson from Story 10.5)
+
+The container (ParkingGrid, obstacles, player car, exit zone) lives entirely
+in **local coordinates** with `CONTAINER_SCALE=1.35` applied. The D-pad and
+HUD are separate Phaser GameObjects added directly to the Scene, **outside**
+the container, in raw world coordinates. These two coordinate systems only
+meet when converting a local value to a world-space check (e.g. "does the
+car's clamp overlap the D-pad on screen").
+
+⚠️ **Convert once, at the boundary — not per-component.** `CAR_HALF_W`/
+`CAR_HALF_H` are container-local units (same space as `COL0_CENTER` etc.,
+confirmed by `CAR_W=72`/`CAR_H=144` above). Any clamp constant that already
+has `CAR_HALF_W/H` added into it is a complete local-space value. To check
+it against a world-space object (D-pad, HUD), transform the **whole clamp
+value once**:
+```
+worldEdge = CONTAINER_Y + (localClampValue * CONTAINER_SCALE)
+```
+Do NOT separately re-multiply `CAR_HALF_W/H` by `CONTAINER_SCALE` on top of
+this — that double-counts the scale and produces a false "still overlapping"
+result. This exact mistake caused two rounds of unnecessary re-work in
+Story 10.5.
+
+**Current confirmed clamp constants (D-pad clearance, Story 10.5):**
+```
+CLAMP_MIN_X = 21.333
+CLAMP_MAX_X = 314.666
+CLAMP_MIN_Y = 42.666
+CLAMP_MAX_Y = 311
+```
+Verified against real screenshots at all 4 edges — car does not visually
+overlap D-pad buttons in any direction.
 
 ---
 
