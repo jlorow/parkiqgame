@@ -29,6 +29,7 @@ const CARD_Y = CONTAINER_Y - 6;
 const CARD_W = 390;
 const CARD_H = 760;
 const CARD_RADIUS = 14;
+const CARD_BOTTOM = CARD_Y + CARD_H;
 
 const CONTROLS_CENTER_X = 195;
 const CONTROLS_CENTER_Y = CARD_Y + CARD_H - 128;
@@ -121,7 +122,7 @@ export class PuzzleScene extends Phaser.Scene {
     const { puzzleIndex } = await getProgress();
     this.puzzle = getPuzzleByIndex(puzzleIndex);
 
-    this.renderThemeEnvironment(this.puzzle.theme);
+    this.renderEnvironment();
     this.renderHUD();
     this.renderObjective();
     this.renderControls();
@@ -186,7 +187,7 @@ export class PuzzleScene extends Phaser.Scene {
   //  Draws at depth 2 — between vignette (1) and card (3).
   // ──────────────────────────────────────────────────────────
 
-  private renderThemeEnvironment(theme: PuzzleTheme): void {
+  private renderEnvironment(): void {
     // Destroy previous environment if exists (for puzzle-to-puzzle transitions)
     if (this.themeEnvGfx) {
       this.themeEnvGfx.destroy();
@@ -198,20 +199,194 @@ export class PuzzleScene extends Phaser.Scene {
 
     const W = 390;
     const H = 844;
+    const theme = this.puzzle.theme;
 
     switch (theme) {
       case 'street':
-        drawStreetEnv(gfx, W, H);
+        this.drawStreetBackdrop(gfx, W, H);
         break;
       case 'garage':
-        drawGarageEnv(gfx, W, H);
+        this.drawGarageBackdrop(gfx, W, H);
         break;
       case 'underground':
-        drawUndergroundEnv(gfx, W, H);
+        this.drawUndergroundBackdrop(gfx, W, H);
         break;
       case 'rooftop':
-        drawRooftopEnv(gfx, W, H);
+        this.drawRooftopBackdrop(gfx, W, H);
         break;
+    }
+  }
+
+  // ── Theme backdrop helpers (Theme Base + Ground Surface) ────────
+
+  private drawStreetBackdrop(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
+    // Sky gradient (y=0-120)
+    for (let y = 0; y < 120; y++) {
+      const t = y / 120;
+      const r = Math.floor(0x0a + (0x1a - 0x0a) * t);
+      const c = (r << 16) | (r << 8) | r;
+      gfx.fillStyle(c, 0.8 + 0.2 * (1 - t));
+      gfx.fillRect(0, y, W, 1);
+    }
+    // Sandy/beige ground below card (y=CARD_BOTTOM-844)
+    for (let y = CARD_BOTTOM; y < H; y++) {
+      const t = (y - CARD_BOTTOM) / (H - CARD_BOTTOM);
+      const r = Math.floor(0x2a + (0x1a - 0x2a) * Math.min(t * 2, 1));
+      const g = Math.floor(0x22 + (0x14 - 0x22) * Math.min(t * 2, 1));
+      const b = Math.floor(0x18 + (0x0c - 0x18) * Math.min(t * 2, 1));
+      const color = (r << 16) | (g << 8) | b;
+      gfx.fillStyle(color, 1);
+      gfx.fillRect(0, y, W, 1);
+    }
+    // Grass line at top of ground area
+    gfx.fillStyle(0x1a4a1a, 0.4);
+    gfx.fillRect(0, CARD_BOTTOM - 5, W, 6);
+  }
+
+  private drawGarageBackdrop(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
+    // Upper wall (y=0-52)
+    gfx.fillStyle(0x0a0f14, 1);
+    gfx.fillRect(0, 0, W, 52);
+    // Concrete beam at top of card
+    gfx.fillStyle(0x1f2937, 1);
+    gfx.fillRect(0, 44, W, 8);
+    // Lower floor (y=CARD_BOTTOM-844)
+    gfx.fillStyle(0x0d1117, 1);
+    gfx.fillRect(0, CARD_BOTTOM, W, H - CARD_BOTTOM);
+    // Floor line
+    gfx.lineStyle(1, 0x374151, 0.4);
+    gfx.beginPath();
+    gfx.moveTo(0, CARD_BOTTOM);
+    gfx.lineTo(W, CARD_BOTTOM);
+    gfx.strokePath();
+  }
+
+  private drawUndergroundBackdrop(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
+    // Upper wall
+    gfx.fillStyle(0x060a0f, 1);
+    gfx.fillRect(0, 0, W, 52);
+    // Red/white warning stripe at top of card
+    for (let sx = 0; sx < W; sx += 8) {
+      const isRed = Math.floor(sx / 8) % 2 === 0;
+      gfx.fillStyle(isRed ? 0xe8320a : 0xffffff, isRed ? 0.35 : 0.12);
+      gfx.fillRect(sx, 44, 8, 8);
+    }
+    // Pipe ends protruding from top
+    gfx.fillStyle(0x4a5568, 0.6);
+    gfx.fillRect(50, 30, 8, 16);
+    gfx.fillRect(130, 28, 10, 18);
+    gfx.fillRect(210, 32, 8, 14);
+    gfx.fillRect(290, 29, 10, 17);
+    gfx.fillRect(350, 31, 8, 15);
+    // Lower floor
+    gfx.fillStyle(0x060a0f, 1);
+    gfx.fillRect(0, CARD_BOTTOM, W, H - CARD_BOTTOM);
+    gfx.lineStyle(1, 0xe8320a, 0.15);
+    gfx.beginPath();
+    gfx.moveTo(0, CARD_BOTTOM);
+    gfx.lineTo(W, CARD_BOTTOM);
+    gfx.strokePath();
+  }
+
+  private drawRooftopBackdrop(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
+    // Sky gradient behind building silhouettes
+    for (let y = 0; y < 60; y++) {
+      const t = y / 60;
+      const r = Math.floor(0x0a + (0x2a - 0x0a) * t);
+      const g = Math.floor(0x0e + (0x30 - 0x0e) * t);
+      const b = Math.floor(0x1a + (0x40 - 0x1a) * t);
+      const color = (r << 16) | (g << 8) | b;
+      gfx.fillStyle(color, 1);
+      gfx.fillRect(0, y, W, 1);
+    }
+    // Building silhouettes at top of card area
+    gfx.fillStyle(0x1a1a2e, 0.7);
+    const buildings = [
+      { x: 0, w: 50, h: 42 }, { x: 55, w: 30, h: 32 },
+      { x: 90, w: 44, h: 44 }, { x: 140, w: 26, h: 28 },
+      { x: 172, w: 38, h: 36 }, { x: 218, w: 48, h: 48 },
+      { x: 270, w: 20, h: 24 }, { x: 295, w: 95, h: 38 },
+    ];
+    for (const b of buildings) {
+      gfx.fillRect(b.x, 52 - b.h, b.w, b.h);
+    }
+    // A few lit windows
+    gfx.fillStyle(0x4a6741, 0.3);
+    const windows: Array<{ x: number; y: number }> = [
+      { x: 16, y: 22 }, { x: 32, y: 30 },
+      { x: 100, y: 18 }, { x: 114, y: 26 },
+      { x: 182, y: 24 }, { x: 196, y: 20 },
+      { x: 230, y: 14 }, { x: 244, y: 22 }, { x: 254, y: 34 },
+    ];
+    for (const w of windows) {
+      gfx.fillRect(w.x, 52 - w.y, 4, 4);
+    }
+    // Lower light concrete
+    gfx.fillStyle(0x9ca3af, 0.35);
+    gfx.fillRect(0, CARD_BOTTOM, W, H - CARD_BOTTOM);
+    // Safety rail at top of lower area
+    gfx.lineStyle(2, 0x6b7280, 0.5);
+    gfx.beginPath();
+    gfx.moveTo(0, CARD_BOTTOM + 3);
+    gfx.lineTo(W, CARD_BOTTOM + 3);
+    for (let px = 0; px < W; px += 30) {
+      gfx.moveTo(px, CARD_BOTTOM);
+      gfx.lineTo(px, CARD_BOTTOM + 9);
+    }
+    gfx.strokePath();
+  }
+
+  /** Small tree: brown trunk + green circle canopy */
+  private drawTree(gfx: Phaser.GameObjects.Graphics, x: number, y: number): void {
+    gfx.fillStyle(0x5c3a1e, 1);
+    gfx.fillRect(x - 2, y - 10, 4, 10);
+    gfx.fillStyle(0x2d7a2d, 1);
+    gfx.fillCircle(x, y - 14, 8);
+  }
+
+  // ── Theme foreground props (inside parking container) ───────────
+
+  private addThemeForeground(container: Phaser.GameObjects.Container, theme: PuzzleTheme): void {
+    const foreGfx = this.add.graphics();
+    foreGfx.setDepth(4.5);
+    container.add(foreGfx);
+
+    if (theme === 'street') {
+      // Trees at bottom corners + small grass tufts
+      this.drawTree(foreGfx, 24, 282);
+      this.drawTree(foreGfx, 264, 282);
+      foreGfx.fillStyle(0x2d7a2d, 0.25);
+      for (let gx = 60; gx < 240; gx += 28) {
+        foreGfx.fillCircle(gx, 285, 3);
+        foreGfx.fillCircle(gx + 10, 287, 2);
+      }
+    } else if (theme === 'garage') {
+      // Concrete beam at top edge
+      foreGfx.fillStyle(0x374151, 0.4);
+      foreGfx.fillRect(0, 0, 288, 5);
+      foreGfx.lineStyle(1, 0x4b5563, 0.5);
+      foreGfx.beginPath();
+      foreGfx.moveTo(0, 5);
+      foreGfx.lineTo(288, 5);
+      foreGfx.strokePath();
+    } else if (theme === 'underground') {
+      // Overhead pipe segments at top edge
+      foreGfx.fillStyle(0x4a5568, 0.5);
+      foreGfx.fillRect(0, 0, 288, 4);
+      foreGfx.fillRect(55, -2, 6, 10);
+      foreGfx.fillRect(135, -2, 6, 10);
+      foreGfx.fillRect(215, -2, 6, 10);
+    } else if (theme === 'rooftop') {
+      // Safety railing at bottom edge
+      foreGfx.lineStyle(2, 0x6b7280, 0.45);
+      foreGfx.beginPath();
+      foreGfx.moveTo(0, 282);
+      foreGfx.lineTo(288, 282);
+      for (let px = 0; px < 288; px += 24) {
+        foreGfx.moveTo(px, 279);
+        foreGfx.lineTo(px, 285);
+      }
+      foreGfx.strokePath();
     }
   }
 
@@ -309,46 +484,7 @@ export class PuzzleScene extends Phaser.Scene {
     });
 
     // ── Themed foreground elements framing the grid ────────────
-    const foreGfx = this.add.graphics();
-    foreGfx.setDepth(4.5);
-    container.add(foreGfx);
-    if (this.puzzle.theme === 'street') {
-      // Trees at bottom corners + small grass tufts
-      drawTree(foreGfx, 24, 282);
-      drawTree(foreGfx, 264, 282);
-      foreGfx.fillStyle(0x2d7a2d, 0.25);
-      for (let gx = 60; gx < 240; gx += 28) {
-        foreGfx.fillCircle(gx, 285, 3);
-        foreGfx.fillCircle(gx + 10, 287, 2);
-      }
-    } else if (this.puzzle.theme === 'garage') {
-      // Concrete beam at top edge
-      foreGfx.fillStyle(0x374151, 0.4);
-      foreGfx.fillRect(0, 0, 288, 5);
-      foreGfx.lineStyle(1, 0x4b5563, 0.5);
-      foreGfx.beginPath();
-      foreGfx.moveTo(0, 5);
-      foreGfx.lineTo(288, 5);
-      foreGfx.strokePath();
-    } else if (this.puzzle.theme === 'underground') {
-      // Overhead pipe segments at top edge
-      foreGfx.fillStyle(0x4a5568, 0.5);
-      foreGfx.fillRect(0, 0, 288, 4);
-      foreGfx.fillRect(55, -2, 6, 10);
-      foreGfx.fillRect(135, -2, 6, 10);
-      foreGfx.fillRect(215, -2, 6, 10);
-    } else if (this.puzzle.theme === 'rooftop') {
-      // Safety railing at bottom edge
-      foreGfx.lineStyle(2, 0x6b7280, 0.45);
-      foreGfx.beginPath();
-      foreGfx.moveTo(0, 282);
-      foreGfx.lineTo(288, 282);
-      for (let px = 0; px < 288; px += 24) {
-        foreGfx.moveTo(px, 279);
-        foreGfx.lineTo(px, 285);
-      }
-      foreGfx.strokePath();
-    }
+    this.addThemeForeground(container, this.puzzle.theme);
 
     // ── Step 2: Obstacle shadows (static, drawn once) ─────────────
     for (const obs of this.puzzle.obstacles) {
@@ -567,7 +703,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.puzzleNumberText.setText(`PUZZLE #${this.puzzle.id}`);
 
     // Redraw themed environment for the new theme
-    this.renderThemeEnvironment(this.puzzle.theme);
+    this.renderEnvironment();
 
     // Reset state
     this.exited = false;
@@ -635,140 +771,4 @@ export class PuzzleScene extends Phaser.Scene {
     this.playerCarImage.setPosition(this.carX, this.carY);
     this.playerCarImage.setAngle(this.carAngle);
   }
-}
-
-// ──────────────────────────────────────────────────────────
-//  Theme Environment Drawing (module-level helpers)
-//  Each draws a full-screen backdrop (390×844) at the given
-//  Graphics context, filling the area above and below the
-//  parking card to create a miniature-environment feel.
-// ──────────────────────────────────────────────────────────
-
-/** Street: dark warm sky → sandy ground */
-function drawStreetEnv(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
-  // Sky gradient (y=0-120)
-  for (let y = 0; y < 120; y++) {
-    const t = y / 120;
-    const r = Math.floor(0x0a + (0x1a - 0x0a) * t);
-    const c = (r << 16) | (r << 8) | r;
-    gfx.fillStyle(c, 0.8 + 0.2 * (1 - t));
-    gfx.fillRect(0, y, W, 1);
-  }
-  // Sandy/beige ground below card (y=447-844)
-  for (let y = 447; y < H; y++) {
-    const t = (y - 447) / (H - 447);
-    const r = Math.floor(0x2a + (0x1a - 0x2a) * Math.min(t * 2, 1));
-    const g = Math.floor(0x22 + (0x14 - 0x22) * Math.min(t * 2, 1));
-    const b = Math.floor(0x18 + (0x0c - 0x18) * Math.min(t * 2, 1));
-    const color = (r << 16) | (g << 8) | b;
-    gfx.fillStyle(color, 1);
-    gfx.fillRect(0, y, W, 1);
-  }
-  // Grass line at top of ground area
-  gfx.fillStyle(0x1a4a1a, 0.4);
-  gfx.fillRect(0, 442, W, 6);
-}
-
-/** Garage: dark concrete walls above, concrete floor below */
-function drawGarageEnv(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
-  // Upper wall (y=0-52)
-  gfx.fillStyle(0x0a0f14, 1);
-  gfx.fillRect(0, 0, W, 52);
-  // Concrete beam at top of card
-  gfx.fillStyle(0x1f2937, 1);
-  gfx.fillRect(0, 44, W, 8);
-  // Lower floor (y=447-844)
-  gfx.fillStyle(0x0d1117, 1);
-  gfx.fillRect(0, 447, W, H - 447);
-  // Floor line
-  gfx.lineStyle(1, 0x374151, 0.4);
-  gfx.beginPath();
-  gfx.moveTo(0, 447);
-  gfx.lineTo(W, 447);
-  gfx.strokePath();
-}
-
-/** Underground: very dark walls, red/white stripe, pipes above */
-function drawUndergroundEnv(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
-  // Upper wall
-  gfx.fillStyle(0x060a0f, 1);
-  gfx.fillRect(0, 0, W, 52);
-  // Red/white warning stripe at top of card
-  for (let sx = 0; sx < W; sx += 8) {
-    const isRed = Math.floor(sx / 8) % 2 === 0;
-    gfx.fillStyle(isRed ? 0xe8320a : 0xffffff, isRed ? 0.35 : 0.12);
-    gfx.fillRect(sx, 44, 8, 8);
-  }
-  // Pipe ends protruding from top
-  gfx.fillStyle(0x4a5568, 0.6);
-  gfx.fillRect(50, 30, 8, 16);
-  gfx.fillRect(130, 28, 10, 18);
-  gfx.fillRect(210, 32, 8, 14);
-  gfx.fillRect(290, 29, 10, 17);
-  gfx.fillRect(350, 31, 8, 15);
-  // Lower floor
-  gfx.fillStyle(0x060a0f, 1);
-  gfx.fillRect(0, 447, W, H - 447);
-  gfx.lineStyle(1, 0xe8320a, 0.15);
-  gfx.beginPath();
-  gfx.moveTo(0, 447);
-  gfx.lineTo(W, 447);
-  gfx.strokePath();
-}
-
-/** Rooftop: sky with building silhouettes above, light concrete below */
-function drawRooftopEnv(gfx: Phaser.GameObjects.Graphics, W: number, H: number): void {
-  // Sky gradient behind building silhouettes
-  for (let y = 0; y < 60; y++) {
-    const t = y / 60;
-    const r = Math.floor(0x0a + (0x2a - 0x0a) * t);
-    const g = Math.floor(0x0e + (0x30 - 0x0e) * t);
-    const b = Math.floor(0x1a + (0x40 - 0x1a) * t);
-    const color = (r << 16) | (g << 8) | b;
-    gfx.fillStyle(color, 1);
-    gfx.fillRect(0, y, W, 1);
-  }
-  // Building silhouettes at top of card area
-  gfx.fillStyle(0x1a1a2e, 0.7);
-  const buildings = [
-    { x: 0, w: 50, h: 42 }, { x: 55, w: 30, h: 32 },
-    { x: 90, w: 44, h: 44 }, { x: 140, w: 26, h: 28 },
-    { x: 172, w: 38, h: 36 }, { x: 218, w: 48, h: 48 },
-    { x: 270, w: 20, h: 24 }, { x: 295, w: 95, h: 38 },
-  ];
-  for (const b of buildings) {
-    gfx.fillRect(b.x, 52 - b.h, b.w, b.h);
-  }
-  // A few lit windows
-  gfx.fillStyle(0x4a6741, 0.3);
-  const windows: Array<{ x: number; y: number }> = [
-    { x: 16, y: 22 }, { x: 32, y: 30 },
-    { x: 100, y: 18 }, { x: 114, y: 26 },
-    { x: 182, y: 24 }, { x: 196, y: 20 },
-    { x: 230, y: 14 }, { x: 244, y: 22 }, { x: 254, y: 34 },
-  ];
-  for (const w of windows) {
-    gfx.fillRect(w.x, 52 - w.y, 4, 4);
-  }
-  // Lower light concrete
-  gfx.fillStyle(0x9ca3af, 0.35);
-  gfx.fillRect(0, 447, W, H - 447);
-  // Safety rail at top of lower area
-  gfx.lineStyle(2, 0x6b7280, 0.5);
-  gfx.beginPath();
-  gfx.moveTo(0, 450);
-  gfx.lineTo(W, 450);
-  for (let px = 0; px < W; px += 30) {
-    gfx.moveTo(px, 447);
-    gfx.lineTo(px, 453);
-  }
-  gfx.strokePath();
-}
-
-/** Small tree: brown trunk + green circle canopy */
-function drawTree(gfx: Phaser.GameObjects.Graphics, x: number, y: number): void {
-  gfx.fillStyle(0x5c3a1e, 1);
-  gfx.fillRect(x - 2, y - 10, 4, 10);
-  gfx.fillStyle(0x2d7a2d, 1);
-  gfx.fillCircle(x, y - 14, 8);
 }

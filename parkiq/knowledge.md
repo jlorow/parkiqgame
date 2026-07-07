@@ -414,6 +414,8 @@ All geometry (player car, obstacles, exit zone) uses the same container-local pi
 ## Git Branching Rule (mandatory)
 Before writing any code, run: `git checkout -b feature/<name>` — adjust `<name>` to match the current prompt/epic/story (e.g. `feature/epic9-story9-5-cleanup`). Freebuff executes this git command in the project terminal before implementing anything, every time, with no exceptions. This must be the first action taken in response to any task prompt, before Step 0/audit work begins.
 
+**Merge-back is equally mandatory.** Before creating a NEW feature branch, first confirm the PREVIOUS feature branch's confirmed-working changes have been merged into the base branch (main), and that the new branch is created FROM that updated base — not from an older point that predates the previous branch's fixes. Skipping this caused a real regression (Story 10.2 rebuilt environment rendering on a branch that predated Story 10.1's exit-zone fix, silently reintroducing the bug). Report the merge explicitly when confirming a new branch: "merged feature/X into main, then created feature/Y from updated main."
+
 ## Sequencing Rule
 Implement and verify one story at a time. Do not start the next until the current one's Definition of Done is explicitly confirmed.
 
