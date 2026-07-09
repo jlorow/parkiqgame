@@ -46,6 +46,18 @@ const CONTROLS_CENTER_X = 195;
 const CONTROLS_CENTER_Y = 690;
 
 // ──────────────────────────────────────────────────────────
+//  Instruction Panel Constants
+//  The panel is sized from the text word-wrap width plus
+//  padding, so it adapts if the instruction string or wrap
+//  width changes.
+// ──────────────────────────────────────────────────────────
+
+const INSTRUCTION_WRAP_WIDTH = 320;   // Word-wrap width for instruction text — also used to size the panel
+const INSTRUCTION_PANEL_PAD_X = 16;   // Horizontal padding between text content and panel edge
+const INSTRUCTION_PANEL_PAD_Y = 10;   // Vertical padding between text and panel edge
+const INSTRUCTION_PANEL_RADIUS = 10;  // Corner radius of the rounded-rect panel
+
+// ──────────────────────────────────────────────────────────
 //  Sprite counter-scale — keeps car/obstacle images proportional
 //  when container applies non-uniform scale (SCALE_X ≠ SCALE_Y).
 // ──────────────────────────────────────────────────────────
@@ -731,18 +743,38 @@ export class PuzzleScene extends Phaser.Scene {
   // ──────────────────────────────────────────────────────────
 
   private renderObjective(): void {
-    this.add
-      .text(195, OBJECTIVE_Y, 'Drive out without hitting another car.', {
+    // Create text first so we can measure its rendered height
+    const text = this.add
+      .text(CONTROLS_CENTER_X, OBJECTIVE_Y, 'Drive out without hitting another car.', {
         fontSize: '14px',
         color: '#FFFFFF',
         stroke: '#000000',
         strokeThickness: 4,
         fontStyle: 'bold',
         align: 'center',
-        wordWrap: { width: 320 },
+        wordWrap: { width: INSTRUCTION_WRAP_WIDTH },
       })
       .setOrigin(0.5, 0)
       .setDepth(10);
+
+    // Draw a subtle panel behind the text using the measured text height.
+    // Panel dimensions are derived from INSTRUCTION_WRAP_WIDTH + padding,
+    // positioned relative to CONTROLS_CENTER_X / OBJECTIVE_Y.
+    const panelW = INSTRUCTION_WRAP_WIDTH + INSTRUCTION_PANEL_PAD_X * 2;
+    const panelH = text.height + INSTRUCTION_PANEL_PAD_Y * 2;
+    const panelX = CONTROLS_CENTER_X - panelW / 2;
+    const panelY = OBJECTIVE_Y - INSTRUCTION_PANEL_PAD_Y;
+
+    const panel = this.add.graphics();
+    panel.setDepth(8);
+
+    // Soft dark fill with subtle contrast against the control surface (0x141414)
+    panel.fillStyle(0x1a1a1a, 0.9);
+    panel.fillRoundedRect(panelX, panelY, panelW, panelH, INSTRUCTION_PANEL_RADIUS);
+
+    // Thin border for definition
+    panel.lineStyle(1, 0x2a2a2a, 0.4);
+    panel.strokeRoundedRect(panelX, panelY, panelW, panelH, INSTRUCTION_PANEL_RADIUS);
   }
 
   // ──────────────────────────────────────────────────────────

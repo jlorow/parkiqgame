@@ -329,6 +329,281 @@ Movement, collision detection, and exit-zone detection are already built and ver
 
 ---
 
+---
+
+# Epic 15 — Gameplay Integrity & Movement
+
+**Goal:** Restore the intended gameplay behaviour by ensuring the player vehicle respects the physical boundaries of the parking lot and all obstacle interactions before continuing with any gameplay enhancements.
+
+---
+
+# Story 15.1 — Playfield Boundary Enforcement
+
+### Problem
+
+The player vehicle can currently be driven outside the intended playable parking area.
+
+Examples observed:
+
+* Driving beyond the road surface.
+* Leaving the visible parking lot.
+* Partially disappearing outside the playfield.
+
+This breaks the illusion of a bounded parking puzzle.
+
+---
+
+### Objective
+
+Ensure the player vehicle always remains inside the playable area.
+
+Movement should stop at the defined playfield boundaries.
+
+---
+
+### Scope
+
+Investigate:
+
+* current movement clamp logic
+* world bounds
+* container-local coordinates
+* vehicle footprint
+* edge calculations
+
+Implement a robust boundary solution without changing gameplay feel.
+
+---
+
+### Success Criteria
+
+* Player cannot leave the playable area.
+* No clipping outside the road.
+* Vehicle remains fully visible.
+* Existing movement behaviour is preserved.
+
+---
+
+### Risk
+
+**Medium**
+
+Touches movement constraints.
+
+Must not affect puzzle completion or collision detection.
+
+---
+
+# Story 15.2 — Vehicle Collision Integrity
+
+### Problem
+
+The player vehicle is able to overlap parked vehicles.
+
+In several screenshots the player occupies the same space as obstacle cars.
+
+This breaks the core puzzle mechanic.
+
+---
+
+### Objective
+
+Restore proper vehicle-to-vehicle collision behaviour.
+
+Parked vehicles must behave as solid obstacles.
+
+---
+
+### Scope
+
+Audit and fix:
+
+* collision detection
+* collision response
+* collision footprint
+* sprite bounds vs collision bounds
+* overlap tests
+
+---
+
+### Success Criteria
+
+* Player cannot drive through parked vehicles.
+* Collision is detected consistently.
+* Collision response matches the intended game design.
+* No regression in movement.
+
+---
+
+### Risk
+
+**High**
+
+Core gameplay system.
+
+Requires careful testing across all puzzles.
+
+---
+
+# Story 15.3 — Environmental Obstacle Collision
+
+### Problem
+
+Environmental objects exist throughout the playfield (pillars, AC units, barriers, etc.), but their gameplay behaviour must be verified.
+
+The Epic 14 audit confirmed these are intentional assets.
+
+Their collision behaviour should now be validated.
+
+---
+
+### Objective
+
+Ensure every obstacle behaves consistently with the intended puzzle design.
+
+---
+
+### Scope
+
+Verify each environmental object:
+
+* has collision when intended
+* has no collision when decorative
+* uses the correct collision bounds
+* behaves consistently across themes
+
+---
+
+### Success Criteria
+
+* Interactive obstacles block movement.
+* Decorative props do not interfere.
+* Collision matches visual appearance.
+
+---
+
+### Risk
+
+**Medium**
+
+May expose inconsistencies in obstacle definitions.
+
+---
+
+# Story 15.4 — Collision Response & Reset Behaviour
+
+### Problem
+
+Even when collisions occur, the response may not be consistent.
+
+The player experience should be predictable.
+
+---
+
+### Objective
+
+Ensure every collision triggers the correct gameplay response.
+
+Depending on the existing game rules, this may include:
+
+* immediate reset
+* restart animation
+* sound effect
+* visual feedback
+
+This story should implement **the project's established collision behaviour**, not invent new mechanics.
+
+---
+
+### Scope
+
+Review:
+
+* collision event flow
+* reset sequence
+* puzzle restart
+* state cleanup
+
+---
+
+### Success Criteria
+
+* Every collision produces the expected response.
+* Puzzle resets cleanly.
+* No duplicated state.
+* No soft locks.
+
+---
+
+### Risk
+
+**Medium–High**
+
+Touches game state management.
+
+---
+
+# Story 15.5 — Gameplay Validation Pass
+
+### Problem
+
+After Stories 15.1–15.4, gameplay integrity must be verified across all puzzles.
+
+---
+
+### Objective
+
+Perform a comprehensive gameplay validation.
+
+---
+
+### Scope
+
+Verify across all implemented puzzles:
+
+* boundary enforcement
+* parked vehicle collisions
+* environmental collisions
+* exit detection
+* puzzle progression
+* restart behaviour
+* player spawn
+* movement consistency
+
+---
+
+### Success Criteria
+
+Every puzzle:
+
+* starts correctly,
+* plays correctly,
+* resets correctly,
+* completes correctly,
+* advances correctly.
+
+---
+
+### Risk
+
+**Low**
+
+Validation only.
+
+---
+
+## Recommended execution order
+
+Unlike the layout stories, these have dependencies and should be completed in sequence:
+
+1. **Story 15.1 — Playfield Boundary Enforcement** (keep the player inside the playable area)
+2. **Story 15.2 — Vehicle Collision Integrity** (restore collisions with parked cars)
+3. **Story 15.3 — Environmental Obstacle Collision** (validate props and obstacles)
+4. **Story 15.4 — Collision Response & Reset Behaviour** (ensure collisions trigger the correct game response)
+5. **Story 15.5 — Gameplay Validation Pass** (end-to-end verification)
+
+--
+
 ## Project Structure
 
 ```
