@@ -21,6 +21,15 @@ const CONTAINER_Y = -30;
 const CONTAINER_OFFSET_X = 0.5;
 const CONTAINER_OFFSET_Y = 0.5;
 
+// ════════════════════════════════════════════════════════════
+//  Developer Testing Flags  —  set true to bypass mechanics
+// ════════════════════════════════════════════════════════════
+
+const DEBUG_SKIP_PUZZLE_5 = true;    // Skip puzzle 5 → load puzzle 6
+const DEBUG_DISABLE_COLLISIONS = true; // Ignore all collision hitboxes
+
+// ════════════════════════════════════════════════════════════
+
 const HUD_Y = 8;
 const PARKIQ_FONT = '20px';
 const HUD_MUTED_FONT = '13px';
@@ -168,7 +177,12 @@ export class PuzzleScene extends Phaser.Scene {
   // ──────────────────────────────────────────────────────────
 
   private async loadAndRender(): Promise<void> {
-    const { puzzleIndex } = await getProgress();
+    let { puzzleIndex } = await getProgress();
+
+    if (DEBUG_SKIP_PUZZLE_5 && puzzleIndex === 5) {
+      puzzleIndex = 6;
+    }
+
     this.puzzle = getPuzzleByIndex(puzzleIndex);
 
     this.renderEnvironment();
@@ -898,6 +912,8 @@ export class PuzzleScene extends Phaser.Scene {
   // ──────────────────────────────────────────────────────────
 
   private checkCollision(cx: number, cy: number): boolean {
+    if (DEBUG_DISABLE_COLLISIONS) return false;
+
     const playerRect = new Phaser.Geom.Rectangle(
       cx - CAR_W / 2,
       cy - CAR_H / 2,

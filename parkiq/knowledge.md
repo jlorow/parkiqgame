@@ -72,7 +72,8 @@ EPIC 2: Puzzle Engine          ← rework in progress (index-based, not date-bas
 EPIC 7: Drive Mechanic         ← built, working (movement/collision/exit detection)
 EPIC 9: Linear Progression     ← done — replaced Epic 4 entirely
 EPIC 8: Pixel Art Visual Style ← Story 8-1 done, rest deferred into Epic 10
-EPIC 10: Visual Foundation & Rendering Architecture ← CURRENT FOCUS
+EPIC 10: Visual Foundation & Rendering Architecture 
+Epic 14 — Layout & Presentation Polish← CURRENT FOCUS
 ```
 
 *(Epic 3 "Feedback System" and Epic 5 "Share Card" were already fully superseded — see "What Is Scrapped." Epic 4 "Streak + Retention" is now fully removed, replaced by Epic 9.)*
@@ -141,6 +142,167 @@ Sequence strictly in this order (Sequencing Rule applies per-story within this e
 | Story | Goal | Deliverables |
 |---|---|---|
 | 13.1 | SVG asset integration | Load and wire Car-Player, Car-obstacle-01..05 (randomized selection), 4 Road tiles (under existing grid-line code), and the usable prop set into their respective theme/component slots. Replace Epic 12's Graphics-drawn car and Epic 10's Graphics-drawn foreground props. |
+
+
+Epic 14 — Layout & Presentation Polish
+
+Goal: Bring the live game layout back in line with the approved mockups and eliminate visual inconsistencies introduced during Epic 13 integration and Story 13.2 layout changes.
+
+Story 14.1 — Control Panel Surface Audit
+Problem
+
+The control area currently appears to be composed of two different visual surfaces:
+
+Upper control region = dark black panel
+Lower D-pad region = grey slab
+
+This creates a visible seam and makes the UI feel unfinished.
+
+Deliverable
+
+Determine:
+
+What draws the black region.
+What draws the grey region.
+Whether both are intentional.
+Whether one should be removed.
+Whether the mockups show one continuous control surface.
+Success Criteria
+Control section uses a single visual language.
+No visible horizontal seam.
+Matches approved mockup proportions.
+Risk
+
+Low.
+
+Pure rendering/layout audit.
+
+No gameplay impact.
+
+Story 14.2 — Playfield Width & Dead-Space Audit
+Problem
+
+Large black columns exist on both sides of the parking area.
+
+From the screenshots:
+
+Road section occupies only the middle.
+Significant horizontal space is unused.
+Deliverable
+
+Measure:
+
+Canvas width.
+Playfield width.
+Left margin.
+Right margin.
+
+Determine:
+
+Is the playfield narrower than intended?
+Is the container centered incorrectly?
+Is extra padding being introduced?
+Success Criteria
+Quantified measurements.
+Root cause identified.
+No guessing.
+Risk
+
+Medium.
+
+Touches layout constants.
+
+Must not reintroduce clipping.
+
+Story 14.3 — Unknown Rectangle Asset Audit
+Problem
+
+Several grey rectangular objects appear in the playfield.
+
+Visible in multiple screenshots.
+
+Unknown whether they are:
+
+Decorative props.
+Placeholder assets.
+Collision blockers.
+Debug remnants.
+Deliverable
+
+Identify:
+
+Which file creates them.
+Asset name.
+Purpose.
+Whether they belong in the final game.
+Success Criteria
+
+Every rectangle has a documented purpose.
+
+Risk
+
+Low.
+
+Audit only.
+
+Story 14.4 — HUD & Instruction Bar Audit
+Problem
+
+The instruction text area appears compressed.
+
+Current structure appears:
+
+Playfield
+Instruction Strip
+Large Empty Control Area
+D-pad
+
+The instruction strip looks unusually thin.
+
+Deliverable
+
+Measure:
+
+Playfield height
+Instruction strip height
+D-pad zone height
+
+Compare against mockups.
+
+Success Criteria
+
+Document actual proportions.
+
+Risk
+
+Low.
+
+Audit only.
+
+Story 14.5 — Layout Consolidation Plan
+Problem
+
+After multiple layout stories:
+
+Epic 10
+Story 10.5
+Story 10.6
+Story 13.2
+
+the layout has accumulated several changes.
+
+We need one authoritative picture of the final layout.
+
+Deliverable
+
+Produce:
+
+Current vertical layout map.
+Current horizontal layout map.
+Mockup comparison.
+Recommended final dimensions.
+
+No implementation
 
 ### Epic 2 — Puzzle Engine (revised)
 | Story | Summary |
