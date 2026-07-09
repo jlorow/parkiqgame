@@ -18,8 +18,8 @@ const SCALE_X = 1.35;
 const SCALE_Y = 1.53;
 const CONTAINER_X = 1;
 const CONTAINER_Y = -30;
-const CONTAINER_OFFSET_X = 1;
-const CONTAINER_OFFSET_Y = 2;
+const CONTAINER_OFFSET_X = 0.5;
+const CONTAINER_OFFSET_Y = 0.5;
 
 const HUD_Y = 8;
 const PARKIQ_FONT = '20px';
@@ -55,8 +55,8 @@ const CAR_HALF_W = CAR_W / 2;
 const CAR_HALF_H = CAR_H / 2;
 
 // Boundary clamp — derived from grid coordinate system:
-// pixelX = (col + CONTAINER_OFFSET_X) * UNIT_PX → col 0-5: 48 to 288
-// pixelY = (row + CONTAINER_OFFSET_Y) * UNIT_PX → row 0-5: 96 to 336
+// pixelX = (col + CONTAINER_OFFSET_X) * UNIT_PX → col 0-5: 24 to 264
+// pixelY = (row + CONTAINER_OFFSET_Y) * UNIT_PX → row 0-5: 24 to 264
 // Then offset by scale-corrected half-car to let car's far edge
 // reach each cell center in container-local coordinates.
 const CAR_HALF_W_LOCAL = CAR_HALF_W / SCALE_X;
