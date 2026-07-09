@@ -98,7 +98,7 @@ export const puzzles: Puzzle[] = [
     playerCar: { col: 2, row: 5, angle: 0 },
     obstacles: [
       { type: 'sedan', col: 0, row: 2, angle: 0 },
-      { type: 'suv',   col: 3, row: 2, angle: 0 },
+      { type: 'suv',   col: 3, row: 1, angle: 0 },
     ],
     exitZone: { col: 1, row: 0, direction: 'top' },
     escapeSteps: [
