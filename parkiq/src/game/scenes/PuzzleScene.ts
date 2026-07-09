@@ -116,8 +116,6 @@ export class PuzzleScene extends Phaser.Scene {
   private puzzle!: Puzzle;
   /** Guard against double-fire of exit-zone win */
   private exited = false;
-  /** Drop shadow graphics for the player car — cleared/redrawn each frame */
-  private playerCarShadow!: Phaser.GameObjects.Graphics;
   /** Themed environment scene — drawn at depth 2, rebuilt on puzzle change */
   private themeEnvGfx: Phaser.GameObjects.Graphics | null = null;
   /** Silent elapsed-time counter — no UI, only used for timeTaken in puzzleComplete() */
@@ -709,17 +707,8 @@ export class PuzzleScene extends Phaser.Scene {
     // ── Themed foreground elements framing the grid ────────────
     this.addThemeForeground(container, this.puzzle.theme);
 
-    // ── Step 2: Obstacle shadows (static, drawn once) ─────────────
     for (const obs of this.puzzle.obstacles) {
       if (obs.type === 'pillar' || obs.type === 'wall') continue;
-      const obsPixelX = (obs.col + CONTAINER_OFFSET_X) * UNIT_PX;
-      const obsPixelY = (obs.row + CONTAINER_OFFSET_Y) * UNIT_PX;
-      // Drop shadow: semi-transparent dark rounded rect offset downward
-      const obsShadow = this.add.graphics();
-      obsShadow.fillStyle(0x000000, 0.25);
-      obsShadow.fillRoundedRect(obsPixelX - 30, obsPixelY - 5 + 6, 60, 20, 8);
-      obsShadow.setDepth(0.5);
-      container.add(obsShadow);
 
       const obsImg = createObstacleCar(
         this,
@@ -731,12 +720,6 @@ export class PuzzleScene extends Phaser.Scene {
       obsImg.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
       container.add(obsImg);
     }
-
-    // ── Step 2: Player car shadow (dynamic — updated each frame) ──
-    const playerShadow = this.add.graphics();
-    playerShadow.setDepth(49);
-    container.add(playerShadow);
-    this.playerCarShadow = playerShadow;
 
     const playerCar = createCarSprite(this, {
       x: pc.col + CONTAINER_OFFSET_X,
@@ -876,18 +859,9 @@ export class PuzzleScene extends Phaser.Scene {
       this.resetToSpawn();
     }
 
-    // ── 5. Apply to image & shadow ──────────────────────────
+    // ── 5. Apply to image ──────────────────────────────────
     this.playerCarImage.setPosition(this.carX, this.carY);
     this.playerCarImage.setAngle(this.carAngle);
-    this.playerCarShadow.clear();
-    this.playerCarShadow.fillStyle(0x000000, 0.25);
-    this.playerCarShadow.fillRoundedRect(
-      this.carX - 30,
-      this.carY - 5 + 6,
-      60,
-      20,
-      8,
-    );
 
     // ── 6. Exit zone check — win flow ──────────────────────
     if (!this.exited && this.checkExitReached(this.carX, this.carY)) {
