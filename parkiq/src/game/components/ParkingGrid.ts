@@ -42,9 +42,8 @@ export function createParkingGrid(
 
   const graphics = scene.add.graphics({ x, y });
 
-  // 1. Road surface — transparent so the theme-tinted card and backdrop show through
-  graphics.fillStyle(colors.road, 0.20);
-  graphics.fillRect(0, 0, width, height);
+  // 1. Road surface — now provided by SVG road tile in PuzzleScene.renderParkingScene()
+  //    (grid lines are drawn on top, below)
 
   // 2. Layout lines
   switch (environment) {

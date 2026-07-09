@@ -27,7 +27,9 @@ const HUD_MUTED_FONT = '13px';
 const OBJECTIVE_Y = 430;
 
 const CARD_Y = CONTAINER_Y - 6;
-const CARD_H = 760;
+const GRID_SIZE = 288;
+
+const CARD_H = 704;
 const CARD_BOTTOM = CARD_Y + CARD_H;
 
 const CONTROLS_CENTER_X = 195;
@@ -54,9 +56,9 @@ const CAR_HALF_H_LOCAL = CAR_HALF_H / CONTAINER_SCALE;
 
 // Bottom clamp derived from the car's rendered edge in world space.
 // Car rendered bottom = CONTAINER_Y + (CLAMP_MAX_Y × CONTAINER_SCALE) + CAR_HALF_H
-// Must be ≤ D-pad forward ▲ button top edge (543) − 20px clearance.
-// (30 + CLAMP_MAX_Y × 1.35) + 72 ≤ 523 → CLAMP_MAX_Y ≤ 311
-const CLAMP_MAX_Y = 311;
+// Must be ≤ D-pad forward ▲ button top edge (487) − 20px clearance.
+// (30 + CLAMP_MAX_Y × 1.35) + 72 ≤ 467 → CLAMP_MAX_Y ≤ 270
+const CLAMP_MAX_Y = 270;
 
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
@@ -113,6 +115,29 @@ export class PuzzleScene extends Phaser.Scene {
   preload(): void {
     this.load.audio('crunch', 'assets/sounds/crunch.mp3');
     this.load.audio('success', 'assets/sounds/success.mp3');
+
+    // ── Car SVGs ──────────────────────────────────────────────────
+    this.load.svg('car-player', 'assets/sprites/cars/Car-Player.svg', { width: 200, height: 400 });
+    this.load.svg('car-obstacle-1', 'assets/sprites/cars/Car-obstacle-01.svg', { width: 200, height: 400 });
+    this.load.svg('car-obstacle-2', 'assets/sprites/cars/Car-obstacle-02.svg', { width: 200, height: 400 });
+    this.load.svg('car-obstacle-3', 'assets/sprites/cars/Car-obstacle-03.svg', { width: 200, height: 400 });
+    this.load.svg('car-obstacle-4', 'assets/sprites/cars/Car-obstacle-04.svg', { width: 200, height: 400 });
+    this.load.svg('car-obstacle-5', 'assets/sprites/cars/Car-obstacle-05.svg', { width: 200, height: 400 });
+
+    // ── Road tile SVGs (full 288×288 grid surface per theme) ──────
+    this.load.svg('road-street',       'assets/sprites/roads/Road-Street.svg',       { width: 780, height: 780 });
+    this.load.svg('road-garage',       'assets/sprites/roads/Road-Garage.svg',       { width: 780, height: 780 });
+    this.load.svg('road-underground',  'assets/sprites/roads/Road-Underground.svg',  { width: 780, height: 780 });
+    this.load.svg('road-rooftop',      'assets/sprites/roads/Road-Rooftop.svg',      { width: 780, height: 780 });
+
+    // ── Prop SVGs ─────────────────────────────────────────────────
+    this.load.svg('prop-tree',       'assets/sprites/props/Prop-Tree.svg',       { width: 64, height: 64 });
+    this.load.svg('prop-shrub-1',    'assets/sprites/props/Prop-Shrub-1.svg',    { width: 48, height: 48 });
+    this.load.svg('prop-shrub-2',    'assets/sprites/props/Prop-Shrub-2.svg',    { width: 48, height: 48 });
+    this.load.svg('prop-lamppost',   'assets/sprites/props/Prop-Lamppost.svg',   { width: 32, height: 128 });
+    this.load.svg('prop-cone',       'assets/sprites/props/Prop-Cone.svg',       { width: 32, height: 48 });
+    this.load.svg('prop-barricade-1','assets/sprites/props/Prop-Barricade-1.svg',{ width: 64, height: 48 });
+    this.load.svg('prop-barricade-2','assets/sprites/props/Prop-Barricade-2.svg',{ width: 64, height: 48 });
   }
 
   create(): void {
@@ -412,43 +437,39 @@ export class PuzzleScene extends Phaser.Scene {
     gfx.strokePath();
   }
 
-  /** Small tree: brown trunk + green circle canopy */
-  private drawTree(gfx: Phaser.GameObjects.Graphics, x: number, y: number): void {
-    gfx.fillStyle(0x5c3a1e, 1);
-    gfx.fillRect(x - 3, y - 15, 6, 15);
-    gfx.fillStyle(0x2d7a2d, 1);
-    gfx.fillCircle(x, y - 21, 12);
-  }
-
   // ── Theme foreground props (inside parking container) ───────────
 
   private addThemeForeground(container: Phaser.GameObjects.Container, theme: PuzzleTheme): void {
     const foreGfx = this.add.graphics();
     foreGfx.setDepth(4.5);
     container.add(foreGfx);
+    // Helper to add an SVG image prop to the container
+    const addProp = (key: string, x: number, y: number, scale = 1) => {
+      const img = this.add.image(x, y, key);
+      img.setScale(scale);
+      img.setDepth(4.5);
+      container.add(img);
+    };
 
     if (theme === 'street') {
-      // Trees at bottom corners + small grass tufts
-      this.drawTree(foreGfx, 24, 282);
-      this.drawTree(foreGfx, 264, 282);
-      foreGfx.fillStyle(0x2d7a2d, 1);
-      for (let gx = 60; gx < 240; gx += 28) {
-        foreGfx.fillCircle(gx, 285, 5);
-        foreGfx.fillCircle(gx + 10, 287, 3);
-      }
+      // Trees at bottom corners
+      addProp('prop-tree', 24, 258);
+      addProp('prop-tree', 264, 258);
+      // Shrubs along bottom edge (replacing grass tufts)
+      addProp('prop-shrub-1', 74, 282);
+      addProp('prop-shrub-2', 130, 282);
+      addProp('prop-shrub-1', 186, 282);
+      addProp('prop-shrub-2', 242, 282);
       // Two more trees at top corners
-      this.drawTree(foreGfx, 24, 12);
-      this.drawTree(foreGfx, 264, 12);
+      addProp('prop-tree', 24, 0);
+      addProp('prop-tree', 264, 0);
       // Crosswalk stripes near exit zone (white painted bars)
       foreGfx.fillStyle(0xffffff, 1);
       for (let cx = 0; cx < 288; cx += 14) {
         foreGfx.fillRect(cx, 38, 12, 6);
       }
       // Lamppost on left side
-      foreGfx.fillStyle(0x4a5568, 1);
-      foreGfx.fillRect(9, 60, 5, 90);
-      foreGfx.fillStyle(0xfbbf24, 1);
-      foreGfx.fillCircle(11, 58, 6);
+      addProp('prop-lamppost', 11, 105);
       // Sidewalk paving grid at bottom edge
       foreGfx.lineStyle(1, 0x6b7280, 1);
       foreGfx.beginPath();
@@ -550,11 +571,18 @@ export class PuzzleScene extends Phaser.Scene {
     container.setDepth(5);
     this.parkingContainer = container;
 
+    // ── Road tile image (under grid lines) ──────────────────────────
+    const roadKey = `road-${this.puzzle.theme}`;
+    const roadImage = this.add.image(0, 0, roadKey);
+    roadImage.setOrigin(0, 0);
+    roadImage.setDisplaySize(GRID_SIZE, GRID_SIZE);
+    container.add(roadImage);
+
     const grid = createParkingGrid(this, {
       x: 0,
       y: 0,
-      width: 288,
-      height: 288,
+      width: GRID_SIZE,
+      height: GRID_SIZE,
       environment: this.puzzle.environment,
       theme: this.puzzle.theme,
     });
@@ -569,15 +597,15 @@ export class PuzzleScene extends Phaser.Scene {
     const exitGfx = this.add.graphics();
 
     // Exit zone fill / border / chevron — sourced from ThemeRegistry
-    exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.25);
+    exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
     exitGfx.fillRect(exitPixelX, exitPixelY, 96, 96);
 
     // Bright border — reads as a gate frame
-    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.6);
+    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.85);
     exitGfx.strokeRect(exitPixelX, exitPixelY, 96, 96);
 
     // Chevron arrows pointing in the exit direction
-    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.5);
+    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.75);
     exitGfx.beginPath();
     if (ez.direction === 'top') {
       // Upward-pointing chevron (^)
