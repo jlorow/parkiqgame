@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import type { Puzzle, PuzzleTheme } from '../puzzles/puzzle-types';
+import { createCarSprite } from '../components/CarSprite';
 import { createParkingGrid } from '../components/ParkingGrid';
 import { createObstacleCar } from '../components/ObstacleCar';
 import { DrivingControls } from '../components/DrivingControls';
 import type { DrivingInputState } from '../components/DrivingControls';
 import { getPuzzleByIndex } from '../../lib/puzzle-engine';
 import { puzzleComplete, getProgress } from '../../lib/devvit-client';
-import { CARD_TINT, THEME_FLAT_COLORS } from '../config/ThemeRegistry';
+import { THEME_FLAT_COLORS } from '../config/ThemeRegistry';
 
 // ──────────────────────────────────────────────────────────
 //  Layout Constants
@@ -25,17 +26,12 @@ const HUD_MUTED_FONT = '13px';
 
 const OBJECTIVE_Y = 430;
 
-const CARD_X = 0;
 const CARD_Y = CONTAINER_Y - 6;
-const CARD_W = 390;
 const CARD_H = 760;
-const CARD_RADIUS = 14;
 const CARD_BOTTOM = CARD_Y + CARD_H;
 
 const CONTROLS_CENTER_X = 195;
 const CONTROLS_CENTER_Y = CARD_Y + CARD_H - 128;
-
-const CARD_ALPHA = 0.55;
 
 // ──────────────────────────────────────────────────────────
 //  Movement & Collision Constants
@@ -43,7 +39,6 @@ const CARD_ALPHA = 0.55;
 
 const MOVE_SPEED = 120;
 const ROTATION_SPEED = 90;
-const PLAYER_CAR_SCALE = 2.25;
 const CAR_W = 72;
 const CAR_H = 144;
 const CAR_HALF_W = CAR_W / 2;
@@ -82,8 +77,6 @@ export class PuzzleScene extends Phaser.Scene {
   private playerCarShadow!: Phaser.GameObjects.Graphics;
   /** Themed environment scene — drawn at depth 2, rebuilt on puzzle change */
   private themeEnvGfx: Phaser.GameObjects.Graphics | null = null;
-  /** Theme-tinted parking card — drawn at depth 3, rebuilt on theme change */
-  private cardGfx: Phaser.GameObjects.Graphics | null = null;
   /** Silent elapsed-time counter — no UI, only used for timeTaken in puzzleComplete() */
   private elapsedSeconds = 0;
   private elapsedEvent!: Phaser.Time.TimerEvent;
@@ -92,7 +85,7 @@ export class PuzzleScene extends Phaser.Scene {
   private spawnY = 0;
   private spawnAngle = 0;
 
-  /** Player car — plain Image inside the parking container (no physics) */
+  /** Player car — baked texture image inside the parking container */
   private playerCarImage!: Phaser.GameObjects.Image;
   private carX = 0;
   private carY = 0;
@@ -118,10 +111,6 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.svg('car', 'assets/sprites/car-top-down.svg', {
-      width: 32,
-      height: 64,
-    });
     this.load.audio('crunch', 'assets/sounds/crunch.mp3');
     this.load.audio('success', 'assets/sounds/success.mp3');
   }
@@ -150,7 +139,6 @@ export class PuzzleScene extends Phaser.Scene {
     this.puzzle = getPuzzleByIndex(puzzleIndex);
 
     this.renderEnvironment();
-    this.renderParkingCard(this.puzzle.theme);
     this.renderHUD();
     this.renderObjective();
     this.renderControls();
@@ -427,9 +415,9 @@ export class PuzzleScene extends Phaser.Scene {
   /** Small tree: brown trunk + green circle canopy */
   private drawTree(gfx: Phaser.GameObjects.Graphics, x: number, y: number): void {
     gfx.fillStyle(0x5c3a1e, 1);
-    gfx.fillRect(x - 2, y - 10, 4, 10);
+    gfx.fillRect(x - 3, y - 15, 6, 15);
     gfx.fillStyle(0x2d7a2d, 1);
-    gfx.fillCircle(x, y - 14, 8);
+    gfx.fillCircle(x, y - 21, 12);
   }
 
   // ── Theme foreground props (inside parking container) ───────────
@@ -443,26 +431,26 @@ export class PuzzleScene extends Phaser.Scene {
       // Trees at bottom corners + small grass tufts
       this.drawTree(foreGfx, 24, 282);
       this.drawTree(foreGfx, 264, 282);
-      foreGfx.fillStyle(0x2d7a2d, 0.25);
+      foreGfx.fillStyle(0x2d7a2d, 1);
       for (let gx = 60; gx < 240; gx += 28) {
-        foreGfx.fillCircle(gx, 285, 3);
-        foreGfx.fillCircle(gx + 10, 287, 2);
+        foreGfx.fillCircle(gx, 285, 5);
+        foreGfx.fillCircle(gx + 10, 287, 3);
       }
       // Two more trees at top corners
       this.drawTree(foreGfx, 24, 12);
       this.drawTree(foreGfx, 264, 12);
       // Crosswalk stripes near exit zone (white painted bars)
-      foreGfx.fillStyle(0xffffff, 0.3);
+      foreGfx.fillStyle(0xffffff, 1);
       for (let cx = 0; cx < 288; cx += 14) {
-        foreGfx.fillRect(cx, 38, 8, 4);
+        foreGfx.fillRect(cx, 38, 12, 6);
       }
       // Lamppost on left side
-      foreGfx.fillStyle(0x4a5568, 0.7);
-      foreGfx.fillRect(10, 60, 3, 60);
-      foreGfx.fillStyle(0xfbbf24, 0.6);
-      foreGfx.fillCircle(11, 58, 4);
+      foreGfx.fillStyle(0x4a5568, 1);
+      foreGfx.fillRect(9, 60, 5, 90);
+      foreGfx.fillStyle(0xfbbf24, 1);
+      foreGfx.fillCircle(11, 58, 6);
       // Sidewalk paving grid at bottom edge
-      foreGfx.lineStyle(1, 0x6b7280, 0.15);
+      foreGfx.lineStyle(1, 0x6b7280, 1);
       foreGfx.beginPath();
       for (let px = 0; px < 288; px += 16) {
         foreGfx.moveTo(px, 280);
@@ -471,37 +459,37 @@ export class PuzzleScene extends Phaser.Scene {
       foreGfx.strokePath();
     } else if (theme === 'garage') {
       // Concrete beam at top edge
-      foreGfx.fillStyle(0x374151, 0.4);
-      foreGfx.fillRect(0, 0, 288, 5);
-      foreGfx.lineStyle(1, 0x4b5563, 0.5);
+      foreGfx.fillStyle(0x374151, 1);
+      foreGfx.fillRect(0, 0, 288, 8);
+      foreGfx.lineStyle(2, 0x4b5563, 1);
       foreGfx.beginPath();
       foreGfx.moveTo(0, 5);
       foreGfx.lineTo(288, 5);
       foreGfx.strokePath();
       // Shopping cart at bottom-left
-      foreGfx.lineStyle(2, 0x9ca3af, 0.5);
-      foreGfx.strokeRect(20, 260, 18, 14);
-      foreGfx.fillStyle(0x9ca3af, 0.4);
-      foreGfx.fillCircle(23, 274, 3);
-      foreGfx.fillCircle(35, 274, 3);
+      foreGfx.lineStyle(3, 0x9ca3af, 1);
+      foreGfx.strokeRect(20, 253, 27, 21);
+      foreGfx.fillStyle(0x9ca3af, 1);
+      foreGfx.fillCircle(25, 274, 5);
+      foreGfx.fillCircle(43, 274, 5);
       // Barrier blocks at edge
-      foreGfx.fillStyle(0xfbbf24, 0.5);
-      foreGfx.fillRect(248, 270, 14, 10);
-      foreGfx.fillRect(266, 270, 14, 10);
+      foreGfx.fillStyle(0xfbbf24, 1);
+      foreGfx.fillRect(241, 265, 21, 15);
+      foreGfx.fillRect(265, 265, 21, 15);
     } else if (theme === 'underground') {
       // Overhead pipe segments at top edge
-      foreGfx.fillStyle(0x4a5568, 0.5);
-      foreGfx.fillRect(0, 0, 288, 4);
-      foreGfx.fillRect(55, -2, 6, 10);
-      foreGfx.fillRect(135, -2, 6, 10);
-      foreGfx.fillRect(215, -2, 6, 10);
+      foreGfx.fillStyle(0x4a5568, 1);
+      foreGfx.fillRect(0, 0, 288, 6);
+      foreGfx.fillRect(54, -3, 9, 15);
+      foreGfx.fillRect(134, -3, 9, 15);
+      foreGfx.fillRect(214, -3, 9, 15);
       // Large overhead rectangular duct running across
-      foreGfx.fillStyle(0x6b7280, 0.35);
-      foreGfx.fillRect(80, -6, 120, 8);
-      foreGfx.fillStyle(0x4a5568, 0.3);
-      foreGfx.fillRect(80, -6, 120, 2);
+      foreGfx.fillStyle(0x6b7280, 1);
+      foreGfx.fillRect(50, -9, 180, 12);
+      foreGfx.fillStyle(0x4a5568, 1);
+      foreGfx.fillRect(50, -9, 180, 3);
       // Drainage grate at bottom-right corner
-      foreGfx.lineStyle(1, 0x4a5568, 0.3);
+      foreGfx.lineStyle(2, 0x4a5568, 1);
       foreGfx.beginPath();
       for (let gx = 230; gx < 260; gx += 4) {
         foreGfx.moveTo(gx, 278);
@@ -510,7 +498,7 @@ export class PuzzleScene extends Phaser.Scene {
       foreGfx.strokePath();
     } else if (theme === 'rooftop') {
       // Safety railing at bottom edge
-      foreGfx.lineStyle(2, 0x6b7280, 0.45);
+      foreGfx.lineStyle(3, 0x6b7280, 1);
       foreGfx.beginPath();
       foreGfx.moveTo(0, 282);
       foreGfx.lineTo(288, 282);
@@ -520,13 +508,13 @@ export class PuzzleScene extends Phaser.Scene {
       }
       foreGfx.strokePath();
       // AC unit / ventilator box at top-right
-      foreGfx.fillStyle(0x6b7280, 0.5);
-      foreGfx.fillRect(234, 250, 22, 14);
-      foreGfx.lineStyle(1, 0x9ca3af, 0.4);
-      foreGfx.strokeRect(234, 250, 22, 14);
-      foreGfx.fillStyle(0x4a5568, 0.4);
-      foreGfx.fillRect(238, 253, 6, 4);
-      foreGfx.fillRect(246, 253, 6, 4);
+      foreGfx.fillStyle(0x6b7280, 1);
+      foreGfx.fillRect(223, 243, 33, 21);
+      foreGfx.lineStyle(2, 0x9ca3af, 1);
+      foreGfx.strokeRect(223, 243, 33, 21);
+      foreGfx.fillStyle(0x4a5568, 1);
+      foreGfx.fillRect(229, 248, 9, 6);
+      foreGfx.fillRect(241, 248, 9, 6);
       // Potted plants along the railing
       this.drawPottedPlant(foreGfx, 20, 280);
       this.drawPottedPlant(foreGfx, 268, 280);
@@ -536,32 +524,11 @@ export class PuzzleScene extends Phaser.Scene {
   /** Small potted plant: brown pot + green leaves */
   private drawPottedPlant(gfx: Phaser.GameObjects.Graphics, x: number, y: number): void {
     gfx.fillStyle(0x8b5e3c, 1);
-    gfx.fillRect(x - 3, y - 4, 6, 4);
-    gfx.fillStyle(0x4ade80, 0.7);
-    gfx.fillCircle(x, y - 8, 4);
-    gfx.fillCircle(x - 3, y - 6, 3);
-    gfx.fillCircle(x + 3, y - 6, 3);
-  }
-
-  // ──────────────────────────────────────────────────────────
-  //  Parking Card
-  // ──────────────────────────────────────────────────────────
-
-  private renderParkingCard(theme?: PuzzleTheme): void {
-    // Destroy previous card if exists (for puzzle-to-puzzle transitions)
-    if (this.cardGfx) {
-      this.cardGfx.destroy();
-    }
-    const card = this.add.graphics();
-    this.cardGfx = card;
-    card.setDepth(3);
-    card.fillStyle(0x000000, 0.2);
-    card.fillRoundedRect(CARD_X + 3, CARD_Y + 4, CARD_W, CARD_H, CARD_RADIUS);
-    const fillColor = theme ? CARD_TINT[theme] : 0x141428;
-    card.fillStyle(fillColor, CARD_ALPHA);
-    card.fillRoundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, CARD_RADIUS);
-    card.lineStyle(1, THEME_FLAT_COLORS.playerCarTint, 0.15);
-    card.strokeRoundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, CARD_RADIUS);
+    gfx.fillRect(x - 5, y - 6, 10, 6);
+    gfx.fillStyle(0x4ade80, 1);
+    gfx.fillCircle(x, y - 12, 6);
+    gfx.fillCircle(x - 5, y - 9, 5);
+    gfx.fillCircle(x + 5, y - 9, 5);
   }
 
   // ──────────────────────────────────────────────────────────
@@ -673,14 +640,15 @@ export class PuzzleScene extends Phaser.Scene {
     container.add(playerShadow);
     this.playerCarShadow = playerShadow;
 
-    const carImg = this.add.image(this.carX, this.carY, 'car');
-    carImg.setTint(THEME_FLAT_COLORS.playerCarTint).setTintMode(Phaser.TintModes.FILL);
-    carImg.setAngle(this.carAngle);
-    carImg.setOrigin(0.5, 0.5);
-    carImg.setScale(PLAYER_CAR_SCALE);
-    carImg.setDepth(50);
-    container.add(carImg);
-    this.playerCarImage = carImg;
+    const playerCar = createCarSprite(this, {
+      x: pc.col + CONTAINER_OFFSET_X,
+      y: pc.row + CONTAINER_OFFSET_Y,
+      angle: pc.angle,
+      type: 'player',
+    });
+    playerCar.setDepth(50);
+    container.add(playerCar);
+    this.playerCarImage = playerCar;
   }
 
   // ──────────────────────────────────────────────────────────
@@ -692,6 +660,8 @@ export class PuzzleScene extends Phaser.Scene {
       .text(195, OBJECTIVE_Y, 'Drive out without hitting another car.', {
         fontSize: '14px',
         color: '#FFFFFF',
+        stroke: '#000000',
+        strokeThickness: 4,
         fontStyle: 'bold',
         align: 'center',
         wordWrap: { width: 320 },
@@ -710,6 +680,8 @@ export class PuzzleScene extends Phaser.Scene {
       .text(20, HUD_Y, 'PARKIQ', {
         fontSize: PARKIQ_FONT,
         color: '#E8320A',
+        stroke: '#000000',
+        strokeThickness: 4,
         fontStyle: 'bold',
       })
       .setDepth(10);
@@ -717,7 +689,9 @@ export class PuzzleScene extends Phaser.Scene {
     this.puzzleNumberText = this.add
       .text(195, HUD_Y + 2, `PUZZLE #${this.puzzle.id}`, {
         fontSize: HUD_MUTED_FONT,
-        color: '#6B7280',
+        color: '#FFFFFF',
+        stroke: '#000000',
+        strokeThickness: 4,
       })
       .setOrigin(0.5, 0)
       .setDepth(10);
@@ -840,6 +814,8 @@ export class PuzzleScene extends Phaser.Scene {
         .text(195, 420, 'You cleared all puzzles!', {
           fontSize: '28px',
           color: '#E8320A',
+          stroke: '#000000',
+          strokeThickness: 4,
           fontStyle: 'bold',
           align: 'center',
           wordWrap: { width: 320 },
@@ -865,9 +841,8 @@ export class PuzzleScene extends Phaser.Scene {
     // Update HUD puzzle number
     this.puzzleNumberText.setText(`PUZZLE #${this.puzzle.id}`);
 
-    // Redraw themed environment and card tint for the new theme
+    // Redraw themed environment for the new theme
     this.renderEnvironment();
-    this.renderParkingCard(this.puzzle.theme);
 
     // Reset state
     this.exited = false;

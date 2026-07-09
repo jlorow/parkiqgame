@@ -111,6 +111,37 @@ EPIC 10: Visual Foundation & Rendering Architecture ← CURRENT FOCUS
 
 Sequence strictly in this order (Sequencing Rule applies per-story within this epic too).
 
+### Epic 11 — Theme Registry (color centralization)
+**Goal:** Stop hardcoded hex values being scattered across `CarSprite.ts`, `ParkingGrid.ts`, `DrivingControls.ts`, `PuzzleScene.ts`; centralize gameplay-critical colors in one file.
+
+**Delivered:** `parkiq/src/game/config/ThemeRegistry.ts` — exports `THEME_GRID_COLORS`, `CARD_TINT`, `THEME_FLAT_COLORS`. Wired into `ParkingGrid.ts` (road/lines/pillar/sidewalk per theme), `CarSprite.ts` (player/obstacle tint), `PuzzleScene.ts` (card tint, exit zone, player tint), `DrivingControls.ts` (button/glow color). Decorative backdrop methods (`draw*Backdrop`, `addThemeForeground`) deliberately left local to `PuzzleScene.ts` — out of scope for this epic.
+
+**Confirmed via mockup pixel-sampling, not eyeballing:** player car muted to `0xA8392E` (was `0xE8320A`), exit zone muted to `0x5F8F60` (was `0x22C55E`). Per-theme road colors also updated — see `ThemeRegistry.ts` for current values, don't re-derive from old audits.
+
+### Epic 12 — Car Geometry Rebuild
+**Goal:** Replace the tinted-SVG-silhouette car (pixelated at render scale, no visible windshield/detail) with a real drawn shape.
+
+**Story 12.1 (superseded by Epic 13 below):** Rebuilt player/obstacle cars as `Phaser.Graphics` — rounded-rect body + outline + single centered cabin window (44×72 local, at -22,-36 from center, radius 8) — replacing `scene.add.image('car', svg).setTint()`. Confirmed: no pixelation, rotation works as one unit, collision/exit-zone unaffected (CAR_W/CAR_H unchanged). SVG preload removed as unused.
+
+⚠️ **This was later superseded by Epic 13's hand-drawn Figma SVG assets** — Graphics-drawn cars were a stopgap, not the final approach. Do not re-implement Graphics-drawn cars; check whether Epic 13 has landed before assuming which car-rendering approach is currently live.
+
+### Epic 13 — Figma Hand-Drawn Asset Pipeline (current)
+**Goal:** Replace Graphics-drawn/procedural visuals with real hand-drawn Bauhaus/flat-vector SVG assets (car, obstacle cars, per-theme road tiles, environment props), drawn in Figma by the project owner (not agent-generated).
+
+**Rationale:** Both the tinted-SVG approach (Epic 8/pre-Epic-12) and the Graphics-primitive approach (Epic 12) hit a visual ceiling — neither can produce the mockup's level of shape detail (windshield, mirrors, textured road) through code alone. Hand-drawn assets solve this directly.
+
+**Asset inventory delivered (Figma → exported SVG):**
+- `Car-Player`, `Car-obstacle-01` through `Car-obstacle-05` — 6 total car variants, obstacle color/shape varied for richness
+- `Road-Street`, `Road-Garage`, `Road-Underground`, `Road-Rooftop` — one per implemented theme, flat/grain-textured surface fill only, NO baked-in grid lines (grid lines stay code-drawn on top, since layout differs per puzzle type — parallel/garage/reverse_bay)
+- Usable props: `Prop-Tree`, `Prop-Shrub-1/2/3`, `Prop-Lamppost`, `Prop-Lamppost-1`, `Prop-Lamppost-2` (dual light-beam variant), `Prop-Cone`, `Prop-Barricade-1/2`
+- **Explicitly excluded / not wired in:** `Prop-Character-1/2/3` (no pedestrian mechanic exists anywhere in the game — no home for these), `Prop-House-1/2/3` and `Prop-Swimming` from an earlier draft (isometric perspective, clashes with the game's strict top-down view; also no matching puzzle theme exists in code — those belong to Desert/Beach/Harbor settings that were never implemented as real puzzle themes, only as reference mockups)
+
+**Sizing convention (do not deviate without re-deriving):** Figma page grid set to 48px (matches `UNIT_PX`). Car frames 360×720 (design), car footprint stays 72×144 local / 1:2 ratio. Road tiles 780×780 design canvas → represents the 288×288 local grid surface. Props ~200×200 design canvas, ~48–96 local units final. All assets load into the **container's local coordinate space** (×1.35 `CONTAINER_SCALE` to reach final screen pixels) — see Container-Scale Coordinate Frame section below. Road tiles are NOT the same layer as the depth-2 theme backdrop (sky/buildings) — that full-canvas layer is a separate, still-unaddressed piece of environment richness.
+
+| Story | Goal | Deliverables |
+|---|---|---|
+| 13.1 | SVG asset integration | Load and wire Car-Player, Car-obstacle-01..05 (randomized selection), 4 Road tiles (under existing grid-line code), and the usable prop set into their respective theme/component slots. Replace Epic 12's Graphics-drawn car and Epic 10's Graphics-drawn foreground props. |
+
 ### Epic 2 — Puzzle Engine (revised)
 | Story | Summary |
 |---|---|
