@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ParkIQ - Sprite Comparison</title>
+  <script src="node_modules/phaser/dist/phaser.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0F0F0F;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      min-height: 100vh;
+      color: #fff;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    #game-container { width: 390px; height: 844px; }
+    #log {
+      margin-top: 12px;
+      padding: 12px;
+      background: #1C1C1E;
+      border-radius: 8px;
+      max-width: 760px;
+      width: 100%;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    #measurements {
+      margin-top: 8px;
+      padding: 12px;
+      background: #1C1C1E;
+      border-radius: 8px;
+      max-width: 760px;
+      width: 100%;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    .highlight { color: #fbbf24; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <div id="measurements">Loading measurements...</div>
+  <div id="log">Waiting for log output...</div>
+  <script>
+    const logEl = document.getElementById('log');
+    const measEl = document.getElementById('measurements');
+
+    function appendLog(msg) {
+      console.log(msg);
+      logEl.textContent += msg + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // ── Constants matching PuzzleScene.ts ──────────────────
+    const UNIT_PX = 48;
+    const GRID_SIZE = 288;
+    const SCALE_X = 1.35;
+    const SCALE_Y = 1.53;
+    const COUNTER_SCALE_Y = SCALE_X / SCALE_Y;  // ≈ 0.882
+
+    // ── Comparison scene ───────────────────────────────────
+    class CompareScene extends Phaser.Scene {
+      constructor() { super('CompareScene'); }
+
+      preload() {
+        // Load both car textures with identical dimensions (200×400)
+        this.load.svg('car-player',      'public/assets/sprites/cars/Car-Player.svg',       { width: 200, height: 400 });
+        this.load.svg('car-obstacle-1',  'public/assets/sprites/cars/Car-obstacle-01.svg',  { width: 200, height: 400 });
+        this.load.svg('car-obstacle-2',  'public/assets/sprites/cars/Car-obstacle-02.svg',  { width: 200, height: 400 });
+        this.load.svg('car-obstacle-3',  'public/assets/sprites/cars/Car-obstacle-03.svg',  { width: 200, height: 400 });
+        this.load.svg('car-obstacle-4',  'public/assets/sprites/cars/Car-obstacle-04.svg',  { width: 200, height: 400 });
+        this.load.svg('car-obstacle-5',  'public/assets/sprites/cars/Car-obstacle-05.svg',  { width: 200, height: 400 });
+      }
+
+      create() {
+        const W = 390;
+        const H = 844;
+        const CX = W / 2;   // 195
+        const CY = H / 2;   // 422
+
+        // ── Background ──────────────────────────────────────
+        const bg = this.add.graphics();
+        bg.fillStyle(0x1a1a2e, 1);
+        bg.fillRect(0, 0, W, H);
+
+        // ── Grid reference ──────────────────────────────────
+        const grid = this.add.graphics();
+        grid.lineStyle(1, 0x333355, 0.5);
+        for (let x = 0; x <= W; x += 48) {
+          grid.moveTo(x, 0); grid.lineTo(x, H);
+        }
+        for (let y = 0; y <= H; y += 48) {
+          grid.moveTo(0, y); grid.lineTo(W, y);
+        }
+        grid.strokePath();
+
+        // ── Title labels ────────────────────────────────────
+        const labelStyle = { fontSize: '11px', color: '#888', fontFamily: 'monospace' };
+
+        // ═══════════════════════════════════════════════════
+        //  ROW 1: SIDE-BY-SIDE comparison (same container-local coords)
+        // ═══════════════════════════════════════════════════
+        const ROW1_Y = 200;
+        const LEFT_X = 100;
+        const RIGHT_X = 290;
+
+        // Scale both cars to match game rendering
+        const CAR_SCALE_X = 1;
+        const CAR_SCALE_Y = COUNTER_SCALE_Y;
+
+        // ── Create player car (left) ──
+        const playerCar = this.add.image(LEFT_X, ROW1_Y, 'car-player');
+        playerCar.setScale(CAR_SCALE_X, CAR_SCALE_Y);
+        this.playerCar = playerCar;
+
+        // ── Create obstacle car (right) ──
+        const obstacleCar = this.add.image(RIGHT_X, ROW1_Y, 'car-obstacle-3');
+        obstacleCar.setScale(CAR_SCALE_X, CAR_SCALE_Y);
+        this.obstacleCar = obstacleCar;
+
+        // Labels
+        this.add.text(LEFT_X, ROW1_Y + 100, 'PLAYER', { ...labelStyle, color: '#ff6b6b' }).setOrigin(0.5);
+        this.add.text(RIGHT_X, ROW1_Y + 100, 'OBSTACLE', { ...labelStyle, color: '#6bb5ff' }).setOrigin(0.5);
+
+        // ═══════════════════════════════════════════════════
+        //  ROW 2: OVERLAID at same position (toggle visibility)
+        // ═══════════════════════════════════════════════════
+        const ROW2_Y = 500;
+
+        // Player at same position as obstacle, slightly offset to show both
+        const playerOverlay = this.add.image(CX - 4, ROW2_Y, 'car-player');
+        playerOverlay.setScale(CAR_SCALE_X, CAR_SCALE_Y);
+        playerOverlay.setAlpha(0.8);
+        this.playerOverlay = playerOverlay;
+
+        const obstacleOverlay = this.add.image(CX + 4, ROW2_Y, 'car-obstacle-3');
+        obstacleOverlay.setScale(CAR_SCALE_X, CAR_SCALE_Y);
+        obstacleOverlay.setAlpha(0.8);
+        this.obstacleOverlay = obstacleOverlay;
+
+        this.add.text(CX, ROW2_Y + 100, 'OVERLAID (player left, obstacle right)', labelStyle).setOrigin(0.5);
+
+        // ═══════════════════════════════════════════════════
+        //  DEBUG OVERLAYS
+        // ═══════════════════════════════════════════════════
+
+        this.drawDebugBounds(playerCar,  0xff0000, 'player');
+        this.drawDebugBounds(obstacleCar, 0x00aaff, 'obstacle');
+        this.drawDebugBounds(playerOverlay,  0xff4444, 'player-overlay');
+        this.drawDebugBounds(obstacleOverlay, 0x44aaff, 'obstacle-overlay');
+
+        // ── Grid boundary indicators ──
+        const boundaryGfx = this.add.graphics();
+        boundaryGfx.lineStyle(1, 0xffff00, 0.5);
+
+        // Grid left/right edges at playfield boundaries (if container applied)
+        // Simulate container-local x=0 and x=288 → world x = CONTAINER_X + 0*SCALE_X and CONTAINER_X + 288*SCALE_X
+        // But we're in world space here, so just show absolute grid edges
+        const CONTAINER_X_WORLD = 1;
+        const CONTAINER_Y_WORLD = -30;
+
+        // Show where grid edges would be in world space with container transform
+        // We don't use a container here, so just draw the reference lines at
+        // world positions matching how the game would render them
+        const gridLeft = CONTAINER_X_WORLD + 0 * SCALE_X;
+        const gridRight = CONTAINER_X_WORLD + 288 * SCALE_X;
+        const gridTop = CONTAINER_Y_WORLD + 0 * SCALE_Y;
+        const gridBottom = CONTAINER_Y_WORLD + 288 * SCALE_Y;
+
+        // These are above the visible area, so draw relative grid lines
+        // at the comparison positions instead
+        const gfx = this.add.graphics();
+        gfx.lineStyle(2, 0x00ff00, 0.4);
+
+        // ── Measure and log runtime values ──
+        this.time.delayedCall(500, () => {
+          this.measureAndLog();
+        });
+
+        // ── Keyboard toggles ──
+        this.input.keyboard.on('keydown-P', () => {
+          playerCar.setVisible(!playerCar.visible);
+          playerOverlay.setVisible(!playerOverlay.visible);
+          appendLog('> Toggled player visibility');
+        });
+        this.input.keyboard.on('keydown-O', () => {
+          obstacleCar.setVisible(!obstacleCar.visible);
+          obstacleOverlay.setVisible(!obstacleOverlay.visible);
+          appendLog('> Toggled obstacle visibility');
+        });
+        this.input.keyboard.on('keydown-R', () => {
+          this.measureAndLog();
+        });
+
+        appendLog('=== COMPARISON SCENE READY ===');
+        appendLog('Press P to toggle player, O to toggle obstacle, R to re-measure');
+      }
+
+      drawDebugBounds(sprite, color, label) {
+        const gfx = this.add.graphics();
+
+        // Get the sprite's bounds
+        const bounds = sprite.getBounds();
+
+        // Display bounds outline
+        gfx.lineStyle(1, color, 0.7);
+        gfx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+
+        // Center point
+        gfx.fillStyle(color, 0.9);
+        gfx.fillCircle(sprite.x, sprite.y, 3);
+
+        // Origin marker (small cross)
+        gfx.lineStyle(1, 0xffffff, 0.5);
+        const ox = sprite.x;
+        const oy = sprite.y;
+        gfx.beginPath();
+        gfx.moveTo(ox - 6, oy); gfx.lineTo(ox + 6, oy);
+        gfx.moveTo(ox, oy - 6); gfx.lineTo(ox, oy + 6);
+        gfx.strokePath();
+
+        // Label
+        this.add.text(bounds.x, bounds.y - 12, label, {
+          fontSize: '10px', color: Phaser.Display.Color.IntegerToColor(color).rgba, fontFamily: 'monospace'
+        });
+      }
+
+      measureAndLog() {
+        const p = this.playerCar;
+        const o = this.obstacleCar;
+        const texP = this.textures.get('car-player');
+        const texO = this.textures.get('car-obstacle-3');
+        const frameP = texP.get();
+        const frameO = texO.get();
+
+        const pBounds = p.getBounds();
+        const oBounds = o.getBounds();
+
+        let m = '';
+        m += '══════════════════════════════════════════════════\n';
+        m += '  RUNTIME MEASUREMENTS\n';
+        m += '══════════════════════════════════════════════════\n\n';
+
+        m += `  PROPERTY              PLAYER        OBSTACLE      DIFF\n`;
+        m += `  ───────────────────────────────────────────────────────\n`;
+        m += `  displayWidth          ${String(p.displayWidth).padStart(6)}        ${String(o.displayWidth).padStart(6)}        ${(p.displayWidth - o.displayWidth).toFixed(1)}\n`;
+        m += `  displayHeight         ${String(p.displayHeight).padStart(6)}        ${String(o.displayHeight).padStart(6)}        ${(p.displayHeight - o.displayHeight).toFixed(1)}\n`;
+        m += `  bounds.width          ${pBounds.width.toFixed(2).padStart(6)}      ${oBounds.width.toFixed(2).padStart(6)}      ${(pBounds.width - oBounds.width).toFixed(2)}\n`;
+        m += `  bounds.height         ${pBounds.height.toFixed(2).padStart(6)}      ${oBounds.height.toFixed(2).padStart(6)}      ${(pBounds.height - oBounds.height).toFixed(2)}\n`;
+        m += `  scaleX                ${String(p.scaleX).padStart(6)}        ${String(o.scaleX).padStart(6)}        ${(p.scaleX - o.scaleX).toFixed(3)}\n`;
+        m += `  scaleY                ${p.scaleY.toFixed(3).padStart(6)}      ${o.scaleY.toFixed(3).padStart(6)}      ${(p.scaleY - o.scaleY).toFixed(3)}\n`;
+        m += `  texture.width         ${String(frameP.width).padStart(6)}        ${String(frameO.width).padStart(6)}        ${frameP.width - frameO.width}\n`;
+        m += `  texture.height        ${String(frameP.height).padStart(6)}        ${String(frameO.height).padStart(6)}        ${frameP.height - frameO.height}\n`;
+        m += `  originX               ${p.originX.toFixed(3).padStart(6)}      ${o.originX.toFixed(3).padStart(6)}      ${(p.originX - o.originX).toFixed(3)}\n`;
+        m += `  originY               ${p.originY.toFixed(3).padStart(6)}      ${o.originY.toFixed(3).padStart(6)}      ${(p.originY - o.originY).toFixed(3)}\n`;
+        m += `  rotation (deg)        ${String(p.angle).padStart(6)}        ${String(o.angle).padStart(6)}        ${p.angle - o.angle}\n`;
+        m += `  x                     ${String(p.x).padStart(6)}        ${String(o.x).padStart(6)}        ${p.x - o.x}\n`;
+        m += `  y                     ${String(p.y).padStart(6)}        ${String(o.y).padStart(6)}        ${p.y - o.y}\n\n`;
+
+        // Also measure obstacle-02 (different viewBox)
+        if (this.obstacleCar2) {
+          const o2 = this.obstacleCar2;
+          const o2Bounds = o2.getBounds();
+          m += `  Obstacle-02 vs Player bounds difference:\n`;
+          m += `  width diff: ${(o2Bounds.width - pBounds.width).toFixed(2)}px\n`;
+          m += `  height diff: ${(o2Bounds.height - pBounds.height).toFixed(2)}px\n`;
+        }
+
+        m += '\n';
+        m += '  Texture source width (SVG-derived):\n';
+
+        // Check if Phaser gives us source width
+        for (let i = 0; i < texP.source.length; i++) {
+          const src = texP.source[i];
+          if (src && src.image) {
+            m += `  Player SVG source: ${src.image.width} × ${src.image.height}\n`;
+            break;
+          }
+        }
+        for (let i = 0; i < texO.source.length; i++) {
+          const src = texO.source[i];
+          if (src && src.image) {
+            m += `  Obstacle SVG source: ${src.image.width} × ${src.image.height}\n`;
+            break;
+          }
+        }
+
+        m += '══════════════════════════════════════════════════\n';
+
+        measEl.textContent = m;
+        measEl.style.display = 'block';
+        appendLog('✓ Measurements captured');
+      }
+    }
+
+    // ── Game config (matching production) ──────────────────
+    const config = {
+      type: Phaser.AUTO,
+      width: 390,
+      height: 844,
+      backgroundColor: '#0F0F0F',
+      pixelArt: true,
+      parent: 'game-container',
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 390,
+        height: 844,
+      },
+      scene: [CompareScene],
+    };
+
+    const game = new Phaser.Game(config);
+  </script>
+</body>
+</html>

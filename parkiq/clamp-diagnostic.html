@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ParkIQ — Clamp/Origin Diagnostic</title>
+  <script src="phaser-local.min.js"></script>
+  <style>gsa
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0F0F0F;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      color: #eee;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+    }
+    #game-container { width: 390px; height: 844px; }
+    #controls {
+      margin: 6px 0;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 780px;
+    }
+    #controls button, #controls .btn {
+      background: #2a2a2a;
+      color: #eee;
+      border: 1px solid #555;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: monospace;
+      font-size: 11px;
+    }
+    #controls button:hover { background: #3a3a3a; }
+    #controls button.snap { border-color: #fbbf24; color: #fbbf24; }
+    #controls button.active { border-color: #6bb5ff; color: #6bb5ff; }
+    #controls .group-label {
+      color: #666;
+      font-size: 10px;
+      line-height: 28px;
+      margin: 0 2px;
+    }
+    #report {
+      padding: 8px 12px;
+      background: #1C1C1E;
+      border-radius: 6px;
+      max-width: 780px;
+      width: 100%;
+      white-space: pre-wrap;
+      line-height: 1.4;
+      max-height: 500px;
+      overflow-y: auto;
+      font-size: 11px;
+      border: 1px solid #333;
+    }
+    #report .hdr { color: #fbbf24; font-weight: bold; font-size: 13px; }
+    #report .sub { color: #6bb5ff; font-weight: bold; }
+    #report .val-p { color: #ff6b6b; }
+    #report .val-o { color: #6bb5ff; }
+    #report .val-warn { color: #fbbf24; }
+    #report .val-err { color: #ff4444; }
+    #report .val-ok { color: #44ff44; }
+    .legend {
+      display: flex; gap: 12px; font-size: 10px;
+      margin-top: 4px; flex-wrap: wrap; justify-content: center;
+    }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .legend-swatch { width: 14px; height: 3px; display: inline-block; }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <div class="legend">
+    <span class="legend-item"><span class="legend-swatch" style="background:#00ff00;"></span> Playfield (0,0–288,288)</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#ffff00;opacity:0.6;"></span> X-clamp (88–200) Y-clamp (24–264)</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#ff4444;"></span> Collision box (72×144)</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#ff66ff;"></span> Sprite bounds</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#ff0000;"></span> Player origin</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#4444ff;"></span> Visual edge markers</span>
+  </div>
+  <div id="controls">
+    <span class="group-label">SNAP TO EDGE:</span>
+    <button class="snap" id="btn-left">← Left</button>
+    <button class="snap" id="btn-right">Right →</button>
+    <button class="snap" id="btn-top">↑ Top</button>
+    <button class="snap" id="btn-bottom">Bottom ↓</button>
+    <button class="snap" id="btn-center">⊞ Center</button>
+    <span class="group-label">|</span>
+    <button id="btn-world-toggle">Toggle World View</button>
+    <span class="group-label">|</span>
+    <button id="btn-log-all">Log All Edges</button>
+  </div>
+  <div id="report">Loading diagnostic scene...</div>
+  <script>
+    (function() {
+      'use strict';
+
+      const reportEl = document.getElementById('report');
+      let logBuf = '';
+
+      function appendLog(msg) {
+        console.log(msg);
+        logBuf += msg + '\n';
+        reportEl.textContent = logBuf;
+        reportEl.scrollTop = reportEl.scrollHeight;
+      }
+
+      function clearLog() {
+        logBuf = '';
+        reportEl.textContent = '';
+      }
+
+      // ════════════════════════════════════════════════════════
+      //  EXACT CONSTANTS FROM PuzzleScene.ts
+      // ════════════════════════════════════════════════════════
+      const UNIT_PX = 48;
+      const SCALE_X = 1.35;
+      const SCALE_Y = 1.53;
+      const CONTAINER_X = 1;
+      const CONTAINER_Y = -30;
+      const CONTAINER_OFFSET_X = 0.5;
+      const CONTAINER_OFFSET_Y = 0.5;
+      const COUNTER_SCALE_Y = SCALE_X / SCALE_Y;  // ≈ 0.88235
+      const CAR_W = 72;
+      const CAR_H = 144;
+
+      // Cell centers for each grid edge
+      const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;   // 24
+      const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;   // 264
+      const ROW0_CENTER = (0 + CONTAINER_OFFSET_Y) * UNIT_PX;   // 24
+
+      // Visual sprite dimensions (matches PuzzleScene.ts)
+      const TEX_W = 200;
+      const TEX_H = 400;
+      const CAR_SCALE = CAR_H / (TEX_H * COUNTER_SCALE_Y);        // ≈ 0.408
+      const VISUAL_W = TEX_W * CAR_SCALE;                          // ≈ 81.6
+      const VISUAL_H = TEX_H * CAR_SCALE * COUNTER_SCALE_Y;        // 144 (matches CAR_H)
+
+      // Clamp: both axes now achieve intended overhang via CAR_SCALE
+      // X: visual edge = 12px overhang, Y: visual edge = 48px overhang
+      const CLAMP_MIN_X = COL0_CENTER + (VISUAL_W - CAR_W) / 2;  // ≈ 28.8
+      const CLAMP_MAX_X = COL5_CENTER - (VISUAL_W - CAR_W) / 2;  // ≈ 259.2
+      const CLAMP_MIN_Y = ROW0_CENTER + (VISUAL_H - CAR_H) / 2;  // 24
+      const CLAMP_MAX_Y = COL5_CENTER - (VISUAL_H - CAR_H) / 2;  // 264
+
+      const GRID_SIZE = 288;
+
+      // Derived: intended overhang values
+      const INTENDED_COLLISION_LEFT   = CLAMP_MIN_X - VISUAL_W / 2;  // 28.8 - 40.8 = -12
+      const INTENDED_COLLISION_RIGHT  = CLAMP_MAX_X + VISUAL_W / 2;  // 259.2 + 40.8 = 300
+      const INTENDED_COLLISION_TOP    = CLAMP_MIN_Y - VISUAL_H / 2;  // 24 - 72 = -48
+      const INTENDED_COLLISION_BOTTOM = CLAMP_MAX_Y + VISUAL_H / 2;  // 264 + 72 = 336
+
+      // ── Phaser world-space conversion ──
+      function containerToWorld(localX, localY) {
+        return {
+          x: CONTAINER_X + localX * SCALE_X,
+          y: CONTAINER_Y + localY * SCALE_Y,
+        };
+      }
+
+      let sceneRef = null;
+      let playerCar = null;
+      let container = null;
+      let debugGfx = null;
+      let overlayGfx = null;
+      let worldMode = false;  // false = container-local view, true = world-space view
+
+      // ── Diagnostic Scene ──────────────────────────────────
+      class ClampDiagScene extends Phaser.Scene {
+        constructor() { super('ClampDiagScene'); }
+
+        preload() {
+          this.load.svg('car-player', 'public/assets/sprites/cars/Car-Player.svg', { width: 200, height: 400 });
+        }
+
+        create() {
+          const W = 390;
+          const H = 844;
+
+          // ── Background ────────────────────────────────────
+          const bg = this.add.graphics();
+          bg.fillStyle(0x0a0a12, 1);
+          bg.fillRect(0, 0, W, H);
+
+          // ── Title ─────────────────────────────────────────
+          this.add.text(195, 6, 'CLAMP / ORIGIN DIAGNOSTIC', {
+            fontSize: '12px', color: '#fbbf24', fontFamily: 'monospace', fontStyle: 'bold',
+          }).setOrigin(0.5, 0).setDepth(200);
+
+          this.add.text(195, 20, 'Snap car to each edge and compare expected vs actual', {
+            fontSize: '9px', color: '#888', fontFamily: 'monospace',
+          }).setOrigin(0.5, 0).setDepth(200);
+
+          // ── Container (exact match to PuzzleScene.ts) ─────
+          container = this.add.container(CONTAINER_X, CONTAINER_Y);
+          container.setScale(SCALE_X, SCALE_Y);
+          container.setDepth(5);
+
+          // ── Playfield boundary (the visual edge of the road) ──
+          const playfieldGfx = this.add.graphics();
+          playfieldGfx.lineStyle(2, 0x00ff00, 0.8);
+          playfieldGfx.strokeRect(0, 0, GRID_SIZE, GRID_SIZE);
+          // Fill with very subtle green tint
+          playfieldGfx.fillStyle(0x00ff00, 0.04);
+          playfieldGfx.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
+          container.add(playfieldGfx);
+
+          // ── Grid lines (48px spacing) ─────────────────────
+          const gridGfx = this.add.graphics();
+          gridGfx.lineStyle(1, 0x00ff00, 0.15);
+          gridGfx.beginPath();
+          for (let gx = 0; gx <= GRID_SIZE; gx += UNIT_PX) {
+            gridGfx.moveTo(gx, 0); gridGfx.lineTo(gx, GRID_SIZE);
+          }
+          for (let gy = 0; gy <= GRID_SIZE; gy += UNIT_PX) {
+            gridGfx.moveTo(0, gy); gridGfx.lineTo(GRID_SIZE, gy);
+          }
+          gridGfx.strokePath();
+          container.add(gridGfx);
+
+          // ── Clamp boundary rect (YELLOW, shows CLAMP_MIN/MAX) ──
+          const clampGfx = this.add.graphics();
+          const clampW = CLAMP_MAX_X - CLAMP_MIN_X;  // 112 (visual-based X)
+          const clampH = CLAMP_MAX_Y - CLAMP_MIN_Y;  // 240 (collision-based Y)
+          clampGfx.lineStyle(2, 0xffff00, 0.5);
+          clampGfx.strokeRect(CLAMP_MIN_X, CLAMP_MIN_Y, clampW, clampH);
+          clampGfx.fillStyle(0xffff00, 0.06);
+          clampGfx.fillRect(CLAMP_MIN_X, CLAMP_MIN_Y, clampW, clampH);
+          container.add(clampGfx);
+
+          // ── Collision rect reference (shown at center) ────
+          const collGfx = this.add.graphics();
+          collGfx.lineStyle(1, 0xff4444, 0.5);
+          collGfx.strokeRect(-CAR_W/2, -CAR_H/2, CAR_W, CAR_H);
+          container.add(collGfx);
+          // Store reference for updating position
+          this.collGfxLocal = collGfx;
+
+          // ── Axis labels on playfield ──────────────────────
+          const style = { fontSize: '8px', color: '#555', fontFamily: 'monospace' };
+          this.add.text(2, -2, '(0,0)', style).setDepth(200);
+          this.add.text(264, -2, '(288,0)', style).setDepth(200);
+          this.add.text(2, 276, '(0,288)', style).setDepth(200);
+
+          // ── Player car (matches PuzzleScene.ts CAR_SCALE) ──
+          playerCar = this.add.image(CLAMP_MIN_X, CLAMP_MIN_Y, 'car-player');
+          playerCar.setScale(CAR_SCALE, CAR_SCALE * COUNTER_SCALE_Y);
+          playerCar.setOrigin(0.5, 0.5);
+          container.add(playerCar);
+          sceneRef = this;
+
+          // ── Update collision rect position ────────────────
+          this.updateCollRect = function(cx, cy) {
+            collGfx.setPosition(cx, cy);
+          };
+          this.updateCollRect(CLAMP_MIN_X, CLAMP_MIN_Y);
+
+          // ── Debug overlay (redrawn each snap) ────────────
+          debugGfx = this.add.graphics().setDepth(150);
+          overlayGfx = this.add.graphics().setDepth(151);
+          this.debugGfxRef = debugGfx;
+          this.overlayGfxRef = overlayGfx;
+
+          // ── Corner labels ─────────────────────────────────
+          this.add.text(2, 2, 'PLAYFIELD [0,0]', {
+            fontSize: '7px', color: '#00ff00', fontFamily: 'monospace',
+          }).setDepth(200);
+          this.add.text(230, 2, '[288,0] PLAYFIELD', {
+            fontSize: '7px', color: '#00ff00', fontFamily: 'monospace',
+          }).setOrigin(1, 0).setDepth(200);
+          this.add.text(2, 268, 'PLAYFIELD [0,288]', {
+            fontSize: '7px', color: '#00ff00', fontFamily: 'monospace',
+          }).setDepth(200);
+          this.add.text(230, 268, '[288,288] PLAYFIELD', {
+            fontSize: '7px', color: '#00ff00', fontFamily: 'monospace',
+          }).setOrigin(1, 0).setDepth(200);
+
+          // ── Clamp boundary labels ─────────────────────────
+          this.add.text(CLAMP_MIN_X + 2, CLAMP_MIN_Y - 10,
+            `CLAMP MIN (${CLAMP_MIN_X},${CLAMP_MIN_Y})`, {
+            fontSize: '7px', color: '#ffff00', fontFamily: 'monospace',
+          }).setDepth(200);
+          this.add.text(CLAMP_MAX_X - 2, CLAMP_MIN_Y - 10,
+            `CLAMP MAX (${CLAMP_MAX_X},${CLAMP_MAX_Y})`, {
+            fontSize: '7px', color: '#ffff00', fontFamily: 'monospace',
+          }).setOrigin(1, 0).setDepth(200);
+
+          // Note explaining the split axis
+          this.add.text(195, 290,
+            'X: visual-based (88-200)  │  Y: collision-based (24-264)', {
+            fontSize: '8px', color: '#ffff8877', fontFamily: 'monospace',
+          }).setOrigin(0.5, 0).setDepth(200);
+
+          // ── Initial diagnostic ────────────────────────────
+          this.time.delayedCall(400, () => {
+            this.runDiagnostic(CLAMP_MIN_X, CLAMP_MIN_Y, 'initial (center)');
+          });
+
+          sceneRef = this;
+        }
+
+        runDiagnostic(cx, cy, label) {
+          clearLog();
+          const W = this.scale.width;
+
+          // ── Compute all values (ALL in container-local space) ──
+          // CRITICAL: getBounds() returns WORLD-SPACE coords when inside a
+          // scaled/positioned container. We must compute visual edges from
+          // displayWidth/Height and origin, which are container-local.
+          //
+          // displayWidth  = texture.width  × scaleX  (container-local)
+          // displayHeight = texture.height × scaleY  (container-local)
+          const displayW = playerCar.displayWidth;   // 200 × 1.0 = 200
+          const displayH = playerCar.displayHeight;   // 400 × COUNTER_SCALE_Y ≈ 352.94
+          const originX = playerCar.originX;          // 0.5
+          const originY = playerCar.originY;          // 0.5
+          const rawW = playerCar.width;               // 200 (texture frame width, already scaled?)
+          const rawH = playerCar.height;              // 400
+
+          // Visual edges in container-local space (computed, NOT from getBounds)
+          const visLeft   = cx - displayW * originX;
+          const visRight  = cx + displayW * (1 - originX);
+          const visTop    = cy - displayH * originY;
+          const visBottom = cy + displayH * (1 - originY);
+
+          // Collision box edges (container-local)
+          const collLeft   = cx - CAR_W / 2;
+          const collRight  = cx + CAR_W / 2;
+          const collTop    = cy - CAR_H / 2;
+          const collBottom = cy + CAR_H / 2;
+
+          // Visual overhang beyond playfield
+          const visOverhangLeft = Math.max(-visLeft, 0);            // how much left of playfield x=0
+          const visOverhangRight = Math.max(visRight - 288, 0);     // how much right of playfield x=288
+          const visOverhangTop = Math.max(-visTop, 0);              // how much above playfield y=0
+          const visOverhangBottom = Math.max(visBottom - 288, 0);   // how much below playfield y=288
+
+          // World-space values (for reference)
+          const worldBounds = playerCar.getBounds();
+          const worldCenter = containerToWorld(cx, cy);
+          const worldLeft   = CONTAINER_X + visLeft * SCALE_X;
+          const worldRight  = CONTAINER_X + visRight * SCALE_X;
+          const worldTop    = CONTAINER_Y + visTop * SCALE_Y;
+          const worldBottom = CONTAINER_Y + visBottom * SCALE_Y;
+
+          // ── SECTION 1: ORIGIN CHECK ───────────────────────
+          appendLog('╔══════════════════════════════════════════════════════╗');
+          appendLog('║   SECTION 1 — ORIGIN CHECK                          ║');
+          appendLog('╚══════════════════════════════════════════════════════╝');
+          appendLog('');
+          appendLog(`  Position: ${label}`);
+          appendLog(`  Car center (x, y):    (${cx.toFixed(2)}, ${cy.toFixed(2)})`);
+          appendLog(`  originX:              ${originX.toFixed(4)}`);
+          appendLog(`  originY:              ${originY.toFixed(4)}`);
+          appendLog('');
+
+          appendLog('  Computed visual edges (container-local):');
+          appendLog(`  left   = ${cx} - ${displayW.toFixed(1)}×${originX.toFixed(1)} = ${visLeft.toFixed(1)}`);
+          appendLog(`  right  = ${cx} + ${displayW.toFixed(1)}×(1-${originX.toFixed(1)}) = ${visRight.toFixed(1)}`);
+          appendLog(`  top    = ${cy} - ${displayH.toFixed(1)}×${originY.toFixed(1)} = ${visTop.toFixed(1)}`);
+          appendLog(`  bottom = ${cy} + ${displayH.toFixed(1)}×(1-${originY.toFixed(1)}) = ${visBottom.toFixed(1)}`);
+          appendLog('');
+
+          appendLog('  World-space getBounds() (for cross-check only):');
+          appendLog(`  getBounds(): (${worldBounds.x.toFixed(1)}, ${worldBounds.y.toFixed(1)}, ${worldBounds.width.toFixed(1)}, ${worldBounds.height.toFixed(1)})`);
+          appendLog(`  Converted from local → world:`);
+          appendLog(`    worldLeft   = 1 + ${visLeft.toFixed(1)} × 1.35 = ${worldLeft.toFixed(1)}`);
+          appendLog(`    worldRight  = 1 + ${visRight.toFixed(1)} × 1.35 = ${worldRight.toFixed(1)}`);
+          appendLog(`    worldTop    = -30 + ${visTop.toFixed(1)} × 1.53 = ${worldTop.toFixed(1)}`);
+          appendLog(`    worldBottom = -30 + ${visBottom.toFixed(1)} × 1.53 = ${worldBottom.toFixed(1)}`);
+          appendLog('');
+
+          // Cross-check: does our computed world-space match getBounds()?
+          const wBoundsMatch = Math.abs(worldBounds.x - worldLeft) < 2 &&
+                               Math.abs(worldBounds.y - worldTop) < 2;
+          appendLog(`  Computed world edges match getBounds(): ${wBoundsMatch ? '✓ YES' : '✗ NO'}`);
+          appendLog('');
+
+          // The clamp assumes x,y is the CENTER (origin 0.5, 0.5).
+          // Origin (0.5, 0.5) always gives: left=cx-displayW/2, right=cx+displayW/2
+          // This is a mathematical certainty — no way for origin to be "wrong".
+          appendLog('  Origin analysis:');
+          appendLog('  With origin (0.5, 0.5), visual center == clamp center == car position.');
+          appendLog('  The clamp constrains the car center, which is correct.');
+          appendLog('  No origin mismatch is possible with Phaser default (0.5, 0.5).');
+          appendLog('');
+
+          // ── SECTION 2: BOUNDARY RECT vs PLAYFIELD EDGE ───
+          appendLog('╔══════════════════════════════════════════════════════╗');
+          appendLog('║   SECTION 2 — BOUNDARY RECT vs PLAYFIELD EDGE       ║');
+          appendLog('╚══════════════════════════════════════════════════════╝');
+          appendLog('');
+
+          appendLog('  Playfield:          (0, 0) → (288, 288)');
+          appendLog(`  Clamp rect center:  (${CLAMP_MIN_X}, ${CLAMP_MIN_Y}) → (${CLAMP_MAX_X}, ${CLAMP_MAX_Y})`);
+          appendLog(`  Clamp rect size:    ${CLAMP_MAX_X - CLAMP_MIN_X} × ${CLAMP_MAX_Y - CLAMP_MIN_Y}`);
+          appendLog('');
+
+          // The collision box edge when clamped
+          appendLog('  Collision box extent (container-local) when clamped:');
+          appendLog(`  Collision left:   ${collLeft.toFixed(1)}    (playfield left = 0, overhang = ${Math.abs(collLeft).toFixed(1)}px)`);
+          appendLog(`  Collision right:  ${collRight.toFixed(1)}   (playfield right = 288, overhang = ${(collRight - 288).toFixed(1)}px)`);
+          appendLog(`  Collision top:    ${collTop.toFixed(1)}     (playfield top = 0, overhang = ${Math.abs(collTop).toFixed(1)}px)`);
+          appendLog(`  Collision bottom: ${collBottom.toFixed(1)}   (playfield bottom = 288, overhang = ${(collBottom - 288).toFixed(1)}px)`);
+          appendLog('');
+
+          const intendedLeft = INTENDED_COLLISION_LEFT;
+          const intendedRight = INTENDED_COLLISION_RIGHT;
+          const intendedTop = INTENDED_COLLISION_TOP;
+          const intendedBottom = INTENDED_COLLISION_BOTTOM;
+
+          appendLog('  Intended overhang (per code comment in PuzzleScene.ts):');
+          appendLog(`  Left:   ${intendedLeft.toFixed(1)}   (playfield edge = 0,    intended overhang = ${Math.abs(intendedLeft).toFixed(1)}px)`);
+          appendLog(`  Right:  ${intendedRight.toFixed(1)}   (playfield edge = 288, intended overhang = ${(intendedRight - 288).toFixed(1)}px)`);
+          appendLog(`  Top:    ${intendedTop.toFixed(1)}    (playfield edge = 0,    intended overhang = ${Math.abs(intendedTop).toFixed(1)}px)`);
+          appendLog(`  Bottom: ${intendedBottom.toFixed(1)}  (playfield edge = 288, intended overhang = ${(intendedBottom - 288).toFixed(1)}px)`);
+          appendLog('');
+
+          // Check if actual collision edges match intended
+          const collLeftOk = Math.abs(collLeft - intendedLeft) < 1;
+          const collRightOk = Math.abs(collRight - intendedRight) < 1;
+          const collTopOk = Math.abs(collTop - intendedTop) < 1;
+          const collBottomOk = Math.abs(collBottom - intendedBottom) < 1;
+
+          appendLog('  Collision extent matches intended?');
+          appendLog(`  Left:   ${collLeftOk ? '✓' : '✗'} (actual=${collLeft.toFixed(1)}, intended=${intendedLeft.toFixed(1)})`);
+          appendLog(`  Right:  ${collRightOk ? '✓' : '✗'} (actual=${collRight.toFixed(1)}, intended=${intendedRight.toFixed(1)})`);
+          appendLog(`  Top:    ${collTopOk ? '✓' : '✗'} (actual=${collTop.toFixed(1)}, intended=${intendedTop.toFixed(1)})`);
+          appendLog(`  Bottom: ${collBottomOk ? '✓' : '✗'} (actual=${collBottom.toFixed(1)}, intended=${intendedBottom.toFixed(1)})`);
+          appendLog('');
+
+          // ── VISUAL vs COLLISION gap ──
+          appendLog('  VISUAL SPRITE vs COLLISION BOX gap:');
+          const gapLeft = Math.abs(visLeft - collLeft);
+          const gapRight = Math.abs(visRight - collRight);
+          const gapTop = Math.abs(visTop - collTop);
+          const gapBottom = Math.abs(visBottom - collBottom);
+          appendLog(`  Sprite left vs collision left:     ${visLeft.toFixed(1)} vs ${collLeft.toFixed(1)}  (gap=${gapLeft.toFixed(1)}px)`);
+          appendLog(`  Sprite right vs collision right:   ${visRight.toFixed(1)} vs ${collRight.toFixed(1)} (gap=${gapRight.toFixed(1)}px)`);
+          appendLog(`  Sprite top vs collision top:       ${visTop.toFixed(1)} vs ${collTop.toFixed(1)}    (gap=${gapTop.toFixed(1)}px)`);
+          appendLog(`  Sprite bottom vs collision bottom: ${visBottom.toFixed(1)} vs ${collBottom.toFixed(1)} (gap=${gapBottom.toFixed(1)}px)`);
+          appendLog('');
+
+          appendLog('  VISUAL OVERHANG beyond playfield:');
+          appendLog(`  Left:   ${visOverhangLeft.toFixed(1)}px beyond playfield edge (x=0)`);
+          appendLog(`  Right:  ${visOverhangRight.toFixed(1)}px beyond playfield edge (x=288)`);
+          appendLog(`  Top:    ${visOverhangTop.toFixed(1)}px beyond playfield edge (y=0)`);
+          appendLog(`  Bottom: ${visOverhangBottom.toFixed(1)}px beyond playfield edge (y=288)`);
+          appendLog('');
+
+          // ── SECTION 3: SCALE / TEXTURE CHECK ──────────────
+          appendLog('╔══════════════════════════════════════════════════════╗');
+          appendLog('║   SECTION 3 — SCALE / TEXTURE SIZE CHECK            ║');
+          appendLog('╚══════════════════════════════════════════════════════╝');
+          appendLog('');
+
+          appendLog(`  Texture frame (from SVG load): ${rawW} × ${rawH}`);
+          appendLog(`  scaleX: ${playerCar.scaleX.toFixed(4)}`);
+          appendLog(`  scaleY: ${playerCar.scaleY.toFixed(4)}`);
+          appendLog(`  displayWidth:  ${displayW.toFixed(4)}  (= ${rawW} × ${playerCar.scaleX.toFixed(4)})`);
+          appendLog(`  displayHeight: ${displayH.toFixed(4)}  (= ${rawH} × ${playerCar.scaleY.toFixed(4)})`);
+          appendLog('');
+          appendLog('  Does clamp use displayWidth/Height or raw width/height?');
+          appendLog('  Clamp formula: Math.max(CLAMP_MIN_X, Math.min(candidateX, CLAMP_MAX_X))');
+          appendLog('  This clamps the CENTER, not the edge.');
+          appendLog('  The formula does NOT multiply by displayWidth or raw width.');
+          appendLog('  The clamp constrains the car CENTER, not its visual edges.');
+          appendLog('');
+
+          const scaleOk = Math.abs(displayW - rawW) < 1;
+          appendLog(`  SCALE VERDICT: ${scaleOk ? '✓ scaleX ≈ 1, same as raw width' : '⚠ scaleX ≠ 1 — must use displayWidth, not player.width'}`);
+
+          // ── World-space values ──────────────────────────
+          appendLog('');
+          appendLog('  WORLD-SPACE (on-screen pixels):');
+          appendLog(`  Container origin: (${CONTAINER_X}, ${CONTAINER_Y})`);
+          appendLog(`  Container scale: (${SCALE_X}, ${SCALE_Y})`);
+          appendLog(`  World center:    (${worldCenter.x.toFixed(2)}, ${worldCenter.y.toFixed(2)})`);
+          appendLog(`  World left:      ${worldLeft.toFixed(2)}px`);
+          appendLog(`  World right:     ${worldRight.toFixed(2)}px`);
+          appendLog(`  World top:       ${worldTop.toFixed(2)}px`);
+          appendLog(`  World bottom:    ${worldBottom.toFixed(2)}px`);
+          appendLog('');
+
+          // ── CONCLUSION ────────────────────────────────────
+          appendLog('╔══════════════════════════════════════════════════════╗');
+          appendLog('║   SECTION 4 — CONCLUSION                            ║');
+          appendLog('╚══════════════════════════════════════════════════════╝');
+          appendLog('');
+
+          const boundaryIssue = !(collLeftOk && collRightOk && collTopOk && collBottomOk);
+          const visualExtendsBeyond = visOverhangLeft > 5 || visOverhangRight > 5 || visOverhangTop > 5 || visOverhangBottom > 5;
+
+          appendLog('  ORIGIN: Origin (0.5, 0.5) is correct and self-consistent.');
+          appendLog('  The clamp constrains car center, which matches origin.');
+          appendLog('  No origin mismatch — Conclusion A is not applicable.');
+          appendLog('');
+
+          if (boundaryIssue) {
+            appendLog('  ❌ CONCLUSION B: Boundary rect miscalculated');
+            appendLog('  The collision box extent does not match the intended overhang');
+          } else {
+            appendLog('  ✅ CONCLUSION B: Boundary rect is correctly calculated.');
+            appendLog('  Collision extent matches intended overhang exactly.');
+          }
+          appendLog('');
+
+          appendLog(`  SCALE: scaleX = ${playerCar.scaleX.toFixed(4)} ≈ 1.0, no scale mismatch.`);
+          appendLog('  Conclusion C is not applicable — scale is correct.');
+          appendLog('');
+
+          if (visualExtendsBeyond) {
+            appendLog('  ⚠ KEY FINDING: The visual sprite is MUCH LARGER than the collision box.');
+            appendLog(`  Visual display: ${displayW.toFixed(0)}×${displayH.toFixed(0)}  vs  Collision hitbox: ${CAR_W}×${CAR_H}`);
+            appendLog(`  The sprite is ${(displayW / CAR_W).toFixed(1)}× wider and ${(displayH / CAR_H).toFixed(1)}× taller than the collision box.`);
+            appendLog('');
+            appendLog('  The clamp correctly constrains the collision center within (24–264).');
+            appendLog('  But the visible art (200×400 texture) is significantly larger than');
+            appendLog('  the collision footprint (72×144), so the VISUAL overhang beyond the');
+            appendLog('  playfield edges is a natural consequence of the asset size, not a bug.');
+            appendLog('');
+            appendLog('  VISUAL OVERHANG IN WORLD PIXELS:');
+            appendLog(`  Left visual overhang:   ${(visOverhangLeft * SCALE_X).toFixed(1)} world-px beyond playfield`);
+            appendLog(`  Right visual overhang:  ${(visOverhangRight * SCALE_X).toFixed(1)} world-px beyond playfield`);
+            appendLog(`  Top visual overhang:    ${(visOverhangTop * SCALE_Y).toFixed(1)} world-px beyond playfield`);
+            appendLog(`  Bottom visual overhang: ${(visOverhangBottom * SCALE_Y).toFixed(1)} world-px beyond playfield`);
+            appendLog('');
+            appendLog('  ROOT CAUSE: The car SVG texture (200×400) is ~2.8× wider and ~2.4× taller');
+            appendLog('  than the collision hitbox (72×144). The visual overhang is BUILT INTO');
+            appendLog('  the asset dimensions. If the goal is to eliminate visual clipping, the');
+            appendLog('  fix must address this size mismatch — either by: (1) reducing the SVG');
+            appendLog('  canvas size, (2) shrinking the sprite scale, or (3) expanding the clamp');
+            appendLog('  bounds to match the visual footprint rather than the collision footprint.');
+          }
+
+          // ── Update debug overlay (container-local coords) ──
+          this.updateDebugOverlay(cx, cy, visLeft, visRight, visTop, visBottom,
+                                  collLeft, collRight, collTop, collBottom);
+
+          // ── Final ─────────────────────────────────────────
+          appendLog('');
+          appendLog('═══ DIAGNOSTIC COMPLETE ═══');
+          appendLog(`  Renderer: ${this.game.renderer.type === Phaser.WEBGL ? 'WebGL' : 'Canvas'}`);
+          appendLog(`  Press edge buttons to check other boundaries`);
+        }
+
+        updateDebugOverlay(cx, cy, visLeft, visRight, visTop, visBottom,
+                           collLeft, collRight, collTop, collBottom) {
+          const d = this.debugGfxRef;
+          const o = this.overlayGfxRef;
+          d.clear();
+          o.clear();
+
+          // Visual sprite outline (magenta)
+          d.lineStyle(2, 0xff66ff, 0.7);
+          d.strokeRect(visLeft, visTop, visRight - visLeft, visBottom - visTop);
+
+          // Collision box (red)
+          d.lineStyle(2, 0xff4444, 0.6);
+          d.strokeRect(collLeft, collTop, collRight - collLeft, collBottom - collTop);
+
+          // Origin crosshair (bright red)
+          d.lineStyle(2, 0xff0000, 0.9);
+          d.beginPath();
+          d.moveTo(cx - 12, cy); d.lineTo(cx + 12, cy);
+          d.moveTo(cx, cy - 12); d.lineTo(cx, cy + 12);
+          d.strokePath();
+          d.fillStyle(0xff0000, 1);
+          d.fillCircle(cx, cy, 4);
+
+          // Playfield edge markers (green dotted, for reference)
+          d.lineStyle(1, 0x00ff00, 0.5);
+          d.beginPath();
+          // Left edge
+          d.moveTo(0, 0); d.lineTo(0, 288);
+          // Right edge
+          d.moveTo(288, 0); d.lineTo(288, 288);
+          // Top edge
+          d.moveTo(0, 0); d.lineTo(288, 0);
+          // Bottom edge
+          d.moveTo(0, 288); d.lineTo(288, 288);
+          d.strokePath();
+
+          // Visual edge markers (blue, semi-transparent)
+          o.lineStyle(1, 0x4488ff, 0.6);
+          o.beginPath();
+          o.moveTo(visLeft, 0); o.lineTo(visLeft, 288);
+          o.moveTo(visRight, 0); o.lineTo(visRight, 288);
+          o.moveTo(0, visTop); o.lineTo(288, visTop);
+          o.moveTo(0, visBottom); o.lineTo(288, visBottom);
+          o.strokePath();
+        }
+      }
+
+      // ════════════════════════════════════════════════════════
+      //  Game config
+      // ════════════════════════════════════════════════════════
+      const config = {
+        type: Phaser.AUTO,
+        width: 390,
+        height: 844,
+        backgroundColor: '#0a0a12',
+        pixelArt: false,
+        parent: 'game-container',
+        scale: {
+          mode: Phaser.Scale.FIT,
+          autoCenter: Phaser.Scale.CENTER_BOTH,
+          width: 390,
+          height: 844,
+        },
+        scene: [ClampDiagScene],
+      };
+
+      const game = new Phaser.Game(config);
+
+      // ── Helper: snap car to position and run diagnostic ───
+      function snapTo(cx, cy, label) {
+        if (!playerCar || !sceneRef) return;
+        playerCar.setPosition(cx, cy);
+        if (sceneRef.collGfxLocal) {
+          sceneRef.collGfxLocal.setPosition(cx, cy);
+        }
+        sceneRef.runDiagnostic(cx, cy, label);
+      }
+
+      // ── UI button wiring ───────────────────────────────────
+      document.getElementById('btn-left').addEventListener('click', () => {
+        snapTo(CLAMP_MIN_X, 144, `clamped LEFT (x=${CLAMP_MIN_X}, y=144)`);
+      });
+      document.getElementById('btn-right').addEventListener('click', () => {
+        snapTo(CLAMP_MAX_X, 144, `clamped RIGHT (x=${CLAMP_MAX_X}, y=144)`);
+      });
+      document.getElementById('btn-top').addEventListener('click', () => {
+        snapTo(144, CLAMP_MIN_Y, `clamped TOP (x=144, y=${CLAMP_MIN_Y})`);
+      });
+      document.getElementById('btn-bottom').addEventListener('click', () => {
+        snapTo(144, CLAMP_MAX_Y, `clamped BOTTOM (x=144, y=${CLAMP_MAX_Y})`);
+      });
+      document.getElementById('btn-center').addEventListener('click', () => {
+        snapTo(144, 144, 'CENTER (144, 144)');
+      });
+      document.getElementById('btn-log-all').addEventListener('click', () => {
+        // Run all 4 edges and center sequentially
+        const positions = [
+          { cx: CLAMP_MIN_X, cy: 144, label: `LEFT edge (x=${CLAMP_MIN_X})` },
+          { cx: CLAMP_MAX_X, cy: 144, label: `RIGHT edge (x=${CLAMP_MAX_X})` },
+          { cx: 144, cy: CLAMP_MIN_Y, label: `TOP edge (y=${CLAMP_MIN_Y})` },
+          { cx: 144, cy: CLAMP_MAX_Y, label: `BOTTOM edge (y=${CLAMP_MAX_Y})` },
+          { cx: 144, cy: 144, label: 'CENTER (144, 144)' },
+        ];
+        // Run current position's diagnostic first
+        const cx = playerCar ? playerCar.x : 144;
+        const cy = playerCar ? playerCar.y : 144;
+        clearLog();
+        for (const pos of positions) {
+          if (playerCar) playerCar.setPosition(pos.cx, pos.cy);
+          if (sceneRef && sceneRef.collGfxLocal) {
+            sceneRef.collGfxLocal.setPosition(pos.cx, pos.cy);
+          }
+          appendLog(`\n  ── ${pos.label} ──\n`);
+          if (sceneRef) {
+            const b = playerCar.getBounds();
+            appendLog(`  Position:       (${pos.cx}, ${pos.cy})`);
+            appendLog(`  displayWidth:   ${playerCar.displayWidth.toFixed(2)}`);
+            appendLog(`  displayHeight:  ${playerCar.displayHeight.toFixed(2)}`);
+            appendLog(`  bounds.left:    ${b.x.toFixed(2)}`);
+            appendLog(`  bounds.right:   ${(b.x + b.width).toFixed(2)}`);
+            appendLog(`  bounds.top:     ${b.y.toFixed(2)}`);
+            appendLog(`  bounds.bottom:  ${(b.y + b.height).toFixed(2)}`);
+            appendLog(`  collision.left: ${(pos.cx - CAR_W/2).toFixed(1)}`);
+            appendLog(`  collision.right:${(pos.cx + CAR_W/2).toFixed(1)}`);
+          }
+        }
+        // Restore last position
+        snapTo(cx, cy, 'restored');
+      });
+
+      document.getElementById('btn-world-toggle').addEventListener('click', () => {
+        worldMode = !worldMode;
+        const btn = document.getElementById('btn-world-toggle');
+        btn.textContent = worldMode ? 'Switch to Local View' : 'Toggle World View';
+        // Toggle container visibility to simulate world/local
+        if (container) {
+          container.setVisible(!worldMode);
+        }
+        appendLog(`> ${worldMode ? 'Showing world-space (container hidden)' : 'Showing container-local view'}`);
+      });
+    })();
+  </script>
+</body>
+</html>

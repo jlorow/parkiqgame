@@ -65,6 +65,15 @@ const INSTRUCTION_PANEL_RADIUS = 10;  // Corner radius of the rounded-rect panel
 const COUNTER_SCALE_Y = SCALE_X / SCALE_Y;
 
 // ──────────────────────────────────────────────────────────
+//  Car visual scale — shrinks the sprite uniformly so the
+//  displayed height fits within the playfield with 48px
+//  overhang top and bottom: 240px = CAR_H (144) + 2×48.
+//  0.680 ≈ 240 / (TEX_H × COUNTER_SCALE_Y).
+// ──────────────────────────────────────────────────────────
+
+const CAR_VISUAL_SCALE = 0.680;
+
+// ──────────────────────────────────────────────────────────
 //  Movement & Collision Constants
 // ──────────────────────────────────────────────────────────
 
@@ -72,29 +81,32 @@ const MOVE_SPEED = 120;
 const ROTATION_SPEED = 90;
 const CAR_W = 72;
 const CAR_H = 144;
-const CAR_HALF_W = CAR_W / 2;
-const CAR_HALF_H = CAR_H / 2;
 
-// Boundary clamp — derived from grid coordinate system:
-// pixelX = (col + CONTAINER_OFFSET_X) * UNIT_PX → col 0-5: 24 to 264
-// pixelY = (row + CONTAINER_OFFSET_Y) * UNIT_PX → row 0-5: 24 to 264
-// Then offset by scale-corrected half-car to let car's far edge
-// reach each cell center in container-local coordinates.
-const CAR_HALF_W_LOCAL = CAR_HALF_W / SCALE_X;
-const CAR_HALF_H_LOCAL = CAR_HALF_H / SCALE_Y;
+// Visual display dimensions at CAR_VISUAL_SCALE (container-local)
+const VISUAL_W = 200 * CAR_VISUAL_SCALE;
+const VISUAL_H = 400 * CAR_VISUAL_SCALE * COUNTER_SCALE_Y;
 
-// Bottom clamp derived from the car's rendered edge in world space.
-// Car rendered bottom = CONTAINER_Y + (CLAMP_MAX_Y × SCALE_Y) + CAR_HALF_H
-// Must be ≤ D-pad forward ▲ button top edge (577) − 20px clearance.
-// (-30 + CLAMP_MAX_Y × 1.53) + 72 ≤ 557 → CLAMP_MAX_Y ≤ 277
-const CLAMP_MAX_Y = 277;
-
+// Cell centers for each grid edge (container-local coordinates)
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
 const ROW0_CENTER = (0 + CONTAINER_OFFSET_Y) * UNIT_PX;
-const CLAMP_MIN_X = COL0_CENTER - CAR_HALF_W_LOCAL;
-const CLAMP_MAX_X = COL5_CENTER + CAR_HALF_W_LOCAL;
-const CLAMP_MIN_Y = ROW0_CENTER - CAR_HALF_H_LOCAL;
+const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
+
+// Boundary clamp — constrains the car center so the VISUAL sprite edge
+// overhangs the playfield by the intended amounts (12px sides, 48px
+// top/bottom).
+//
+//   CLAMP_MIN_X = 24 + (136 - 72) / 2 = 56
+//   Left edge:   56 - 68 = -12  (12px beyond grid left  = 0)
+//   Right edge: 232 + 68 = 300  (12px beyond grid right = 288)
+//
+//   CLAMP_MIN_Y = 24 + (240 - 144) / 2 = 72
+//   Top edge:    72 - 120 = -48  (48px beyond grid top   = 0)
+//   Bottom edge: 216 + 120 = 336  (48px beyond grid bottom = 288)
+const CLAMP_MIN_X = COL0_CENTER + (VISUAL_W - CAR_W) / 2;
+const CLAMP_MAX_X = COL5_CENTER - (VISUAL_W - CAR_W) / 2;
+const CLAMP_MIN_Y = ROW0_CENTER + (VISUAL_H - CAR_H) / 2;
+const CLAMP_MAX_Y = ROW5_CENTER - (VISUAL_H - CAR_H) / 2;
 
 // ──────────────────────────────────────────────────────────
 //  Scene
@@ -716,7 +728,7 @@ export class PuzzleScene extends Phaser.Scene {
         obs.angle,
       );
       obsImg.setDepth(1);
-      obsImg.setScale(1, COUNTER_SCALE_Y);
+      obsImg.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
       container.add(obsImg);
     }
 
@@ -733,7 +745,7 @@ export class PuzzleScene extends Phaser.Scene {
       type: 'player',
     });
     playerCar.setDepth(50);
-    playerCar.setScale(1, COUNTER_SCALE_Y);
+    playerCar.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
     container.add(playerCar);
     this.playerCarImage = playerCar;
   }

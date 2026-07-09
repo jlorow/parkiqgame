@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ParkIQ — Runtime Sprite Verification</title>
+  <script src="phaser-local.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0F0F0F;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      color: #eee;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+    #game-container { width: 780px; height: 600px; }
+    #controls {
+      margin-top: 8px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    #controls button {
+      background: #2a2a2a;
+      color: #eee;
+      border: 1px solid #555;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    #controls button:hover { background: #3a3a3a; }
+    #controls button.active { border-color: #fbbf24; color: #fbbf24; }
+    #report {
+      margin-top: 8px;
+      padding: 10px 14px;
+      background: #1C1C1E;
+      border-radius: 8px;
+      max-width: 780px;
+      width: 100%;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      max-height: 420px;
+      overflow-y: auto;
+      font-size: 12px;
+      border: 1px solid #333;
+    }
+    #report .section-header {
+      color: #fbbf24;
+      font-weight: bold;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    #report .subsection-header {
+      color: #6bb5ff;
+      font-weight: bold;
+      margin-top: 4px;
+    }
+    #report .data-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 8px;
+    }
+    .key { color: #9ca3af; }
+    .val-p { color: #ff6b6b; }
+    .val-o { color: #6bb5ff; }
+    .val-diff { color: #fbbf24; }
+    .badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      margin-left: 6px;
+    }
+    .badge-player { background: #5c1a1a; color: #ff6b6b; }
+    .badge-obstacle { background: #1a2a5c; color: #6bb5ff; }
+    .badge-highlight { background: #5c4a1a; color: #fbbf24; }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <div id="controls">
+    <button id="btn-p-toggle">Toggle Player (P)</button>
+    <button id="btn-o-toggle">Toggle Obstacle (O)</button>
+    <button id="btn-p-only">Player Only (1)</button>
+    <button id="btn-o-only">Obstacle Only (2)</button>
+    <button id="btn-both">Both (3)</button>
+    <button id="btn-overlay">Overlay Mode (4)</button>
+    <button id="btn-remeasure">Re-measure (R)</button>
+    <span style="color:#666;font-size:11px;line-height:30px;">
+      Obstacle variant: <select id="sel-variant">
+        <option value="1">01</option>
+        <option value="2" selected>02</option>
+        <option value="3">03</option>
+        <option value="4">04</option>
+        <option value="5">05</option>
+      </select>
+    </span>
+  </div>
+  <div id="report">Loading report...</div>
+  <script>
+    (function() {
+      'use strict';
+
+      const reportEl = document.getElementById('report');
+      const btnPToggle = document.getElementById('btn-p-toggle');
+      const btnOToggle = document.getElementById('btn-o-toggle');
+      const btnPOnly = document.getElementById('btn-p-only');
+      const btnOOnly = document.getElementById('btn-o-only');
+      const btnBoth = document.getElementById('btn-both');
+      const btnOverlay = document.getElementById('btn-overlay');
+      const btnRemeasure = document.getElementById('btn-remeasure');
+      const selVariant = document.getElementById('sel-variant');
+
+      // ── Constants matching PuzzleScene.ts ──────────────────
+      const SCALE_X = 1.35;
+      const SCALE_Y = 1.53;
+      const COUNTER_SCALE_Y = SCALE_X / SCALE_Y;  // ≈ 0.88235
+
+      let playerCar, obstacleCar, playerOverlay, obstacleOverlay;
+      let playerDebug, obstacleDebug;
+      let logBuf = '';
+
+      function appendLog(msg) {
+        console.log(msg);
+        logBuf += msg + '\n';
+      }
+
+      function clearLog() {
+        logBuf = '';
+      }
+
+      function renderReport() {
+        reportEl.textContent = logBuf;
+        reportEl.scrollTop = 0;
+      }
+
+      // ── Draw debug bounds for a sprite ────────────────────
+      function drawDebugBounds(scene, sprite, color, label, gfx) {
+        const bounds = sprite.getBounds();
+        const isPlayer = label === 'player';
+
+        // Display bounds outline
+        gfx.lineStyle(2, color, 0.8);
+        gfx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+
+        // Center dot
+        gfx.fillStyle(color, 1);
+        gfx.fillCircle(sprite.x, sprite.y, 4);
+
+        // Origin cross
+        gfx.lineStyle(1, 0xffffff, 0.4);
+        const ox = sprite.x, oy = sprite.y;
+        gfx.beginPath();
+        gfx.moveTo(ox - 7, oy); gfx.lineTo(ox + 7, oy);
+        gfx.moveTo(ox, oy - 7); gfx.lineTo(ox, oy + 7);
+        gfx.strokePath();
+
+        // Corner handles
+        gfx.fillStyle(color, 0.5);
+        const corners = [
+          { x: bounds.x, y: bounds.y },
+          { x: bounds.x + bounds.width, y: bounds.y },
+          { x: bounds.x, y: bounds.y + bounds.height },
+          { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+        ];
+        for (const c of corners) {
+          gfx.fillRect(c.x - 2, c.y - 2, 4, 4);
+        }
+
+        // Label above bounds
+        const labelText = scene.add.text(bounds.x, bounds.y - 14, label.toUpperCase(), {
+          fontSize: '11px',
+          color: isPlayer ? '#ff6b6b' : '#6bb5ff',
+          fontFamily: 'monospace',
+          fontStyle: 'bold',
+        }).setDepth(100);
+
+        // Dimension label below bounds
+        const dimText = scene.add.text(bounds.x, bounds.y + bounds.height + 2,
+          `${pixels(bounds.width)}×${pixels(bounds.height)}px`, {
+          fontSize: '10px',
+          color: Phaser.Display.Color.IntegerToColor(color).rgba,
+          fontFamily: 'monospace',
+        }).setDepth(100);
+      }
+
+      function pixels(v) { return v.toFixed(1); }
+
+      // ── Compare Scene ─────────────────────────────────────
+      class CompareScene extends Phaser.Scene {
+        constructor() { super('CompareScene'); }
+
+        preload() {
+          this.load.svg('car-player',      'public/assets/sprites/cars/Car-Player.svg',       { width: 200, height: 400 });
+          this.load.svg('car-obstacle-1',  'public/assets/sprites/cars/Car-obstacle-01.svg',  { width: 200, height: 400 });
+          this.load.svg('car-obstacle-2',  'public/assets/sprites/cars/Car-obstacle-02.svg',  { width: 200, height: 400 });
+          this.load.svg('car-obstacle-3',  'public/assets/sprites/cars/Car-obstacle-03.svg',  { width: 200, height: 400 });
+          this.load.svg('car-obstacle-4',  'public/assets/sprites/cars/Car-obstacle-04.svg',  { width: 200, height: 400 });
+          this.load.svg('car-obstacle-5',  'public/assets/sprites/cars/Car-obstacle-05.svg',  { width: 200, height: 400 });
+        }
+
+        create() {
+          const W = 780;
+          const H = 600;
+          const CX = W / 2;
+
+          // ── Background ────────────────────────────────────
+          const bg = this.add.graphics();
+          bg.fillStyle(0x111118, 1);
+          bg.fillRect(0, 0, W, H);
+
+          // ── Section labels ────────────────────────────────
+          const labelY1 = 16;
+          const labelY2 = 340;
+
+          this.add.text(CX, labelY1, '■ SIDE-BY-SIDE  |  Same X position, identical transforms', {
+            fontSize: '13px', color: '#fbbf24', fontFamily: 'monospace', fontStyle: 'bold',
+          }).setOrigin(0.5, 0).setDepth(200);
+
+          this.add.text(CX, labelY2 - 6, '■ OVERLAID  |  Player slightly left, obstacle slightly right', {
+            fontSize: '13px', color: '#fbbf24', fontFamily: 'monospace', fontStyle: 'bold',
+          }).setOrigin(0.5, 0).setDepth(200);
+
+          // ── Side-by-side row ──────────────────────────────
+          const ROW1_CY = 180;
+          const POS_X = CX;  // Same X — they'd overlap, so offset them visually but keep transforms identical
+
+          // Player car (left side of center)
+          playerCar = this.add.image(CX - 140, ROW1_CY, 'car-player');
+          playerCar.setScale(1, COUNTER_SCALE_Y);
+          playerCar.setOrigin(0.5, 0.5);
+
+          // Obstacle car (right side of center)
+          const obsKey = 'car-obstacle-2';
+          obstacleCar = this.add.image(CX + 140, ROW1_CY, obsKey);
+          obstacleCar.setScale(1, COUNTER_SCALE_Y);
+          obstacleCar.setOrigin(0.5, 0.5);
+
+          // Labels
+          this.add.text(CX - 140, ROW1_CY + 100, 'PLAYER (Car-Player.svg)', {
+            fontSize: '11px', color: '#ff6b6b', fontFamily: 'monospace',
+          }).setOrigin(0.5).setDepth(200);
+
+          this.add.text(CX + 140, ROW1_CY + 100, 'OBSTACLE (Car-obstacle-02.svg)', {
+            fontSize: '11px', color: '#6bb5ff', fontFamily: 'monospace',
+          }).setOrigin(0.5).setDepth(200);
+
+          // ── Draw debug bounds ────────────────────────────
+          playerDebug = this.add.graphics().setDepth(50);
+          obstacleDebug = this.add.graphics().setDepth(50);
+
+          drawDebugBounds(this, playerCar, 0xff4444, 'player', playerDebug);
+          drawDebugBounds(this, obstacleCar, 0x4488ff, 'obstacle', obstacleDebug);
+
+          // ── Overlay row (centered, slightly offset) ──────
+          const ROW2_CY = 500;
+
+          playerOverlay = this.add.image(CX - 6, ROW2_CY, 'car-player');
+          playerOverlay.setScale(1, COUNTER_SCALE_Y);
+          playerOverlay.setOrigin(0.5, 0.5);
+          playerOverlay.setAlpha(0.75);
+          playerOverlay.setDepth(30);
+
+          obstacleOverlay = this.add.image(CX + 6, ROW2_CY, obsKey);
+          obstacleOverlay.setScale(1, COUNTER_SCALE_Y);
+          obstacleOverlay.setOrigin(0.5, 0.5);
+          obstacleOverlay.setAlpha(0.75);
+          obstacleOverlay.setDepth(20);
+
+          // Overlay debug bounds
+          drawDebugBounds(this, playerOverlay, 0xff6666, 'player(overlay)', this.add.graphics().setDepth(50));
+          drawDebugBounds(this, obstacleOverlay, 0x66aaff, 'obstacle(overlay)', this.add.graphics().setDepth(50));
+
+          this.add.text(CX, ROW2_CY + 80, 'Player (left offset) vs Obstacle (right offset)', {
+            fontSize: '10px', color: '#888', fontFamily: 'monospace',
+          }).setOrigin(0.5).setDepth(200);
+
+          // ── Divider lines ─────────────────────────────────
+          const div = this.add.graphics();
+          div.lineStyle(1, 0x333355, 0.6);
+          div.beginPath();
+          div.moveTo(0, 300); div.lineTo(W, 300);
+          div.moveTo(0, 302); div.lineTo(W, 302);
+          div.strokePath();
+
+          // ── Measure after load ───────────────────────────
+          this.time.delayedCall(600, () => {
+            this.generateReport();
+          });
+
+          // ── Keyboard controls ────────────────────────────
+          this.input.keyboard.on('keydown-P', () => {
+            playerCar.setVisible(!playerCar.visible);
+            playerOverlay.setVisible(!playerOverlay.visible);
+            appendLog('> Toggled PLAYER visibility');
+            this.generateReport();
+          });
+          this.input.keyboard.on('keydown-O', () => {
+            obstacleCar.setVisible(!obstacleCar.visible);
+            obstacleOverlay.setVisible(!obstacleOverlay.visible);
+            appendLog('> Toggled OBSTACLE visibility');
+            this.generateReport();
+          });
+          this.input.keyboard.on('keydown-ONE', () => {
+            playerCar.setVisible(true); playerOverlay.setVisible(true);
+            obstacleCar.setVisible(false); obstacleOverlay.setVisible(false);
+            appendLog('> Player only');
+            this.generateReport();
+          });
+          this.input.keyboard.on('keydown-TWO', () => {
+            playerCar.setVisible(false); playerOverlay.setVisible(false);
+            obstacleCar.setVisible(true); obstacleOverlay.setVisible(true);
+            appendLog('> Obstacle only');
+            this.generateReport();
+          });
+          this.input.keyboard.on('keydown-THREE', () => {
+            playerCar.setVisible(true); playerOverlay.setVisible(true);
+            obstacleCar.setVisible(true); obstacleOverlay.setVisible(true);
+            appendLog('> Both visible');
+            this.generateReport();
+          });
+          this.input.keyboard.on('keydown-FOUR', () => {
+            // Overlay mode: position both at same spot
+            const CX2 = this.scale.width / 2;
+            const RY2 = 500;
+            playerCar.setPosition(CX2, RY2);
+            obstacleCar.setPosition(CX2, RY2);
+            playerCar.setAlpha(0.7);
+            obstacleCar.setAlpha(0.7);
+            this.children.each((child) => {
+              if (child.type === 'Text') child.setVisible(false);
+            });
+            appendLog('> Overlay mode: both at same position');
+            this.generateReport();
+          });
+          this.input.keyboard.on('keydown-R', () => {
+            this.generateReport();
+          });
+        }
+
+        generateReport() {
+          clearLog();
+          const W = this.scale.width;
+
+          // ═══════════════════════════════════════════════════
+          //  SECTION 1: Measured Runtime Dimensions
+          // ═══════════════════════════════════════════════════
+          appendLog('╔══════════════════════════════════════════════════════╗');
+          appendLog('║   SECTION 1 — MEASURED RUNTIME DIMENSIONS           ║');
+          appendLog('╚══════════════════════════════════════════════════════╝');
+          appendLog('');
+
+          // Report all obstacle variants
+          const variantNames = ['car-obstacle-1','car-obstacle-2','car-obstacle-3','car-obstacle-4','car-obstacle-5'];
+          const playerTex = this.textures.get('car-player');
+          const playerFrame = playerTex.get();
+
+          appendLog('  ── Texture Source Info ──');
+          appendLog(`  Player texture frame:  ${playerFrame.width} × ${playerFrame.height}`);
+          for (let i = 0; i < playerTex.source.length; i++) {
+            const src = playerTex.source[i];
+            if (src && src.image && src.image.width) {
+              appendLog(`  Player SVG source:    ${src.image.width} × ${src.image.height}`);
+              break;
+            }
+          }
+
+          // For each obstacle variant
+          for (const v of variantNames) {
+            const tex = this.textures.get(v);
+            if (!tex) continue;
+            const frame = tex.get();
+            appendLog(`  ${v}: frame=${frame.width}×${frame.height}`);
+            for (let i = 0; i < tex.source.length; i++) {
+              const src = tex.source[i];
+              if (src && src.image && src.image.width) {
+                const svgW = src.image.width;
+                const svgH = src.image.height;
+                // The SVG natural size
+                appendLog(`    source image: ${svgW} × ${svgH}`);
+                break;
+              }
+            }
+          }
+
+          appendLog('');
+          appendLog('  ── Per-Sprite Runtime Values (side-by-side row) ──');
+          appendLog('');
+
+          // Measure each of the 5 obstacle variants vs player
+          appendLog('  Property             | Player   | Obst-01 | Obst-02 | Obst-03 | Obst-04 | Obst-05');
+          appendLog('  ───────────────────────────────────────────────────────────────────────────────');
+
+          const props = ['displayWidth','displayHeight','scaleX','scaleY','originX','originY','x','y','angle'];
+          const obsKeys = variantNames;
+
+          // Create temporary obstacles at hidden position to measure them all
+          const tempObs = [];
+          for (let i = 0; i < obsKeys.length; i++) {
+            const img = this.add.image(-1000, -1000, obsKeys[i]);
+            img.setScale(1, COUNTER_SCALE_Y);
+            img.setVisible(false);
+            tempObs.push(img);
+          }
+
+          for (const prop of props) {
+            let line = `  ${prop.padEnd(20)} |`;
+            const pVal = playerCar[prop];
+            line += String(typeof pVal === 'number' ? pVal.toFixed(pVal < 10 ? 4 : 2) : pVal).padStart(9);
+
+            for (const img of tempObs) {
+              let oVal = img[prop];
+              line += ' |';
+              line += String(typeof oVal === 'number' ? oVal.toFixed(oVal < 10 ? 4 : 2) : oVal).padStart(9);
+            }
+            appendLog(line);
+          }
+
+          // bounds.width and bounds.height
+          let line = `  ${'bounds.width'.padEnd(20)} |`;
+          const pBounds = playerCar.getBounds();
+          line += pBounds.width.toFixed(2).padStart(9);
+          for (const img of tempObs) {
+            const b = img.getBounds();
+            line += ' |';
+            line += b.width.toFixed(2).padStart(9);
+          }
+          appendLog(line);
+
+          line = `  ${'bounds.height'.padEnd(20)} |`;
+          line += pBounds.height.toFixed(2).padStart(9);
+          for (const img of tempObs) {
+            const b = img.getBounds();
+            line += ' |';
+            line += b.height.toFixed(2).padStart(9);
+          }
+          appendLog(line);
+
+          // Clean up temp images
+          for (const img of tempObs) img.destroy();
+
+          appendLog('');
+
+          // ═══════════════════════════════════════════════════
+          //  SECTION 2: Comparison Table (Player vs selected obstacle)
+          // ═══════════════════════════════════════════════════
+          appendLog('╔══════════════════════════════════════════════════════╗');
+          appendLog('║   SECTION 2 — COMPARISON TABLE                      ║');
+          appendLog('╚══════════════════════════════════════════════════════╝');
+          appendLog('');
+
+          const oBounds = obstacleCar.getBounds();
+
+          appendLog('  Property             | Player       | Obstacle     | Difference');
+          appendLog('  ────────────────────────────────────────────────────────────────');
+          appendLog(`  displayWidth          | ${playerCar.displayWidth.toFixed(2).padStart(8)}    | ${obstacleCar.displayWidth.toFixed(2).padStart(8)}    | ${(playerCar.displayWidth - obstacleCar.displayWidth).toFixed(2)}`);
+          appendLog(`  displayHeight         | ${playerCar.displayHeight.toFixed(2).padStart(8)}    | ${obstacleCar.displayHeight.toFixed(2).padStart(8)}    | ${(playerCar.displayHeight - obstacleCar.displayHeight).toFixed(2)}`);
+          appendLog(`  bounds.width          | ${pBounds.width.toFixed(2).padStart(8)}    | ${oBounds.width.toFixed(2).padStart(8)}    | ${(pBounds.width - oBounds.width).toFixed(2)}`);
+          appendLog(`  bounds.height         | ${pBounds.height.toFixed(2).padStart(8)}    | ${oBounds.height.toFixed(2).padStart(8)}    | ${(oBounds.height - pBounds.height).toFixed(2)}`);
+          appendLog(`  scaleX                | ${playerCar.scaleX.toFixed(4).padStart(8)}    | ${obstacleCar.scaleX.toFixed(4).padStart(8)}    | ${(playerCar.scaleX - obstacleCar.scaleX).toFixed(4)}`);
+          appendLog(`  scaleY                | ${playerCar.scaleY.toFixed(4).padStart(8)}    | ${obstacleCar.scaleY.toFixed(4).padStart(8)}    | ${(playerCar.scaleY - obstacleCar.scaleY).toFixed(4)}`);
+          appendLog(`  originX               | ${playerCar.originX.toFixed(4).padStart(8)}    | ${obstacleCar.originX.toFixed(4).padStart(8)}    | ${(playerCar.originX - obstacleCar.originX).toFixed(4)}`);
+          appendLog(`  originY               | ${playerCar.originY.toFixed(4).padStart(8)}    | ${obstacleCar.originY.toFixed(4).padStart(8)}    | ${(playerCar.originY - obstacleCar.originY).toFixed(4)}`);
+
+          // Texture frame dimensions
+          const playerTexFrame = this.textures.get('car-player').get();
+          const obsTex = this.textures.get(obstacleCar.texture.key);
+          const obsTexFrame = obsTex.get();
+
+          appendLog(`  texture.width         | ${playerTexFrame.width.toString().padStart(8)}    | ${obsTexFrame.width.toString().padStart(8)}    | ${playerTexFrame.width - obsTexFrame.width}`);
+          appendLog(`  texture.height        | ${playerTexFrame.height.toString().padStart(8)}    | ${obsTexFrame.height.toString().padStart(8)}    | ${playerTexFrame.height - obsTexFrame.height}`);
+
+          // SVG source dimensions
+          const playerSrc = this.getSourceDims('car-player');
+          const obsSrc = this.getSourceDims(obstacleCar.texture.key);
+          if (playerSrc) {
+            appendLog(`  SVG source width      | ${playerSrc.w.toString().padStart(8)}    | ${obsSrc ? obsSrc.w.toString().padStart(8) : '  N/A'}    | ${obsSrc ? playerSrc.w - obsSrc.w : 'N/A'}`);
+            appendLog(`  SVG source height     | ${playerSrc.h.toString().padStart(8)}    | ${obsSrc ? obsSrc.h.toString().padStart(8) : '  N/A'}    | ${obsSrc ? playerSrc.h - obsSrc.h : 'N/A'}`);
+          }
+
+          appendLog('');
+
+          // ═══════════════════════════════════════════════════
+          //  SECTION 3: SVG ViewBox Analysis
+          // ═══════════════════════════════════════════════════
+          appendLog('╔══════════════════════════════════════════════════════╗');
+          appendLog('║   SECTION 3 — SVG VIEWBOX vs RENDERED SIZE          ║');
+          appendLog('╚══════════════════════════════════════════════════════╝');
+          appendLog('');
+
+          appendLog('  SVG viewBox dimensions:');
+          appendLog('    Car-Player.svg:       360 × 720  (1:2 ratio, matches 200×400 frame)');
+          appendLog('    Car-obstacle-01.svg:  360 × 720  (1:2 ratio, matches 200×400 frame)');
+          appendLog('    Car-obstacle-02.svg:  348 × 694  (≈1:1.994 ratio)');
+          appendLog('    Car-obstacle-03.svg:  348 × 694  (≈1:1.994 ratio)');
+          appendLog('    Car-obstacle-04.svg:  348 × 694  (≈1:1.994 ratio)');
+          appendLog('    Car-obstacle-05.svg:  348 × 694  (≈1:1.994 ratio)');
+          appendLog('');
+
+          appendLog('  Phaser rasterizes all SVGs into 200×400 textures.');
+          appendLog('  The SVG viewBox difference (360×720 vs 348×694) means');
+          appendLog('  the browser must letterbox the 348×694 SVGs to fit');
+          appendLog('  the 200×400 canvas, adding ~7px horizontal padding.');
+          appendLog('');
+
+          // ── Significant difference check ──
+          const boundsWidthDiff = Math.abs(pBounds.width - oBounds.width);
+          const boundsHeightDiff = Math.abs(pBounds.height - oBounds.height);
+          const displayWidthDiff = Math.abs(playerCar.displayWidth - obstacleCar.displayWidth);
+          const displayHeightDiff = Math.abs(playerCar.displayHeight - obstacleCar.displayHeight);
+
+          const SIGNIFICANT_THRESHOLD = 1.0; // pixels
+
+          const widthSig = displayWidthDiff >= SIGNIFICANT_THRESHOLD;
+          const heightSig = displayHeightDiff >= SIGNIFICANT_THRESHOLD;
+
+          appendLog('');
+          appendLog('╔══════════════════════════════════════════════════════╗');
+          appendLog('║   SECTION 4 — CONCLUSION                            ║');
+          appendLog('╚══════════════════════════════════════════════════════╝');
+          appendLog('');
+
+          if (!widthSig && !heightSig) {
+            appendLog('  ✅ CONCLUSION A:');
+            appendLog('  "The player and obstacle sprites render at effectively');
+            appendLog('   the same visible size."');
+            appendLog('');
+            appendLog('  The SVG viewBox hypothesis is DISPROVEN.');
+            appendLog('  Despite different viewBox dimensions (360×720 vs 348×694),');
+            appendLog('  Phaser rasterization to a uniform 200×400 texture frame');
+            appendLog('  normalises all visible size differences.');
+            appendLog('');
+            appendLog(`  Max displayWidth difference:  ${displayWidthDiff.toFixed(2)}px`);
+            appendLog(`  Max displayHeight difference: ${displayHeightDiff.toFixed(2)}px`);
+            appendLog(`  Threshold for significance:   ${SIGNIFICANT_THRESHOLD}px`);
+          } else {
+            appendLog('  ✅ CONCLUSION B:');
+            appendLog('  "The player and obstacle sprites render at measurably');
+            appendLog('   different visible sizes."');
+            appendLog('');
+            appendLog(`  displayWidth difference:  ${displayWidthDiff.toFixed(2)}px`);
+            appendLog(`  displayHeight difference: ${displayHeightDiff.toFixed(2)}px`);
+            appendLog('');
+            appendLog('  The SVG viewBox mismatch DOES propagate to runtime.');
+          }
+
+          appendLog('');
+          appendLog('  Visual comparison:');
+          const visP = playerCar.visible ? 'visible' : 'hidden';
+          const visO = obstacleCar.visible ? 'visible' : 'hidden';
+          appendLog(`  Player: ${visP}  |  Obstacle: ${visO}`);
+          if (playerCar.alpha < 1 || obstacleCar.alpha < 1) {
+            appendLog(`  Player alpha: ${playerCar.alpha}  |  Obstacle alpha: ${obstacleCar.alpha}`);
+          }
+          appendLog('');
+          appendLog('  Press P/O to toggle visibility, 1=player, 2=obstacle,');
+          appendLog('  3=both, 4=overlay (same position), R=remeasure');
+
+          // ── Store SVG viewBox info in report ──
+          const pSrcDims = this.getSourceDims('car-player');
+          const oSrcDims = this.getSourceDims(obstacleCar.texture.key);
+
+          renderReport();
+          appendLog('');
+          appendLog('═══ MEASUREMENTS UPDATED ═══');
+          appendLog(`  Total sprite pairs measured: 6 (1 player + 5 obstacle variants)`);
+          appendLog(`  Renderer: ${this.game.renderer.type === Phaser.WEBGL ? 'WebGL' : 'Canvas'}`);
+
+          // Set scroll
+          reportEl.scrollTop = 0;
+        }
+
+        getSourceDims(key) {
+          const tex = this.textures.get(key);
+          if (!tex) return null;
+          for (let i = 0; i < tex.source.length; i++) {
+            const src = tex.source[i];
+            if (src && src.image && src.image.width) {
+              return { w: src.image.width, h: src.image.height };
+            }
+          }
+          return null;
+        }
+      }
+
+      // ── Game config ────────────────────────────────────────
+      const config = {
+        type: Phaser.AUTO,
+        width: 780,
+        height: 600,
+        backgroundColor: '#111118',
+        pixelArt: false,
+        parent: 'game-container',
+        scale: {
+          mode: Phaser.Scale.FIT,
+          autoCenter: Phaser.Scale.CENTER_BOTH,
+          width: 780,
+          height: 600,
+        },
+        scene: [CompareScene],
+      };
+
+      const game = new Phaser.Game(config);
+
+      // ── UI button wiring ───────────────────────────────────
+      btnPToggle.addEventListener('click', () => {
+        if (game.scene.scenes[0]) {
+          const scene = game.scene.scenes[0];
+          scene.input.keyboard.emit('keydown-P');
+        }
+      });
+      btnOToggle.addEventListener('click', () => {
+        if (game.scene.scenes[0]) {
+          const scene = game.scene.scenes[0];
+          scene.input.keyboard.emit('keydown-O');
+        }
+      });
+      btnPOnly.addEventListener('click', () => {
+        if (game.scene.scenes[0]) {
+          const scene = game.scene.scenes[0];
+          scene.input.keyboard.emit('keydown-ONE');
+        }
+      });
+      btnOOnly.addEventListener('click', () => {
+        if (game.scene.scenes[0]) {
+          const scene = game.scene.scenes[0];
+          scene.input.keyboard.emit('keydown-TWO');
+        }
+      });
+      btnBoth.addEventListener('click', () => {
+        if (game.scene.scenes[0]) {
+          const scene = game.scene.scenes[0];
+          scene.input.keyboard.emit('keydown-THREE');
+        }
+      });
+      btnOverlay.addEventListener('click', () => {
+        if (game.scene.scenes[0]) {
+          const scene = game.scene.scenes[0];
+          scene.input.keyboard.emit('keydown-FOUR');
+        }
+      });
+      btnRemeasure.addEventListener('click', () => {
+        if (game.scene.scenes[0]) {
+          const scene = game.scene.scenes[0];
+          scene.input.keyboard.emit('keydown-R');
+        }
+      });
+      selVariant.addEventListener('change', () => {
+        // Reload scene with selected variant
+        appendLog(`> Switching to obstacle variant ${selVariant.value}`);
+        // Can't easily swap texture - refresh scene
+        game.scene.stop('CompareScene');
+        game.scene.add('CompareScene', CompareScene, true);
+      });
+    })();
+  </script>
+</body>
+</html>
