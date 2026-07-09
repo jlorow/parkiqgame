@@ -14,9 +14,10 @@ import { THEME_FLAT_COLORS } from '../config/ThemeRegistry';
 // ──────────────────────────────────────────────────────────
 
 const UNIT_PX = 48;
-const CONTAINER_SCALE = 1.35;
+const SCALE_X = 1.35;
+const SCALE_Y = 1.53;
 const CONTAINER_X = 1;
-const CONTAINER_Y = 30;
+const CONTAINER_Y = -30;
 const CONTAINER_OFFSET_X = 1;
 const CONTAINER_OFFSET_Y = 2;
 
@@ -33,7 +34,14 @@ const CARD_H = 704;
 const CARD_BOTTOM = CARD_Y + CARD_H;
 
 const CONTROLS_CENTER_X = 195;
-const CONTROLS_CENTER_Y = CARD_Y + CARD_H - 128;
+const CONTROLS_CENTER_Y = 680;
+
+// ──────────────────────────────────────────────────────────
+//  Sprite counter-scale — keeps car/obstacle images proportional
+//  when container applies non-uniform scale (SCALE_X ≠ SCALE_Y).
+// ──────────────────────────────────────────────────────────
+
+const COUNTER_SCALE_Y = SCALE_X / SCALE_Y;
 
 // ──────────────────────────────────────────────────────────
 //  Movement & Collision Constants
@@ -51,14 +59,14 @@ const CAR_HALF_H = CAR_H / 2;
 // pixelY = (row + CONTAINER_OFFSET_Y) * UNIT_PX → row 0-5: 96 to 336
 // Then offset by scale-corrected half-car to let car's far edge
 // reach each cell center in container-local coordinates.
-const CAR_HALF_W_LOCAL = CAR_HALF_W / CONTAINER_SCALE;
-const CAR_HALF_H_LOCAL = CAR_HALF_H / CONTAINER_SCALE;
+const CAR_HALF_W_LOCAL = CAR_HALF_W / SCALE_X;
+const CAR_HALF_H_LOCAL = CAR_HALF_H / SCALE_Y;
 
 // Bottom clamp derived from the car's rendered edge in world space.
-// Car rendered bottom = CONTAINER_Y + (CLAMP_MAX_Y × CONTAINER_SCALE) + CAR_HALF_H
+// Car rendered bottom = CONTAINER_Y + (CLAMP_MAX_Y × SCALE_Y) + CAR_HALF_H
 // Must be ≤ D-pad forward ▲ button top edge (487) − 20px clearance.
-// (30 + CLAMP_MAX_Y × 1.35) + 72 ≤ 467 → CLAMP_MAX_Y ≤ 270
-const CLAMP_MAX_Y = 270;
+// (-30 + CLAMP_MAX_Y × 1.53) + 72 ≤ 467 → CLAMP_MAX_Y ≤ 277
+const CLAMP_MAX_Y = 277;
 
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
@@ -567,7 +575,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.carAngle = this.spawnAngle;
 
     const container = this.add.container(CONTAINER_X, CONTAINER_Y);
-    container.setScale(CONTAINER_SCALE);
+    container.setScale(SCALE_X, SCALE_Y);
     container.setDepth(5);
     this.parkingContainer = container;
 
@@ -659,6 +667,7 @@ export class PuzzleScene extends Phaser.Scene {
         obs.angle,
       );
       obsImg.setDepth(1);
+      obsImg.setScale(1, COUNTER_SCALE_Y);
       container.add(obsImg);
     }
 
@@ -675,6 +684,7 @@ export class PuzzleScene extends Phaser.Scene {
       type: 'player',
     });
     playerCar.setDepth(50);
+    playerCar.setScale(1, COUNTER_SCALE_Y);
     container.add(playerCar);
     this.playerCarImage = playerCar;
   }
