@@ -34,7 +34,7 @@ const HUD_Y = 8;
 const PARKIQ_FONT = '20px';
 const HUD_MUTED_FONT = '13px';
 
-const OBJECTIVE_Y = 430;
+const OBJECTIVE_Y = 500;
 
 const CARD_Y = CONTAINER_Y - 6;
 const GRID_SIZE = 288;
@@ -43,7 +43,7 @@ const CARD_H = 704;
 const CARD_BOTTOM = CARD_Y + CARD_H;
 
 const CONTROLS_CENTER_X = 195;
-const CONTROLS_CENTER_Y = 680;
+const CONTROLS_CENTER_Y = 690;
 
 // ──────────────────────────────────────────────────────────
 //  Sprite counter-scale — keeps car/obstacle images proportional
@@ -73,8 +73,8 @@ const CAR_HALF_H_LOCAL = CAR_HALF_H / SCALE_Y;
 
 // Bottom clamp derived from the car's rendered edge in world space.
 // Car rendered bottom = CONTAINER_Y + (CLAMP_MAX_Y × SCALE_Y) + CAR_HALF_H
-// Must be ≤ D-pad forward ▲ button top edge (487) − 20px clearance.
-// (-30 + CLAMP_MAX_Y × 1.53) + 72 ≤ 467 → CLAMP_MAX_Y ≤ 277
+// Must be ≤ D-pad forward ▲ button top edge (577) − 20px clearance.
+// (-30 + CLAMP_MAX_Y × 1.53) + 72 ≤ 557 → CLAMP_MAX_Y ≤ 277
 const CLAMP_MAX_Y = 277;
 
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
