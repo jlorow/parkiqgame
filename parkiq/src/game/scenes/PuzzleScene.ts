@@ -259,9 +259,12 @@ export class PuzzleScene extends Phaser.Scene {
   private renderControlSurface(): void {
     const panel = this.add.graphics();
     panel.setDepth(3);
-    // Container bottom (screen coords): CONTAINER_Y + GRID_SIZE × SCALE_Y ≈ 411
+    // Derive position from existing layout constants so the panel
+    // stays aligned if CONTAINER_Y, GRID_SIZE, SCALE_Y, or canvas
+    // dimensions are adjusted later.
+    const containerBottom = CONTAINER_Y + GRID_SIZE * SCALE_Y;
     panel.fillStyle(0x141414, 1);
-    panel.fillRect(0, 411, 390, 844 - 411);
+    panel.fillRect(0, containerBottom, this.scale.width, this.scale.height - containerBottom);
   }
 
   // ──────────────────────────────────────────────────────────
