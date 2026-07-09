@@ -167,6 +167,7 @@ export class PuzzleScene extends Phaser.Scene {
     });
 
     this.renderDefaultBackground();
+    this.renderControlSurface();
 
     // Puzzle loads asynchronously — render static chrome first, then fetch progress
     void this.loadAndRender();
@@ -245,9 +246,28 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // ──────────────────────────────────────────────────────────
+  //  Neutral Control Surface
+  //  Theme-independent UI panel below the playfield.
+  //  Covers from container bottom (~411) to canvas floor (844),
+  //  at depth 3 — above theme backdrop (2) but below container (5)
+  //  and controls (9–11). Eliminates the visible seam between
+  //  the default gradient (depth 0) and the theme ground surface
+  //  (depth 2) in the control region while keeping theme colours
+  //  out of the UI area.
+  // ──────────────────────────────────────────────────────────
+
+  private renderControlSurface(): void {
+    const panel = this.add.graphics();
+    panel.setDepth(3);
+    // Container bottom (screen coords): CONTAINER_Y + GRID_SIZE × SCALE_Y ≈ 411
+    panel.fillStyle(0x141414, 1);
+    panel.fillRect(0, 411, 390, 844 - 411);
+  }
+
+  // ──────────────────────────────────────────────────────────
   //  Themed Environment Scene (STEP A — full-screen backdrop)
   //  Called after puzzle loads so theme is known.
-  //  Draws at depth 2 — between vignette (1) and card (3).
+  //  Draws at depth 2 — between vignette (1) and control surface (3).
   // ──────────────────────────────────────────────────────────
 
   private renderEnvironment(): void {
