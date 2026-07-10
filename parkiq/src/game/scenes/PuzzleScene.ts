@@ -65,13 +65,14 @@ const INSTRUCTION_PANEL_RADIUS = 10;  // Corner radius of the rounded-rect panel
 const COUNTER_SCALE_Y = SCALE_X / SCALE_Y;
 
 // ──────────────────────────────────────────────────────────
-//  Car visual scale — shrinks the sprite uniformly so the
-//  displayed height fits within the playfield with 48px
-//  overhang top and bottom: 240px = CAR_H (144) + 2×48.
-//  0.680 ≈ 240 / (TEX_H × COUNTER_SCALE_Y).
+//  Car visual scale — shrinks the sprite so the visual width
+//  fits within a single lane (48px) with ~4px margin per side.
+//  0.20 ≈ 40 / 200
+//  VISUAL_W = 200 × 0.20 = 40px  (≈ 83% of lane width)
+//  VISUAL_H = 400 × 0.20 × COUNTER_SCALE_Y ≈ 70.6px
 // ──────────────────────────────────────────────────────────
 
-const CAR_VISUAL_SCALE = 0.680;
+const CAR_VISUAL_SCALE = 0.20;
 
 // ──────────────────────────────────────────────────────────
 //  Movement & Collision Constants
@@ -79,8 +80,8 @@ const CAR_VISUAL_SCALE = 0.680;
 
 const MOVE_SPEED = 120;
 const ROTATION_SPEED = 90;
-const CAR_W = 72;
-const CAR_H = 144;
+const CAR_W = 36;
+const CAR_H = 64;
 
 // Visual display dimensions at CAR_VISUAL_SCALE (container-local)
 const VISUAL_W = 200 * CAR_VISUAL_SCALE;
@@ -93,16 +94,9 @@ const ROW0_CENTER = (0 + CONTAINER_OFFSET_Y) * UNIT_PX;
 const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
 
 // Boundary clamp — constrains the car center so the VISUAL sprite edge
-// overhangs the playfield by the intended amounts (12px sides, 48px
-// top/bottom).
-//
-//   CLAMP_MIN_X = 24 + (136 - 72) / 2 = 56
-//   Left edge:   56 - 68 = -12  (12px beyond grid left  = 0)
-//   Right edge: 232 + 68 = 300  (12px beyond grid right = 288)
-//
-//   CLAMP_MIN_Y = 24 + (240 - 144) / 2 = 72
-//   Top edge:    72 - 120 = -48  (48px beyond grid top   = 0)
-//   Bottom edge: 216 + 120 = 336  (48px beyond grid bottom = 288)
+// stays within the playfield (6 columns × 48px = 288px wide, 288px tall).
+// With VISUAL_W=40, CAR_W=36: 2px overhang per side.
+// With VISUAL_H≈70.6, CAR_H=64: ~3.3px overhang per side.
 const CLAMP_MIN_X = COL0_CENTER + (VISUAL_W - CAR_W) / 2;
 const CLAMP_MAX_X = COL5_CENTER - (VISUAL_W - CAR_W) / 2;
 const CLAMP_MIN_Y = ROW0_CENTER + (VISUAL_H - CAR_H) / 2;
@@ -731,6 +725,7 @@ export class PuzzleScene extends Phaser.Scene {
     playerCar.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
     container.add(playerCar);
     this.playerCarImage = playerCar;
+
   }
 
   // ──────────────────────────────────────────────────────────
