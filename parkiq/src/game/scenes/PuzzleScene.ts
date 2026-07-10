@@ -90,7 +90,6 @@ const VISUAL_H = 400 * CAR_VISUAL_SCALE * COUNTER_SCALE_Y;
 // Cell centers for each grid edge (container-local coordinates)
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
-const ROW0_CENTER = (0 + CONTAINER_OFFSET_Y) * UNIT_PX;
 const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
 
 // Both X and Y clamps are computed dynamically per frame in update()
@@ -705,7 +704,7 @@ export class PuzzleScene extends Phaser.Scene {
         obs.row + CONTAINER_OFFSET_Y,
         obs.angle,
       );
-      obsImg.setDepth(1);
+      obsImg.setDepth(6);
       obsImg.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
       container.add(obsImg);
     }
@@ -852,8 +851,10 @@ export class PuzzleScene extends Phaser.Scene {
       (COL0_CENTER - colHalf) + halfEffW,
       Math.min(candidateX, (COL5_CENTER + colHalf) - halfEffW),
     );
+    // Top clamp: keep visual edge at screen y = 0 (avoids off-screen clipping).
+    // Bottom clamp: unchanged — 8px overhang past grid bottom.
     candidateY = Math.max(
-      ROW0_CENTER + halfEffH - rowHalf,
+      -CONTAINER_Y / SCALE_Y + halfEffH,
       Math.min(candidateY, ROW5_CENTER - halfEffH + rowHalf),
     );
 
