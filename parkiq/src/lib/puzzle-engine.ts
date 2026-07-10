@@ -1,6 +1,21 @@
 import type { Puzzle } from '../game/puzzles/puzzle-types';
 import { puzzles } from '../game/puzzles/puzzle-data';
 
+// ── Puzzle validation — fires once at import, catches row-5 obstacles ─────
+function validatePuzzleData(): void {
+  for (const p of puzzles) {
+    for (const obs of p.obstacles) {
+      if (obs.row < 1 || obs.row > 4) {
+        throw new Error(
+          `Puzzle ${p.id}: obstacle at col ${obs.col} row ${obs.row} — ` +
+          'obstacle rows must be in 1–4 (row 0 reserved for exit, row 5 reserved for player spawn).',
+        );
+      }
+    }
+  }
+}
+validatePuzzleData();
+
 /**
  * Launch date for ParkIQ (June 29, 2026).
  * Puzzle index = days since this date modulo 15.

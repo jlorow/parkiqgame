@@ -93,14 +93,9 @@ const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
 const ROW0_CENTER = (0 + CONTAINER_OFFSET_Y) * UNIT_PX;
 const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
 
-// Boundary clamp — constrains the car center so the VISUAL sprite edge
-// stays within the playfield (6 columns × 48px = 288px wide, 288px tall).
-// With VISUAL_W=40, CAR_W=36: 2px overhang per side.
-// With VISUAL_H≈70.6, CAR_H=64: ~3.3px overhang per side.
-const CLAMP_MIN_X = COL0_CENTER + (VISUAL_W - CAR_W) / 2;
-const CLAMP_MAX_X = COL5_CENTER - (VISUAL_W - CAR_W) / 2;
-const CLAMP_MIN_Y = ROW0_CENTER + (VISUAL_H - CAR_H) / 2;
-const CLAMP_MAX_Y = ROW5_CENTER - (VISUAL_H - CAR_H) / 2;
+// Both X and Y clamps are computed dynamically per frame in update()
+// using the car's current rotation angle. X keeps the visual ~6px inside
+// the grid edge; Y allows ~8px overhang (car nosing out of the bay).
 
 // ──────────────────────────────────────────────────────────
 //  Scene
@@ -838,9 +833,29 @@ export class PuzzleScene extends Phaser.Scene {
       candidateY += -Math.cos(rad) * step;
     }
 
-    // ── 3. Boundary clamp — keep car's far edge within outermost cell centers ──
-    candidateX = Math.max(CLAMP_MIN_X, Math.min(candidateX, CLAMP_MAX_X));
-    candidateY = Math.max(CLAMP_MIN_Y, Math.min(candidateY, CLAMP_MAX_Y));
+    // ── 3. Boundary clamp — rotation-aware on both axes ──
+    // Compute rotated AABB half-extents so the visual stays ~6px inside the
+    // grid on X and overhangs ~8px on Y at every angle.
+    // Formulas: half-extents of a rotated rectangle:
+    //   halfW = |½VW·cosθ| + |½VH·sinθ|
+    //   halfH = |½VW·sinθ| + |½VH·cosθ|
+    const rc = Phaser.Math.DegToRad(this.carAngle);
+    const sc = Math.abs(Math.cos(rc));
+    const ss = Math.abs(Math.sin(rc));
+    const halfVW = VISUAL_W / 2;
+    const halfVH = VISUAL_H / 2;
+    const halfEffW = halfVW * sc + halfVH * ss;
+    const halfEffH = halfVW * ss + halfVH * sc;
+    const colHalf = CAR_W / 2;
+    const rowHalf = CAR_H / 2;
+    candidateX = Math.max(
+      (COL0_CENTER - colHalf) + halfEffW,
+      Math.min(candidateX, (COL5_CENTER + colHalf) - halfEffW),
+    );
+    candidateY = Math.max(
+      ROW0_CENTER + halfEffH - rowHalf,
+      Math.min(candidateY, ROW5_CENTER - halfEffH + rowHalf),
+    );
 
     // ── 4. Collision — reject candidate if overlapping any obstacle ──
     const canMove = !this.checkCollision(candidateX, candidateY);

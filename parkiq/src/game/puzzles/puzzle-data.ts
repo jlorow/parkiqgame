@@ -20,8 +20,8 @@ export const puzzles: Puzzle[] = [
     environment: 'street',
     playerCar: { col: 2, row: 5, angle: 0 },
     obstacles: [
-      { type: 'sedan', col: 0, row: 5, angle: 0 },
-      { type: 'suv',   col: 4, row: 5, angle: 0 },
+      { type: 'sedan', col: 0, row: 1, angle: 0 },
+      { type: 'suv',   col: 4, row: 1, angle: 0 },
     ],
     exitZone: { col: 2, row: 0, direction: 'top' },
     escapeSteps: [
@@ -264,7 +264,7 @@ export const puzzles: Puzzle[] = [
     playerCar: { col: 2, row: 4, angle: 180 },
     obstacles: [
       { type: 'sedan', col: 0, row: 1, angle: 0 },
-      { type: 'suv',   col: 4, row: 5, angle: 0 },
+      { type: 'suv',   col: 4, row: 3, angle: 0 },
     ],
     exitZone: { col: 5, row: 2, direction: 'right' },
     escapeSteps: [
