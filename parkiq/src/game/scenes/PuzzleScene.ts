@@ -26,7 +26,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 // ════════════════════════════════════════════════════════════
 
 const DEBUG_SKIP_PUZZLE_5 = true;    // Skip puzzle 5 → load puzzle 6
-const DEBUG_DISABLE_COLLISIONS = true; // Ignore all collision hitboxes
+const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 
 // ════════════════════════════════════════════════════════════
 
