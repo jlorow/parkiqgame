@@ -1,5 +1,5 @@
 import type { Puzzle } from '../game/puzzles/puzzle-types';
-import { puzzles } from '../game/puzzles/puzzle-data';
+import { puzzles, bonusPuzzle } from '../game/puzzles/puzzle-data';
 
 // ── Puzzle validation — fires once at import, catches row-5 obstacles ─────
 function validatePuzzleData(): void {
@@ -53,4 +53,13 @@ export function getPuzzleByIndex(index: number): Puzzle {
   const puzzle = puzzles.find((p) => p.id === clamped);
   if (!puzzle) throw new Error(`No puzzle found for id ${clamped}`);
   return puzzle;
+}
+
+/**
+ * Returns the bonus Dual-Train Scissor Trap puzzle (ID 16).
+ * This puzzle is OUTSIDE the normal 15-puzzle daily rotation and does NOT
+ * affect getPuzzleByIndex or any existing rotation logic.
+ */
+export function getBonusPuzzle(): Puzzle {
+  return bonusPuzzle;
 }

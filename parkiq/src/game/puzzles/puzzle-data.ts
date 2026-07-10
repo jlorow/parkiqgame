@@ -313,6 +313,37 @@ export const puzzles: Puzzle[] = [
   },
 ];
 
+// ── BONUS PUZZLE (Dual-Train Scissor Trap) ────────────────────────────────
+//
+// Outside the 15-puzzle daily rotation. Tier 2 speed/gap from the verified
+// table (45 px/s, 4‑unit gap) — first encounter difficulty for the scissor
+// mechanic, with ~3.2× safety margin (T_open = 4.27s vs T_sprint = 1.33s).
+//
+// Trains occupy rows 3–4 (track 1 → right, track 2 → left). Row 0 exit.
+// ────────────────────────────────────────────────────────────────────────────
+
+export const bonusPuzzle: Puzzle = {
+  id: 16,
+  type: 'parallel',
+  theme: 'underground',
+  difficulty: 5,
+  question: 'Cross both tracks without getting hit!',
+  environment: 'garage',
+  playerCar: { col: 2, row: 5, angle: 0 },
+  obstacles: [],
+  trains: [
+    { row: 3, direction: 'right', speed: 45, gapUnits: 4, gapPx: 192 },
+    { row: 4, direction: 'left',  speed: 45, gapUnits: 4, gapPx: 192 },
+  ],
+  exitZone: { col: 2, row: 0, direction: 'top' },
+  escapeSteps: [
+    { step: 1, description: 'Watch both tracks — the gaps scissor past each other.' },
+    { step: 2, description: 'Wait for both gaps to align vertically, then drive through.' },
+    { step: 3, description: 'Continue straight to the exit at the top.' },
+  ],
+  expertTip: 'Both trains move at the same speed. The gaps overlap roughly twice per cycle — time your cross.',
+};
+
 /**
  * Returns the puzzle for a given sequential ID (1-based).
  * Returns undefined if the ID is out of range (1–15).

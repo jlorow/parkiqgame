@@ -10,6 +10,23 @@ export type PuzzleTheme = 'street' | 'garage' | 'rooftop' | 'underground';
 /** Difficulty rating (1 = easiest, 5 = hardest) */
 export type Difficulty = 1 | 2 | 3 | 4 | 5;
 
+/** Direction a train travels along its track */
+export type TrainDirection = 'left' | 'right';
+
+/** Configuration for one track of the Dual-Train Scissor Trap */
+export type TrainConfig = {
+  /** Grid row this track occupies */
+  row: number;
+  /** Movement direction */
+  direction: TrainDirection;
+  /** Train speed in px/s (positive magnitude — direction field controls sign) */
+  speed: number;
+  /** Gap between train segments in grid units */
+  gapUnits: number;
+  /** Gap in pixels (derived from gapUnits × UNIT_PX) */
+  gapPx: number;
+};
+
 /** Types of obstacles that can appear in a puzzle */
 export type ObstacleType = 'sedan' | 'suv' | 'pillar' | 'wall';
 
@@ -60,6 +77,8 @@ export type Puzzle = {
   playerCar: { col: number; row: number; angle: number };
   /** Obstacles in the scene (other cars, pillars, walls) */
   obstacles: Obstacle[];
+  /** Optional dual-train scissor trap configuration (bonus / final-boss levels only) */
+  trains?: TrainConfig[];
   /** Exit zone — grid position and exit direction */
   exitZone: ExitZone;
   /** Escape steps describing the correct maneuver */

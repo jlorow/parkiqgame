@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import type { Puzzle, PuzzleTheme } from '../puzzles/puzzle-types';
+import type { Puzzle, PuzzleTheme, TrainConfig } from '../puzzles/puzzle-types';
 import { createCarSprite } from '../components/CarSprite';
 import { createParkingGrid } from '../components/ParkingGrid';
 import { createObstacleCar } from '../components/ObstacleCar';
 import { DrivingControls } from '../components/DrivingControls';
 import type { DrivingInputState } from '../components/DrivingControls';
-import { getPuzzleByIndex } from '../../lib/puzzle-engine';
+import { getPuzzleByIndex, getBonusPuzzle } from '../../lib/puzzle-engine';
 import { puzzleComplete, getProgress } from '../../lib/devvit-client';
 import { THEME_FLAT_COLORS } from '../config/ThemeRegistry';
 
@@ -27,6 +27,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 
 const DEBUG_SKIP_PUZZLE_5 = true;    // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
+const DEBUG_LOAD_BONUS = false;         // Force-load bonus Dual-Train level on start
 
 // ════════════════════════════════════════════════════════════
 
@@ -73,6 +74,19 @@ const COUNTER_SCALE_Y = SCALE_X / SCALE_Y;
 // ──────────────────────────────────────────────────────────
 
 const CAR_VISUAL_SCALE = 0.20;
+
+// ──────────────────────────────────────────────────────────
+//  Train Segment Dimensions
+//  Derived: each segment fills ~92% of UNIT_PX (48px), leaving
+//  ~2px margin per side within a grid cell. The car sprite
+//  uses CAR_W=36 (75% width margin) — trains are deliberately
+//  wider because they occupy entire cells and the visual should
+//  read as "this whole space is blocked."
+//  44 / 48 ≈ 0.917 (92% fill)
+// ──────────────────────────────────────────────────────────
+
+const TRAIN_W = 44;
+const TRAIN_H = 44;
 
 // ──────────────────────────────────────────────────────────
 //  Movement & Collision Constants
@@ -137,6 +151,15 @@ export class PuzzleScene extends Phaser.Scene {
   /** True on the frame after reset — prevents same-frame exit-check false win */
   private skipExitCheck = false;
 
+  /** True when the current puzzle is the bonus Dual-Train level */
+  private isBonusLevel = false;
+  /** Per-track scroll offset (px) — unbounded, wraps for rendering */
+  private trainOffsets: number[] = [];
+  /** Graphics layer per track — cleared and redrawn each frame */
+  private trainGfx: Phaser.GameObjects.Graphics[] = [];
+  /** Cached train configs from the bonus puzzle */
+  private trainConfigs: TrainConfig[] = [];
+
   private get webAudio(): Phaser.Sound.WebAudioSoundManager {
     return this.sound as Phaser.Sound.WebAudioSoundManager;
   }
@@ -199,6 +222,11 @@ export class PuzzleScene extends Phaser.Scene {
 
     if (DEBUG_SKIP_PUZZLE_5 && puzzleIndex === 5) {
       puzzleIndex = 6;
+    }
+
+    if (DEBUG_LOAD_BONUS) {
+      this.loadBonusLevel();
+      return;
     }
 
     this.puzzle = getPuzzleByIndex(puzzleIndex);
@@ -727,6 +755,10 @@ export class PuzzleScene extends Phaser.Scene {
     container.add(playerCar);
     this.playerCarImage = playerCar;
 
+    // ── Train tracks (bonus level only) ───────────────────────────
+    if (this.puzzle.trains && this.puzzle.trains.length > 0) {
+      this.renderTrainTracks();
+    }
   }
 
   // ──────────────────────────────────────────────────────────
@@ -736,7 +768,7 @@ export class PuzzleScene extends Phaser.Scene {
   private renderObjective(): void {
     // Create text first so we can measure its rendered height
     const text = this.add
-      .text(CONTROLS_CENTER_X, OBJECTIVE_Y, 'Drive out without hitting another car.', {
+      .text(CONTROLS_CENTER_X, OBJECTIVE_Y, this.puzzle.question, {
         fontSize: '14px',
         color: '#FFFFFF',
         stroke: '#000000',
@@ -868,7 +900,19 @@ export class PuzzleScene extends Phaser.Scene {
       Math.min(candidateY, ROW5_CENTER - halfEffH + rowHalf),
     );
 
-    // ── 4. Collision — reject candidate if overlapping any obstacle ──
+    // ── 4. Train movement — scroll offsets each frame (bonus level only) ──
+    if (this.isBonusLevel && this.trainConfigs.length > 0) {
+      this.updateTrains(dt);
+    }
+
+    // ── 5. Train collision — always-active, not gated by moveDir ──
+    if (this.isBonusLevel && !this.exited && this.checkTrainCollision()) {
+      this.triggerCollisionBurst();
+      this.resetToSpawn();
+      this.tryPlayTrainHitSound();
+    }
+
+    // ── 6. Collision — reject candidate if overlapping any obstacle ──
     const canMove = !this.checkCollision(candidateX, candidateY);
 
     if (canMove) {
@@ -878,18 +922,14 @@ export class PuzzleScene extends Phaser.Scene {
       // Collision: reset to spawn (knowledge.md spec)
       this.triggerCollisionBurst();
       this.resetToSpawn();
-      // Play crunch sound — guarded by 300ms cooldown to prevent double-fire
-      if (this.time.now >= this.collisionCooldownUntil) {
-        try { this.sound.play('crunch'); } catch { /* audio locked */ }
-        this.collisionCooldownUntil = this.time.now + 300;
-      }
+      this.tryPlayTrainHitSound();
     }
 
-    // ── 5. Apply to image ──────────────────────────────────
+    // ── 7. Apply to image ──────────────────────────────────
     this.playerCarImage.setPosition(this.carX, this.carY);
     this.playerCarImage.setAngle(this.carAngle);
 
-    // ── 6. Exit zone check — win flow ──────────────────────
+    // ── 8. Exit zone check — win flow ──────────────────────
     if (!this.exited && !this.skipExitCheck && this.checkExitReached(this.carX, this.carY)) {
       this.exited = true;
       void this.handleWin();
@@ -908,22 +948,34 @@ export class PuzzleScene extends Phaser.Scene {
       // audio context may be locked
     }
 
-    // 2. POST /api/puzzle-complete
-    const result = await puzzleComplete({
-      timeTaken: this.elapsedSeconds,
-      puzzleId: this.puzzle.id,
-    }).catch((error: unknown) => {
-      console.error('[exit] puzzleComplete failed:', error);
-      return { puzzleIndex: this.puzzle.id >= 15 ? 1 : this.puzzle.id + 1 };
-    });
-
-    // 3. If puzzle 15 cleared — show celebration overlay briefly
-    if (this.puzzle.id === 15) {
-      await this.showClearedOverlay();
+    // 2. POST /api/puzzle-complete (skip for bonus level — outside rotation)
+    let nextIndex = 1;
+    if (!this.isBonusLevel) {
+      const result = await puzzleComplete({
+        timeTaken: this.elapsedSeconds,
+        puzzleId: this.puzzle.id,
+      }).catch((error: unknown) => {
+        console.error('[exit] puzzleComplete failed:', error);
+        return { puzzleIndex: this.puzzle.id >= 15 ? 1 : this.puzzle.id + 1 };
+      });
+      nextIndex = result.puzzleIndex;
     }
 
-    // 4. Load next puzzle in place
-    const nextIndex = result.puzzleIndex;
+    // 3. If puzzle 15 cleared — celebrate then load bonus level
+    if (this.puzzle.id === 15) {
+      await this.showClearedOverlay();
+      this.loadBonusLevel();
+      return;
+    }
+
+    // 4. If bonus level cleared — go back to daily rotation (puzzle 1)
+    if (this.isBonusLevel) {
+      this.isBonusLevel = false;
+      this.loadNextPuzzleInPlace(nextIndex);
+      return;
+    }
+
+    // 5. Load next puzzle in place (normal rotation)
     this.loadNextPuzzleInPlace(nextIndex);
   }
 
@@ -953,6 +1005,11 @@ export class PuzzleScene extends Phaser.Scene {
     this.ready = false;
     // Destroy old parking container (grid + obstacles + player car)
     this.parkingContainer.destroy(true);
+
+    // Reset bonus-level state
+    this.isBonusLevel = false;
+    this.trainOffsets = [];
+    this.trainConfigs = [];
 
     // Load new puzzle
     this.puzzle = getPuzzleByIndex(nextIndex);
@@ -1055,6 +1112,162 @@ export class PuzzleScene extends Phaser.Scene {
     const sceneX = CONTAINER_X + this.carX * SCALE_X;
     const sceneY = CONTAINER_Y + this.carY * SCALE_Y;
     this.collisionEmitter.explode(20, sceneX, sceneY);
+  }
+
+  /** Play crunch sound with 300ms cooldown guard — shared by static-obstacle and train hits */
+  private tryPlayTrainHitSound(): void {
+    if (this.time.now >= this.collisionCooldownUntil) {
+      try { this.sound.play('crunch'); } catch { /* audio locked */ }
+      this.collisionCooldownUntil = this.time.now + 300;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────
+  //  Bonus Level — Dual-Train Scissor Trap
+  // ──────────────────────────────────────────────────────────
+
+  private loadBonusLevel(): void {
+    this.ready = false;
+    // Destroy old parking container if exists
+    if (this.parkingContainer) {
+      this.parkingContainer.destroy(true);
+    }
+
+    this.isBonusLevel = true;
+    this.puzzle = getBonusPuzzle();
+    this.trainConfigs = this.puzzle.trains ?? [];
+    this.trainOffsets = this.trainConfigs.map(() => 0);
+
+    // Set initial offsets so gaps are misaligned at start (scissor effect)
+    // Track 1 (row 3, → right): gap starts at col 0
+    // Track 2 (row 4, ← left):  gap starts at col 2 (offset = 2 * UNIT_PX)
+    if (this.trainOffsets.length >= 2) {
+      this.trainOffsets[1] = 2 * UNIT_PX;
+    }
+
+    // Reuse normal rendering pipeline with bonus puzzle data
+    this.renderEnvironment();
+    this.renderHUD();
+    this.renderObjective();
+    this.renderControls();
+    this.renderParkingScene();
+
+    this.startElapsedTimer();
+    this.ready = true;
+  }
+
+  /** Create train track graphics layers inside the parking container */
+  private renderTrainTracks(): void {
+    // Destroy any previous train graphics
+    for (const g of this.trainGfx) {
+      g.destroy();
+    }
+    this.trainGfx = [];
+
+    for (let i = 0; i < this.trainConfigs.length; i++) {
+      const gfx = this.add.graphics();
+      gfx.setDepth(7); // Between static obstacles (6) and player (50)
+      this.parkingContainer.add(gfx);
+      this.trainGfx.push(gfx);
+    }
+  }
+
+  /** Advance train positions by dt, redraw segment graphics, and check collision */
+  private updateTrains(dt: number): void {
+    for (let t = 0; t < this.trainConfigs.length; t++) {
+      const cfg = this.trainConfigs[t]!;
+      const dir = cfg.direction === 'right' ? 1 : -1;
+      this.trainOffsets[t] += cfg.speed * dt * dir;
+
+      // Redraw this track
+      const gfx = this.trainGfx[t]!;
+      gfx.clear();
+
+      const row = cfg.row;
+      const gapUnits = cfg.gapUnits;
+      const offset = this.trainOffsets[t]!;
+
+      // Compute which column the gap starts at (always 0–5)
+      const rawGapCol = Math.floor(offset / UNIT_PX);
+      const gapStartCol = ((rawGapCol % 6) + 6) % 6;
+
+      // Build a set of gap columns for quick lookup (0 = no segment)
+      const gapCols: number[] = [];
+      for (let g = 0; g < gapUnits; g++) {
+        gapCols.push((gapStartCol + g) % 6);
+      }
+
+      for (let c = 0; c < 6; c++) {
+        // Skip gap cells
+        if (gapCols.includes(c)) continue;
+
+        const cx = (c + CONTAINER_OFFSET_X) * UNIT_PX;
+        const cy = (row + CONTAINER_OFFSET_Y) * UNIT_PX;
+        const sx = cx - TRAIN_W / 2;
+        const sy = cy - TRAIN_H / 2;
+
+        // Train body — dark blue-grey
+        gfx.fillStyle(0x2d3748, 1);
+        gfx.fillRect(sx, sy, TRAIN_W, TRAIN_H);
+
+        // Lighter center band (window stripe)
+        gfx.fillStyle(0x4a5568, 0.6);
+        gfx.fillRect(sx + 2, sy + TRAIN_H / 2 - 4, TRAIN_W - 4, 8);
+
+        // Coupling connector dots on segment edges
+        gfx.fillStyle(0x718096, 1);
+        gfx.fillCircle(sx, cy, 3);
+        gfx.fillCircle(sx + TRAIN_W, cy, 3);
+      }
+    }
+  }
+
+  /**
+   * Always-active train collision check — NOT gated by moveDir.
+   * Called every frame in update() for the bonus level only.
+   * Player can be hit while stationary (waiting for gap alignment).
+   */
+  private checkTrainCollision(): boolean {
+    if (DEBUG_DISABLE_COLLISIONS) return false;
+
+    const playerRect = new Phaser.Geom.Rectangle(
+      this.carX - CAR_W / 2,
+      this.carY - CAR_H / 2,
+      CAR_W,
+      CAR_H,
+    );
+
+    for (let t = 0; t < this.trainConfigs.length; t++) {
+      const cfg = this.trainConfigs[t]!;
+      const offset = this.trainOffsets[t]!;
+      const row = cfg.row;
+      const gapUnits = cfg.gapUnits;
+
+      const rawGapCol = Math.floor(offset / UNIT_PX);
+      const gapStartCol = ((rawGapCol % 6) + 6) % 6;
+
+      const gapCols: number[] = [];
+      for (let g = 0; g < gapUnits; g++) {
+        gapCols.push((gapStartCol + g) % 6);
+      }
+
+      for (let c = 0; c < 6; c++) {
+        if (gapCols.includes(c)) continue;
+
+        const ox = (c + CONTAINER_OFFSET_X) * UNIT_PX;
+        const oy = (row + CONTAINER_OFFSET_Y) * UNIT_PX;
+        const trainRect = new Phaser.Geom.Rectangle(
+          ox - TRAIN_W / 2,
+          oy - TRAIN_H / 2,
+          TRAIN_W,
+          TRAIN_H,
+        );
+        if (Phaser.Geom.Rectangle.Overlaps(playerRect, trainRect)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private resetToSpawn(): void {
