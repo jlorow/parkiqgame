@@ -130,6 +130,16 @@ export class PuzzleScene extends Phaser.Scene {
   private parkingContainer!: Phaser.GameObjects.Container;
   /** True once loadAndRender() has completed — guards update() against async race */
   private ready = false;
+  /** Red flash overlay triggered on collision — fades out via tween */
+  private collisionFlash!: Phaser.GameObjects.Graphics;
+  /** Collision cooldown: next time (ms) at which crunch sound may fire again */
+  private collisionCooldownUntil = 0;
+  /** True on the frame after reset — prevents same-frame exit-check false win */
+  private skipExitCheck = false;
+  /** Collision cooldown: next time (ms) at which crunch sound may fire again */
+  private collisionCooldownUntil = 0;
+  /** True on the frame after reset — prevents same-frame exit-check false win */
+  private skipExitCheck = false;
 
   private get webAudio(): Phaser.Sound.WebAudioSoundManager {
     return this.sound as Phaser.Sound.WebAudioSoundManager;
@@ -178,6 +188,7 @@ export class PuzzleScene extends Phaser.Scene {
 
     this.renderDefaultBackground();
     this.renderControlSurface();
+    this.createCollisionFlash();
 
     // Puzzle loads asynchronously — render static chrome first, then fetch progress
     void this.loadAndRender();
@@ -810,6 +821,9 @@ export class PuzzleScene extends Phaser.Scene {
   override update(_time: number, delta: number): void {
     if (!this.ready || this.exited) return;
 
+    // Reset per-frame flag that is set by resetToSpawn() when collision fires
+    this.skipExitCheck = false;
+
     const input: DrivingInputState = this.drivingControls.getState();
     const dt = delta / 1000;
 
@@ -865,9 +879,14 @@ export class PuzzleScene extends Phaser.Scene {
       this.carX = candidateX;
       this.carY = candidateY;
     } else if (moveDir !== 0) {
-      // Collision: play crunch, reset to spawn (knowledge.md spec)
-      try { this.sound.play('crunch'); } catch { /* audio locked */ }
+      // Collision: reset to spawn (knowledge.md spec)
       this.resetToSpawn();
+      this.triggerCollisionFlash();
+      // Play crunch sound — guarded by 300ms cooldown to prevent double-fire
+      if (this.time.now >= this.collisionCooldownUntil) {
+        try { this.sound.play('crunch'); } catch { /* audio locked */ }
+        this.collisionCooldownUntil = this.time.now + 300;
+      }
     }
 
     // ── 5. Apply to image ──────────────────────────────────
@@ -875,7 +894,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.playerCarImage.setAngle(this.carAngle);
 
     // ── 6. Exit zone check — win flow ──────────────────────
-    if (!this.exited && this.checkExitReached(this.carX, this.carY)) {
+    if (!this.exited && !this.skipExitCheck && this.checkExitReached(this.carX, this.carY)) {
       this.exited = true;
       void this.handleWin();
     }
@@ -1009,11 +1028,39 @@ export class PuzzleScene extends Phaser.Scene {
   //  Collision reset — unchanged from prior epics
   // ──────────────────────────────────────────────────────────
 
+  // ──────────────────────────────────────────────────────────
+  //  Collision Flash — brief red screen overlay
+  // ──────────────────────────────────────────────────────────
+
+  /** Creates a full-screen red rectangle overlay, initially invisible. */
+  private createCollisionFlash(): void {
+    this.collisionFlash = this.add.graphics();
+    this.collisionFlash.setDepth(999);
+    this.collisionFlash.fillStyle(0xe8320a, 1);
+    this.collisionFlash.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.collisionFlash.setAlpha(0);
+  }
+
+  /** Flashes the red overlay on collision — fades out over 200ms. */
+  private triggerCollisionFlash(): void {
+    this.tweens.killTweensOf(this.collisionFlash);
+    this.collisionFlash.setAlpha(0.35);
+    this.tweens.add({
+      targets: this.collisionFlash,
+      alpha: 0,
+      duration: 200,
+      ease: 'Sine.easeOut',
+    });
+  }
+
   private resetToSpawn(): void {
     this.carX = this.spawnX;
     this.carY = this.spawnY;
     this.carAngle = this.spawnAngle;
     this.playerCarImage.setPosition(this.carX, this.carY);
     this.playerCarImage.setAngle(this.carAngle);
+    // Prevent same-frame exit check — the car was just reset due to collision,
+    // so we must not also trigger a win in the same update() pass.
+    this.skipExitCheck = true;
   }
 }
