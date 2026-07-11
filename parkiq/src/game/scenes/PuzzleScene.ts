@@ -1387,10 +1387,14 @@ export class PuzzleScene extends Phaser.Scene {
     if (DEBUG_DISABLE_COLLISIONS) return false;
 
     // ── Cell-bounds guard: skip if player is fully within a safe cell ──
-    const ROW5_LO = (5 + CONTAINER_OFFSET_Y) * UNIT_PX - UNIT_PX / 2; // 240
+    // CURRENT values (Bug #4 fix): narrowed from 240/144 to reduce visual/collision gap.
+    // Confirmed zero false-positives at rest: sweep Y=252-259 showed 0/424 per Y;
+    // rest position Y=264 guard-skipped. Sweep overestimates risk (missing
+    // TRACK_RENDER_OFFSET — real game overlap stops at carY=249, not 251).
+    const ROW5_LO = 252;
     const ROW5_HI = (5 + CONTAINER_OFFSET_Y) * UNIT_PX + UNIT_PX / 2; // 288
     const ROW2_LO = (2 + CONTAINER_OFFSET_Y) * UNIT_PX - UNIT_PX / 2; // 96
-    const ROW2_HI = (2 + CONTAINER_OFFSET_Y) * UNIT_PX + UNIT_PX / 2; // 144
+    const ROW2_HI = 132;
     if (this.carY >= ROW5_LO && this.carY <= ROW5_HI) return false;
     if (this.carY >= ROW2_LO && this.carY <= ROW2_HI) return false;
 

@@ -26,9 +26,20 @@ const DT = 0.02;
 const Y_STEP = 4;
 const Y_MIN = 72, Y_MAX = 312;
 
+// ════════════════════════════════════════════════════════════
+//  Guard helpers — original full-cell vs narrowed
+// ════════════════════════════════════════════════════════════
+
+const NARROW_ROW5_LO = 252, NARROW_ROW2_HI = 132;
+
 function inSafeCell(py) {
   return (py >= ROW5_CELL.lo && py <= ROW5_CELL.hi) ||
          (py >= ROW2_CELL.lo && py <= ROW2_CELL.hi);
+}
+
+function inSafeCellNarrowed(py) {
+  return (py >= NARROW_ROW5_LO && py <= ROW5_CELL.hi) ||
+         (py >= ROW2_CELL.lo && py <= NARROW_ROW2_HI);
 }
 
 function getGapCols(offset, gapUnits) {
@@ -66,6 +77,17 @@ function checkCollisionAt(off1, off2, px, py, tch, skipGuard) {
     }
   }
   return { type: 'none', col, hit: false };
+}
+
+function checkCollisionAtNarrowed(off1, off2, px, py, tch) {
+  if (!inSafeCellNarrowed(py)) return checkCollisionAt(off1, off2, px, py, tch, true);
+  return { type: 'guard-skipped', col: -1, hit: false, py };
+}
+
+function categorizeByCell(py) {
+  if (py >= ROW5_CELL.lo && py <= ROW5_CELL.hi) return 'spawn-cell';
+  if (py >= ROW2_CELL.lo && py <= ROW2_CELL.hi) return 'exit-cell';
+  return 'expected-or-transition';
 }
 
 function categorizeHit(py) {
@@ -114,6 +136,41 @@ function runSweep(tch, label, skipGuard) {
   return s;
 }
 
+function runSweepNarrowed(tch, label) {
+  const s = { total:0, none:0, gapProtected:0, expectedOrTransition:0, spawnCell:0, exitCell:0, guardSkipped:0 };
+
+  for (let col = 0; col < 6; col++) {
+    const px = (col + CONTAINER_OFFSET_X) * UNIT_PX;
+    for (let t = 0; t < CYCLE_DURATION; t += DT) {
+      const o1 = t * 34, o2 = 96 - t * 34;
+      for (let y = Y_MIN; y <= Y_MAX; y += Y_STEP) {
+        s.total++;
+        const r = checkCollisionAtNarrowed(o1, o2, px, y, tch);
+        if (r.type === 'none')           s.none++;
+        else if (r.type === 'gap-protected') s.gapProtected++;
+        else if (r.type === 'guard-skipped') s.guardSkipped++;
+        else if (r.hit) {
+          const cat = categorizeByCell(r.py);
+          if (cat === 'spawn-cell')          s.spawnCell++;
+          else if (cat === 'exit-cell')      s.exitCell++;
+          else                               s.expectedOrTransition++;
+        }
+      }
+    }
+  }
+
+  const t = s.total;
+  console.log(`\n═══ ${label} (Y_STEP=${Y_STEP}, DT=${DT}) ═══`);
+  console.log(`Total: ${t}`);
+  console.log(`No collision:       ${s.none} (${(s.none/t*100).toFixed(1)}%)`);
+  console.log(`Guard-skipped:      ${s.guardSkipped} (${(s.guardSkipped/t*100).toFixed(1)}%)`);
+  console.log(`Gap-protected:      ${s.gapProtected} (should be 0) ${s.gapProtected === 0 ? '✅' : '❌'}`);
+  console.log(`Expected/transition:${s.expectedOrTransition} (${(s.expectedOrTransition/t*100).toFixed(1)}%)`);
+  console.log(`Spawn cell false+:  ${s.spawnCell} (BUCKET a) ${s.spawnCell === 0 ? '✅' : '❌'}`);
+  console.log(`Exit cell false+:   ${s.exitCell} (BUCKET a) ${s.exitCell === 0 ? '✅' : '❌'}`);
+  return s;
+}
+
 console.log('══════════════════════════════════════════════════');
 console.log(' HYBRID GUARD — Round 2 at Matching Resolution');
 console.log('══════════════════════════════════════════════════');
@@ -121,6 +178,11 @@ console.log(`\nBaseline resolution: Y_STEP=${Y_STEP}, DT=${DT}s`);
 console.log(`Expected samples: (${(Y_MAX-Y_MIN)/Y_STEP})Y × 6col × ${Math.ceil(CYCLE_DURATION/DT)}time = ${((Y_MAX-Y_MIN)/Y_STEP * 6 * Math.ceil(CYCLE_DURATION/DT)).toFixed(0)}`);
 
 runSweep(32, 'HYBRID GUARD (H=32 + cell bounds)', false);
+
+console.log('────────────────────────────────────────────────────');
+console.log(' NARROWED GUARD — ROW5_LO=252, ROW2_HI=132');
+console.log('────────────────────────────────────────────────────');
+const narrowGuard = runSweepNarrowed(32, 'NARROWED GUARD (ROW5_LO=252, ROW2_HI=132)');
 
 console.log('────────────────────────────────────────────────────');
 console.log(' NO-GUARD VARIANT — same sweep, guard bypassed');
@@ -151,8 +213,9 @@ for (const y of spawnTestYs) {
       if (rc.hit && rc.type !== 'guard-skipped') { ha++; break; }
     }
   }
-  const guard = inSafeCell(y);
-  console.log(`Y=${y}  |  col2: ${h2}/${total} (${(h2/total*100).toFixed(1)}%)  |  any-col: ${ha}/${total} (${(ha/total*100).toFixed(1)}%)  |  guard: ${guard ? 'ACTIVE ✅' : 'OFF'}`);
+  const legacyGuard = inSafeCell(y);
+  const narrowGuard = inSafeCellNarrowed(y);
+  console.log(`Y=${y}  |  col2: ${h2}/${total} (${(h2/total*100).toFixed(1)}%)  |  any-col: ${ha}/${total} (${(ha/total*100).toFixed(1)}%)  |  legacy: ${legacyGuard ? '✅' : 'OFF'}  narrow: ${narrowGuard ? '✅' : 'OFF'}`);
 }
 
 console.log('');
@@ -170,8 +233,9 @@ for (const y of exitTestYs) {
       if (rc.hit && rc.type !== 'guard-skipped') { ha++; break; }
     }
   }
-  const guard = inSafeCell(y);
-  console.log(`Y=${y}  |  col2: ${h2}/${total} (${(h2/total*100).toFixed(1)}%)  |  any-col: ${ha}/${total} (${(ha/total*100).toFixed(1)}%)  |  guard: ${guard ? 'ACTIVE ✅' : 'OFF'}`);
+  const legacyGuard = inSafeCell(y);
+  const narrowGuard = inSafeCellNarrowed(y);
+  console.log(`Y=${y}  |  col2: ${h2}/${total} (${(h2/total*100).toFixed(1)}%)  |  any-col: ${ha}/${total} (${(ha/total*100).toFixed(1)}%)  |  legacy: ${legacyGuard ? '✅' : 'OFF'}  narrow: ${narrowGuard ? '✅' : 'OFF'}`);
 }
 
 // ════════════════════════════════════════════════════════════
