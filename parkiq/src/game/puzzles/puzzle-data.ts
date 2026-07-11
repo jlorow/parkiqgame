@@ -316,7 +316,7 @@ export const puzzles: Puzzle[] = [
 // ── BONUS PUZZLE (Dual-Train Scissor Trap) ────────────────────────────────
 //
 // Outside the 15-puzzle daily rotation. Tier 2 speed/gap from the verified
-// table (45 px/s, 4‑unit gap) — first encounter difficulty for the scissor
+// table (45px/s, 4‑unit gap) — first encounter difficulty for the scissor
 // mechanic, with ~3.2× safety margin (T_open = 4.27s vs T_sprint = 1.33s).
 //
 // Trains occupy rows 3–4 (track 1 → right, track 2 → left). Row 0 exit.
