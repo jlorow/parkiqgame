@@ -89,17 +89,10 @@ const TRAIN_W = 44;
 const TRAIN_H = 44;
 
 // ──────────────────────────────────────────────────────────
-//  Train Tile Rendering Constants
-//  Derived from Train-tile-2x.svg (294.914×50, seamless loop).
-//  TILE_W = source tile width (px). CELL_SRC = source pixels
-//  per cell column. TILE_SCALE = source→screen ratio (0.88).
-//  Split triggers when sourceX_mod > SPLIT_THRESHOLD.
+//  Train Segment Color
 // ──────────────────────────────────────────────────────────
 
-const TILE_W = 294.914;
-const CELL_SRC = 48 / 0.88;        // 54.5454... source px per cell
-const TILE_SCALE = 0.88;           // source→container-local scale
-const SPLIT_THRESHOLD = TILE_W - CELL_SRC; // ~240.369
+const TRAIN_COLOR = 0xCC3333;  // Train body fill (Graphics primitive fallback)
 
 // Track row visual offsets (container-local) — shifts train sprites closer together
 // to eliminate visual overlap with stationary player car at spawn (row 5) and exit (row 2) cells.
@@ -180,23 +173,12 @@ export class PuzzleScene extends Phaser.Scene {
   private isBonusLevel = false;
   /** Per-track scroll offset (px) — unbounded, wraps for rendering */
   private trainOffsets: number[] = [];
-  /** Two-sprite Image pairs per cell per track — [track][col*2 + splitIndex] */
-  private trainSprites: Phaser.GameObjects.Image[][] = [];
+  /** Graphics per cell per track — [track][col] */
+  private trainSprites: Phaser.GameObjects.Graphics[][] = [];
   /** Cached train configs from the bonus puzzle */
   private trainConfigs: TrainConfig[] = [];
 
-  // ════════════════════════════════════════════════════════════
-  //  TEMPORARY: T_open empirical measurement instrumentation
-  //  Remove before marking story complete.
-  // ════════════════════════════════════════════════════════════
-  private topenOpenStart = 0;
-  private topenPrevOverlap = 0;
-  private topenMeasuredDurations: number[] = [];
-  private topenPeakOverlap = 0;
-  private topenLogCount = 0;
-  private topenLastCycleEndTime = 0;
-  private topenSkipCurrentCycle = false;
-  // ════════════════════════════════════════════════════════════
+
 
   /** Gap indicator — green rect over safe crossing columns */
   private gapIndicatorGfx: Phaser.GameObjects.Graphics | null = null;
@@ -232,8 +214,6 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('road-underground',  'assets/sprites/roads/Road-Underground.svg',  { width: 780, height: 780 });
     this.load.svg('road-rooftop',      'assets/sprites/roads/Road-Rooftop.svg',      { width: 780, height: 780 });
 
-    // ── Train tile SVG (seamless 2× loop for scissor-train rendering) ──
-    this.load.svg('train-tile', 'assets/sprites/cars/Train-tile-2x.svg', { width: 294.914, height: 50 });
     this.load.audio('train', 'assets/sounds/train.mp3');
 
     // ── Prop SVGs ─────────────────────────────────────────────────
@@ -914,27 +894,6 @@ export class PuzzleScene extends Phaser.Scene {
     if (input.forward) moveDir = 1;
     else if (input.reverse) moveDir = -1;
 
-    // ════════════════════════════════════════════════════════════
-    //  TEMP AUDIT (Item 4): log carY + zone every frame during movement
-    //  Remove after movement-timing vs collision-guard audit.
-    //  Zones per Q4 boundary definitions:
-    //    guard   = carY 240–288  (ROW5 guard active, collision skipped)
-    //    dead    = carY 217–240  (guard off AND outside train collision box by carY alone)
-    //    hitbox  = carY ≤ 217    (inside train collision Y-range by carY alone)
-    //  NOTE: carY is the car CENTER; player collision rect extends ±32px from it.
-    //  So at carY=230 (in "dead" zone), player rect top=198 < train coll bottom=217 → OVERLAP.
-    //  The "dead" zone at the carY level is an artifact of using carY directly.
-    // ════════════════════════════════════════════════════════════
-    if (moveDir !== 0) {
-      const zoneName = this.carY >= 240 ? 'guard' : this.carY > 217 ? 'dead' : 'hitbox';
-      const deltaY = -Math.cos(Phaser.Math.DegToRad(this.carAngle)) * MOVE_SPEED * dt * moveDir;
-      const collOverlap = this.carY < 249 ? 'coll=YES' : 'coll=no';
-      const trainVisBot = getTrainRowY(4) + TRAIN_H / 2;  // 201 + 22 = 223
-      const visOverlap = this.carY < trainVisBot + VISUAL_H / 2 ? 'vis=YES' : 'vis=no';
-      console.log(`[TEMP AUDIT 4] carY=${this.carY.toFixed(1)}  zone=${zoneName}  ${collOverlap}  ${visOverlap}  deltaY=${deltaY.toFixed(1)}px`);
-    }
-    // ════════════════════════════════════════════════════════════
-
     let candidateX = this.carX;
     let candidateY = this.carY;
 
@@ -975,23 +934,10 @@ export class PuzzleScene extends Phaser.Scene {
     if (this.isBonusLevel && this.trainConfigs.length > 0) {
       this.updateTrains(dt);
       this.renderGapIndicator();
-
-      // ════════════════════════════════════════════════════════════
-      //  TEMPORARY: T_open empirical measurement
-      //  Remove before marking story complete.
-      // ════════════════════════════════════════════════════════════
-      this.topenMeasure();
-      // ════════════════════════════════════════════════════════════
     }
 
     // ── 5. Train collision — always-active, not gated by moveDir ──
     if (this.isBonusLevel && !this.exited && this.checkTrainCollision()) {
-      // ════════════════════════════════════════════════════════════
-      //  TEMP AUDIT (Item 4b): log train-triggered reset
-      //  Remove before marking story complete.
-      // ════════════════════════════════════════════════════════════
-      console.log('[TEMP AUDIT 4b] RESET-TRIGGERED reason=train');
-      // ════════════════════════════════════════════════════════════
       this.triggerCollisionBurst();
       this.resetToSpawn();
       this.tryPlayTrainHitSound();
@@ -1252,28 +1198,24 @@ export class PuzzleScene extends Phaser.Scene {
     } catch { /* audio locked — will play on first pointerdown */ }
   }
 
-  /** Create train track Image layers inside the parking container */
+  /** Create train track Graphics layers inside the parking container */
   private renderTrainTracks(): void {
     // Destroy any previous train sprites
     for (const trackSprites of this.trainSprites) {
-      for (const img of trackSprites) {
-        img.destroy();
+      for (const gfx of trackSprites) {
+        gfx.destroy();
       }
     }
     this.trainSprites = [];
 
-    // 2 images per column (primary + split-secondary) × 6 columns per track
+    // 1 Graphics per column × 6 columns per track
     for (let t = 0; t < this.trainConfigs.length; t++) {
-      const trackSprites: Phaser.GameObjects.Image[] = [];
+      const trackSprites: Phaser.GameObjects.Graphics[] = [];
       for (let c = 0; c < 6; c++) {
-        for (let s = 0; s < 2; s++) {
-          const img = this.add.image(0, 0, 'train-tile');
-          img.setOrigin(0, 0);
-          img.setDepth(7); // Between static obstacles (6) and player (50)
-          img.setVisible(false);
-          this.parkingContainer.add(img);
-          trackSprites.push(img);
-        }
+        const gfx = this.add.graphics();
+        gfx.setDepth(7); // Between static obstacles (6) and player (50)
+        this.parkingContainer.add(gfx);
+        trackSprites.push(gfx);
       }
       this.trainSprites.push(trackSprites);
     }
@@ -1295,7 +1237,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.gapIndicatorGfx = indicatorGfx;
   }
 
-  /** Advance train positions by dt, update tile-image crops, and check collision */
+  /** Advance train positions by dt, draw train segments, and check collision */
   private updateTrains(dt: number): void {
     for (let t = 0; t < this.trainConfigs.length; t++) {
       const cfg = this.trainConfigs[t];
@@ -1310,7 +1252,7 @@ export class PuzzleScene extends Phaser.Scene {
       const row = cfg.row;
       const offset = this.trainOffsets[t] ?? 0;
       const cy = getTrainRowY(row);
-      const imgY = cy - TRAIN_H / 2;
+      const rectY = cy - TRAIN_H / 2;
 
       // Compute which column the gap starts at (always 0–5)
       const rawGapCol = Math.floor(offset / UNIT_PX);
@@ -1323,44 +1265,16 @@ export class PuzzleScene extends Phaser.Scene {
       }
 
       for (let c = 0; c < 6; c++) {
-        const idx = c * 2;
-        const imgA = trackSprites[idx];
-        const imgB = trackSprites[idx + 1];
-        if (!imgA || !imgB) continue;
+        const gfx = trackSprites[c];
+        if (!gfx) continue;
 
-        if (isGap[c]) {
-          imgA.setVisible(false);
-          imgB.setVisible(false);
-          continue;
-        }
+        gfx.clear();
 
-        const imgX = c * UNIT_PX;
-        const sourceX = (offset + c * UNIT_PX) / TILE_SCALE;
-        const sourceXMod = ((sourceX % TILE_W) + TILE_W) % TILE_W;
-        const cropEnd = sourceXMod + CELL_SRC;
+        if (isGap[c]) continue;
 
-        if (cropEnd <= TILE_W + 0.001) {
-          // No split — single sprite fills the cell
-          imgA.setCrop(sourceXMod, 0, CELL_SRC, 50);
-          imgA.setPosition(imgX, imgY);
-          imgA.setScale(TILE_SCALE);
-          imgA.setVisible(true);
-          imgB.setVisible(false);
-        } else {
-          // Split — two sprites tile-edge to tile-edge
-          const rightW = TILE_W - sourceXMod;
-          const leftW = CELL_SRC - rightW;
-
-          imgA.setCrop(sourceXMod, 0, rightW, 50);
-          imgA.setPosition(imgX, imgY);
-          imgA.setScale(TILE_SCALE);
-          imgA.setVisible(true);
-
-          imgB.setCrop(0, 0, leftW,50);
-          imgB.setPosition(imgX + rightW * TILE_SCALE, imgY);
-          imgB.setScale(TILE_SCALE);
-          imgB.setVisible(true);
-        }
+        const rectX = c * UNIT_PX + (UNIT_PX - TRAIN_W) / 2;
+        gfx.fillStyle(TRAIN_COLOR, 1.0);
+        gfx.fillRect(rectX, rectY, TRAIN_W, TRAIN_H);
       }
     }
   }
@@ -1448,99 +1362,6 @@ export class PuzzleScene extends Phaser.Scene {
     }
   }
 
-  // ════════════════════════════════════════════════════════════
-  //  TEMPORARY: T_open empirical measurement instrument
-  //  Logs gap-overlap durations to console.
-  //  Remove before marking story complete.
-  // ════════════════════════════════════════════════════════════
-  private topenMeasure(): void {
-    if (this.trainConfigs.length < 2) return;
-
-    // Compute gap columns for both tracks (shared helper)
-    const gapCols0 = this.getGapCols(0);
-    const gapCols1 = this.getGapCols(1);
-
-    // Columns where BOTH tracks have a gap simultaneously
-    let overlapCols = 0;
-    for (let c = 0; c < 6; c++) {
-      if (gapCols0[c] && gapCols1[c]) {
-        overlapCols++;
-      }
-    }
-
-    const overlapPx = overlapCols * UNIT_PX;
-    const enoughForCar = overlapPx >= CAR_W;
-
-    if (enoughForCar && this.topenPrevOverlap < CAR_W) {
-      // Overlap just became wide enough — record start
-      this.topenOpenStart = this.time.now;
-      this.topenPeakOverlap = 0; // reset peak for new window
-      // ── Fix A: reject cycles contaminated by tab backgrounding ──
-      if (this.topenLastCycleEndTime > 0 && this.time.now - this.topenLastCycleEndTime > 3000) {
-        this.topenSkipCurrentCycle = true;
-      } else {
-        this.topenSkipCurrentCycle = false;
-      }
-      // ════════════════════════════════════════════════════════════
-      //  TEMP AUDIT (Item 3): log raw OPEN start timestamp
-      // ════════════════════════════════════════════════════════════
-      // SILENCED FOR AUDIT 4 TEST — re-enable after
-      console.log(`[TEMP AUDIT 3] CYCLE START  t=${this.time.now}ms  overlap=${overlapCols}cols=${overlapPx}px`);
-      // ════════════════════════════════════════════════════════════
-    } else if (!enoughForCar && this.topenPrevOverlap >= CAR_W) {
-      // Overlap just closed below car width — log duration
-      const elapsed = this.time.now - this.topenOpenStart;
-      const elapsedS = elapsed / 1000;
-      if (elapsedS > 0.1) {
-        this.topenLogCount++;
-        // ════════════════════════════════════════════════════════════
-        //  TEMP AUDIT (Item 3): log raw END timestamp + duration
-        // ════════════════════════════════════════════════════════════
-        // SILENCED FOR AUDIT 4 TEST — re-enable after
-        console.log(
-          `[TEMP AUDIT 3] CYCLE END  t=${this.time.now}ms  ` +
-          `start=${this.topenOpenStart}ms  elapsed=${elapsedS.toFixed(3)}s  ` +
-          `peakOverlap=${this.topenPeakOverlap}px  ` +
-          `prevOverlap=${this.topenPrevOverlap}px`
-        );
-        if (!this.topenSkipCurrentCycle) {
-          this.topenMeasuredDurations.push(elapsedS);
-        }
-        this.topenLastCycleEndTime = this.time.now;
-        // SILENCED FOR AUDIT 4 TEST — re-enable after
-        console.log(
-          `[TEMP T_open] #${this.topenLogCount} open-window duration: ${elapsedS.toFixed(3)}s ` +
-          `(overlap at close ${overlapCols} cols = ${overlapPx}px, threshold ≥${CAR_W}px)` +
-          (this.topenSkipCurrentCycle ? `  ⚠️ REJECTED (gap too large)` : ``)
-        );
-        if (this.topenLogCount >= 5) {
-          // SILENCED FOR AUDIT 4 TEST — re-enable after
-          const window = this.topenMeasuredDurations.slice(-10);
-          const avg = window.length > 0 ? window.reduce((a, b) => a + b, 0) / window.length : 0;
-          const skipped = this.topenLogCount - this.topenMeasuredDurations.length;
-          // SILENCED FOR AUDIT 4 TEST — re-enable after
-          console.log(`[TEMP T_open] === AVERAGE (window=${window.length}, total=${this.topenMeasuredDurations.length}, rejected=${skipped}): ${avg.toFixed(3)}s ===`);
-          // ════════════════════════════════════════════════════════════
-          //  TEMP AUDIT (Item 1a): Paper T_open — hardcoded constant?
-          // ════════════════════════════════════════════════════════════
-          // SILENCED FOR AUDIT 4 TEST — re-enable after
-          const paperTopen = (this.trainConfigs[0].gapUnits * UNIT_PX - CAR_W) / (this.trainConfigs[0].speed + this.trainConfigs[1].speed);
-          console.log(`[TEMP T_open] === Paper T_open: ${paperTopen.toFixed(3)}s (from live config: gapUnits=${this.trainConfigs[0].gapUnits}, speed=${this.trainConfigs[0].speed}) ===`);
-          console.log(`[TEMP T_open] === Delta: ${((avg - paperTopen) / paperTopen * 100).toFixed(1)}% ===`);
-          // ════════════════════════════════════════════════════════════
-        }
-      }
-    }
-
-    // Track peak overlap during open window
-    if (enoughForCar) {
-      this.topenPeakOverlap = Math.max(this.topenPeakOverlap, overlapPx);
-    }
-
-    this.topenPrevOverlap = enoughForCar ? overlapPx : 0;
-  }
-  // ════════════════════════════════════════════════════════════
-
   /**
    * Always-active train collision check — NOT gated by moveDir.
    * Called every frame in update() for the bonus level only.
@@ -1570,29 +1391,6 @@ export class PuzzleScene extends Phaser.Scene {
 
     const TRAIN_COLLISION_H = 32;
 
-    // ════════════════════════════════════════════════════════════
-    //  TEMP AUDIT (Item 4b): gather gap info per track for column logging
-    //  Remove before marking story complete.
-    // ════════════════════════════════════════════════════════════
-    const gapByRow: Record<number, number[]> = {};
-    for (let t = 0; t < this.trainConfigs.length; t++) {
-      const cfg = this.trainConfigs[t];
-      if (!cfg) continue;
-      const offset = this.trainOffsets[t];
-      if (offset === undefined) continue;
-      const rawGapCol = Math.floor(offset / UNIT_PX);
-      const gapStartCol = ((rawGapCol % 6) + 6) % 6;
-      const gapCols: number[] = [];
-      for (let g = 0; g < cfg.gapUnits; g++) {
-        gapCols.push((gapStartCol + g) % 6);
-      }
-      gapByRow[cfg.row] = gapCols;
-    }
-    const playerCol = Math.floor(this.carX / UNIT_PX);
-    const track3Gap = gapByRow[3]?.includes(playerCol) ?? false;
-    const track4Gap = gapByRow[4]?.includes(playerCol) ?? false;
-    // ════════════════════════════════════════════════════════════
-
     for (let t = 0; t < this.trainConfigs.length; t++) {
       const cfg = this.trainConfigs[t];
       if (!cfg) continue;
@@ -1621,22 +1419,10 @@ export class PuzzleScene extends Phaser.Scene {
           TRAIN_COLLISION_H,
         );
         if (Phaser.Geom.Rectangle.Overlaps(playerRect, trainRect)) {
-          // ════════════════════════════════════════════════════════════
-          //  TEMP AUDIT (Item 4b): log real hit
-          //  Remove before marking story complete.
-          // ════════════════════════════════════════════════════════════
-          console.log(`[TEMP AUDIT 4b] HIT carX=${this.carX.toFixed(1)} col=${playerCol} row=${row} hitCol=${c} gapByRow=${JSON.stringify(gapByRow)}`);
-          // ════════════════════════════════════════════════════════════
           return true;
         }
       }
     }
-    // ════════════════════════════════════════════════════════════
-    //  TEMP AUDIT (Item 4b): per-frame column/gap log with actual result
-    //  Remove before marking story complete.
-    // ════════════════════════════════════════════════════════════
-    console.log(`[TEMP AUDIT 4b] carY=${this.carY.toFixed(1)} carX=${this.carX.toFixed(1)} col=${playerCol} track3_gap=${track3Gap ? 'yes' : 'no'} track4_gap=${track4Gap ? 'yes' : 'no'} realColl=false`);
-    // ════════════════════════════════════════════════════════════
     return false;
   }
 
