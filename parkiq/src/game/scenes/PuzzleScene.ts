@@ -187,6 +187,10 @@ export class PuzzleScene extends Phaser.Scene {
 
   /** Gap indicator — green rect over safe crossing columns */
   private gapIndicatorGfx: Phaser.GameObjects.Graphics | null = null;
+  /** Gap indicator tween — alpha pulse while a safe gap is showing */
+  private gapIndicatorTween: Phaser.Tweens.Tween | null = null;
+  /** True while the gap indicator rect is being drawn (tracks open/close transitions) */
+  private gapIndicatorActive = false;
 
 
   private get webAudio(): Phaser.Sound.WebAudioSoundManager {
@@ -1246,6 +1250,13 @@ export class PuzzleScene extends Phaser.Scene {
     if (this.gapIndicatorGfx) {
       this.gapIndicatorGfx.destroy();
     }
+    // Kill any lingering tween on the old graphics object
+    if (this.gapIndicatorTween) {
+      this.gapIndicatorTween.stop();
+      this.gapIndicatorTween.remove();
+      this.gapIndicatorTween = null;
+    }
+    this.gapIndicatorActive = false;
     const indicatorGfx = this.add.graphics();
     indicatorGfx.setDepth(8); // Between trains (7) and player (50)
     this.parkingContainer.add(indicatorGfx);
@@ -1351,17 +1362,41 @@ export class PuzzleScene extends Phaser.Scene {
       }
     }
 
-    // Only draw when overlap is wide enough for the car
-    if (overlapCount * UNIT_PX >= CAR_W) {
+    const gapOpen = overlapCount * UNIT_PX >= CAR_W;
+
+    if (gapOpen) {
+      // Gap just opened — start pulsing tween (matching exit zone pattern)
+      if (!this.gapIndicatorActive) {
+        this.gapIndicatorActive = true;
+        gfx.setAlpha(0.30);
+        this.gapIndicatorTween = this.tweens.add({
+          targets: gfx,
+          alpha: { from: 0.30, to: 0.50 },
+          duration: 1200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+
       const topY = getTrainRowY(3) - TRAIN_H / 2;
       const bottomY = getTrainRowY(4) + TRAIN_H / 2;
-      gfx.fillStyle(0x4ade80, 0.30);
+      gfx.fillStyle(0x4ade80, 1.0);
       gfx.fillRect(
         firstSafe * UNIT_PX,
         topY,
         overlapCount * UNIT_PX,
         bottomY - topY,
       );
+    } else if (this.gapIndicatorActive) {
+      // Gap just closed — stop tween and reset alpha
+      this.gapIndicatorActive = false;
+      if (this.gapIndicatorTween) {
+        this.gapIndicatorTween.stop();
+        this.gapIndicatorTween.remove();
+        this.gapIndicatorTween = null;
+      }
+      gfx.setAlpha(1.0);
     }
   }
 

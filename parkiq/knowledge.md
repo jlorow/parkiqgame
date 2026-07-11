@@ -971,3 +971,76 @@ VERIFIED:
 ## Key Links
 - Devvit docs: https://developers.reddit.com/docs/llms.txt
 - Devvit template: https://github.com/reddit/devvit-template-react
+
+---
+
+## Scissor Trap — Status as of 2026-07-11
+
+> **Bonus level (puzzle 16) — all core mechanics closed, three feature stories about to start.**
+
+### 1. Tier Math — CLOSED (unchanged, carried forward)
+
+Tier 3 (current production tier):
+- Speed: 34 px/s per track, opposite directions
+- gapUnits: 3, gapPx: 144
+- Paper T_open formula: `(GapWidth_px − CAR_W_px) / (Speed_A + Speed_B)` = (144 − 36) / 68 = 1.588s
+
+**Measured reality vs. paper value:** Real single-column measured T_open ≈ 2.817–2.834s steady-state. The paper formula is a confirmed **lower bound**, not the expected measured value. Do not treat future measured/paper mismatches as a new bug — this discrepancy is expected and already explained (the paper formula computes the theoretical minimum overlap duration; real measurements include frame-timing quantisation, ramp-up, and visual-vs-logical column rounding).
+
+### 2. Bug #4 — Guard Zone — CLOSED, LIVE-VERIFIED
+
+The cell-bounds guard in `checkTrainCollision()` prevents false-positive collision resets when the player is sitting safely inside a guard zone (row 5 or row 2).
+
+- **ROW5_LO narrowed:** 240 → **252**
+- **ROW2_HI narrowed:** 144 → **132**
+
+Confirmed via sweep math (overlap requires carY < 249, not 251) and live playtest. This is the **current production value**, not pending.
+
+Code location: `PuzzleScene.ts:1509-1514`
+
+### 3. Bugs A/B/C — Instrumentation — ALL CLOSED
+
+- **Bug A — Paper T_open label:** Now computed live from `this.trainConfigs[0]` (gapUnits, speed) — no longer a hardcoded constant. Logged every 5 cycles as `[TEMP T_open] === Paper T_open: ...`. Code: `PuzzleScene.ts:1479-1481`.
+
+- **Bug B — peakOverlap tracking:** Now tracked as a true per-window running max (`Math.max(this.topenPeakOverlap, overlapPx)` each frame while gap is open). Was always logging 0 because it was never updated during the open window. Code: `PuzzleScene.ts:1487-1489`.
+
+- **Bug C — T_open running average:** Uses a gap-threshold filter that rejects cycles contaminated by tab-backgrounding (>3000ms gap between CYCLE END and next CYCLE START → cycle marked as `topenSkipCurrentCycle = true` and excluded from the average). Uses a rolling window of the last 10 accepted cycles (`slice(-10)`) instead of a pure cumulative mean, preventing a single outlier from producing false "drift." Code: `PuzzleScene.ts:1431-1435, 1458-1474`.
+
+### 4. ERRATA — Correcting the v3 Handoff Doc
+
+> ⚠️ **CORRECTION — do not cite the original claim as fact.**
+
+The original v3 handoff doc's Bug B section states *"peakOverlap should show 144px each cycle"* as an expected/verified result. **This was never a real captured measurement — it was an unverified prediction.**
+
+- Actual live captures consistently show **peakOverlap = 96px**, not 144px.
+- A micro-step simulation across multiple frame-timing offsets confirmed that **144px is a measure-zero event** — it cannot be observed at any tested frame rate for the current tier's initial offsets.
+- **Correct record:** 96px is the correct expected value for peakOverlap, not 144px. The original doc's 144px claim was a pre-implementation prediction that was never validated against real output.
+
+### 5. Gap Indicator Feature — IMPLEMENTED, LIVE-CONFIRMED
+
+Pulsing semi-transparent green rectangle drawn over all currently-overlapping safe column(s), implemented in `renderGapIndicator()` (`PuzzleScene.ts:1345-1399`).
+
+- **Visual style:** Reuses the existing exit-zone pulse tween pattern: `alpha { from: 0.30, to: 0.50 }`, `yoyo: true`, `repeat: -1`, `ease: 'Sine.easeInOut'`, duration 1200ms.
+- **Coverage:** Draws over **all** currently-overlapping safe columns — not just one column. Adapts automatically if overlap width changes by tier.
+- **No directional arrow:** The mockup didn't show one; the implementation omits it. This **deviates from the original v4 doc spec** which included a directional arrow — noted explicitly as a spec deviation.
+- **Depth:** 8 (between trains at depth 7 and player at depth 50). Added to `parkingContainer`. Code: `PuzzleScene.ts:1260-1262`.
+
+#### Shared helper refactor — PARTIAL (known debt)
+
+A shared helper `getGapCols(trackIndex)` was extracted at `PuzzleScene.ts:1326-1338`. It returns a `boolean[]` indicating which columns (0–5) have a gap on the given track for the current frame's offset.
+
+**Consumers migrated to the shared helper:**
+- `renderGapIndicator()` — uses `getGapCols(0)` and `getGapCols(1)` (lines 1351–1352)
+- `topenMeasure()` — uses `getGapCols(0)` and `getGapCols(1)` (lines 1412–1413)
+
+**Remaining inline duplicates (NOT migrated):**
+- `renderTrains()` — computes `gapCols` as a `number[]` inline (lines 1286–1292)
+- `checkTrainCollision()` TEMP AUDIT block — computes `gapCols` as a `number[]` inline (lines 1535–1539)
+- `checkTrainCollision()` main collision loop — computes `gapCols` as a `number[]` inline (lines 1556–1561)
+
+The inline duplicates produce `number[]` (list of gap column indices) while the shared helper returns `boolean[]` (presence mask) — the shapes differ slightly. Both blocks are TEMP-marked for removal before story completion, so this is **known follow-up debt** rather than a live inconsistency. If the TEMP audit code is removed as planned, the remaining inline duplicate in `renderTrains()` (lines 1286–1292) should also be migrated to `getGapCols()`.
+
+### 6. Still Open / Not Yet Started
+
+- **Train.svg real asset swap-in** — about to start as its own story (replacing the procedural `Phaser.Graphics` train segments with a real SVG asset).
+- **5 cosmetic prop-SVG 404s** — low priority, unaddressed.
