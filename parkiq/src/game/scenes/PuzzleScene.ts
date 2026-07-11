@@ -88,6 +88,19 @@ const CAR_VISUAL_SCALE = 0.20;
 const TRAIN_W = 44;
 const TRAIN_H = 44;
 
+// ──────────────────────────────────────────────────────────
+//  Train Tile Rendering Constants
+//  Derived from Train-tile-2x.svg (294.914×50, seamless loop).
+//  TILE_W = source tile width (px). CELL_SRC = source pixels
+//  per cell column. TILE_SCALE = source→screen ratio (0.88).
+//  Split triggers when sourceX_mod > SPLIT_THRESHOLD.
+// ──────────────────────────────────────────────────────────
+
+const TILE_W = 294.914;
+const CELL_SRC = 48 / 0.88;        // 54.5454... source px per cell
+const TILE_SCALE = 0.88;           // source→container-local scale
+const SPLIT_THRESHOLD = TILE_W - CELL_SRC; // ~240.369
+
 // Track row visual offsets (container-local) — shifts train sprites closer together
 // to eliminate visual overlap with stationary player car at spawn (row 5) and exit (row 2) cells.
 // Row 3 shifts down +15px (168 → 183), Row 4 shifts up -15px (216 → 201).
@@ -167,8 +180,8 @@ export class PuzzleScene extends Phaser.Scene {
   private isBonusLevel = false;
   /** Per-track scroll offset (px) — unbounded, wraps for rendering */
   private trainOffsets: number[] = [];
-  /** Graphics layer per track — cleared and redrawn each frame */
-  private trainGfx: Phaser.GameObjects.Graphics[] = [];
+  /** Two-sprite Image pairs per cell per track — [track][col*2 + splitIndex] */
+  private trainSprites: Phaser.GameObjects.Image[][] = [];
   /** Cached train configs from the bonus puzzle */
   private trainConfigs: TrainConfig[] = [];
 
@@ -218,6 +231,10 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('road-garage',       'assets/sprites/roads/Road-Garage.svg',       { width: 780, height: 780 });
     this.load.svg('road-underground',  'assets/sprites/roads/Road-Underground.svg',  { width: 780, height: 780 });
     this.load.svg('road-rooftop',      'assets/sprites/roads/Road-Rooftop.svg',      { width: 780, height: 780 });
+
+    // ── Train tile SVG (seamless 2× loop for scissor-train rendering) ──
+    this.load.svg('train-tile', 'assets/sprites/cars/Train-tile-2x.svg', { width: 294.914, height: 50 });
+    this.load.audio('train', 'assets/sounds/train.mp3');
 
     // ── Prop SVGs ─────────────────────────────────────────────────
     this.load.svg('prop-tree',       'assets/sprites/props/Prop-Tree.svg',       { width: 64, height: 64 });
@@ -1080,6 +1097,10 @@ export class PuzzleScene extends Phaser.Scene {
     this.isBonusLevel = false;
     this.trainOffsets = [];
     this.trainConfigs = [];
+    this.trainSprites = [];
+
+    // Stop train movement sound if leaving bonus level
+    this.sound.stopByKey('train');
 
     // Load new puzzle
     this.puzzle = getPuzzleByIndex(nextIndex);
@@ -1206,11 +1227,6 @@ export class PuzzleScene extends Phaser.Scene {
     this.isBonusLevel = true;
     this.puzzle = getBonusPuzzle();
     this.trainConfigs = this.puzzle.trains ?? [];
-    // ════════════════════════════════════════════════════════════
-    //  TEMP AUDIT (Item 1b): log real train config values at load
-    // ════════════════════════════════════════════════════════════
-    console.log('[TEMP AUDIT 1b] trainConfigs at load:', JSON.stringify(this.trainConfigs));
-    // ════════════════════════════════════════════════════════════
     this.trainOffsets = this.trainConfigs.map(() => 0);
 
     // Set initial offsets so gaps are misaligned at start (scissor effect)
@@ -1229,21 +1245,37 @@ export class PuzzleScene extends Phaser.Scene {
 
     this.startElapsedTimer();
     this.ready = true;
+
+    // Start looping train movement sound
+    try {
+      this.sound.play('train', { loop: true, volume: 0.4 });
+    } catch { /* audio locked — will play on first pointerdown */ }
   }
 
-  /** Create train track graphics layers inside the parking container */
+  /** Create train track Image layers inside the parking container */
   private renderTrainTracks(): void {
-    // Destroy any previous train graphics
-    for (const g of this.trainGfx) {
-      g.destroy();
+    // Destroy any previous train sprites
+    for (const trackSprites of this.trainSprites) {
+      for (const img of trackSprites) {
+        img.destroy();
+      }
     }
-    this.trainGfx = [];
+    this.trainSprites = [];
 
-    for (let i = 0; i < this.trainConfigs.length; i++) {
-      const gfx = this.add.graphics();
-      gfx.setDepth(7); // Between static obstacles (6) and player (50)
-      this.parkingContainer.add(gfx);
-      this.trainGfx.push(gfx);
+    // 2 images per column (primary + split-secondary) × 6 columns per track
+    for (let t = 0; t < this.trainConfigs.length; t++) {
+      const trackSprites: Phaser.GameObjects.Image[] = [];
+      for (let c = 0; c < 6; c++) {
+        for (let s = 0; s < 2; s++) {
+          const img = this.add.image(0, 0, 'train-tile');
+          img.setOrigin(0, 0);
+          img.setDepth(7); // Between static obstacles (6) and player (50)
+          img.setVisible(false);
+          this.parkingContainer.add(img);
+          trackSprites.push(img);
+        }
+      }
+      this.trainSprites.push(trackSprites);
     }
 
     // Create gap indicator graphics layer
@@ -1263,56 +1295,72 @@ export class PuzzleScene extends Phaser.Scene {
     this.gapIndicatorGfx = indicatorGfx;
   }
 
-  /** Advance train positions by dt, redraw segment graphics, and check collision */
+  /** Advance train positions by dt, update tile-image crops, and check collision */
   private updateTrains(dt: number): void {
     for (let t = 0; t < this.trainConfigs.length; t++) {
       const cfg = this.trainConfigs[t];
       if (!cfg) continue;
       if (t >= this.trainOffsets.length) continue;
-      const gfx = this.trainGfx[t];
-      if (!gfx) continue;
+      const trackSprites = this.trainSprites[t];
+      if (!trackSprites) continue;
 
       const dir = cfg.direction === 'right' ? 1 : -1;
       this.trainOffsets[t]! += cfg.speed * dt * dir;
 
-      // Redraw this track
-      gfx.clear();
-
       const row = cfg.row;
-      const gapUnits = cfg.gapUnits;
       const offset = this.trainOffsets[t] ?? 0;
+      const cy = getTrainRowY(row);
+      const imgY = cy - TRAIN_H / 2;
 
       // Compute which column the gap starts at (always 0–5)
       const rawGapCol = Math.floor(offset / UNIT_PX);
       const gapStartCol = ((rawGapCol % 6) + 6) % 6;
 
-      // Build a set of gap columns for quick lookup (0 = no segment)
-      const gapCols: number[] = [];
-      for (let g = 0; g < gapUnits; g++) {
-        gapCols.push((gapStartCol + g) % 6);
+      // Build a set of gap columns for quick lookup
+      const isGap = new Array(6).fill(false) as boolean[];
+      for (let g = 0; g < cfg.gapUnits; g++) {
+        isGap[(gapStartCol + g) % 6] = true;
       }
 
       for (let c = 0; c < 6; c++) {
-        // Skip gap cells
-        if (gapCols.includes(c)) continue;
+        const idx = c * 2;
+        const imgA = trackSprites[idx];
+        const imgB = trackSprites[idx + 1];
+        if (!imgA || !imgB) continue;
 
-        const cx = (c + CONTAINER_OFFSET_X) * UNIT_PX;
-        const cy = getTrainRowY(row);
-        const sx = cx - TRAIN_W / 2;
-        const sy = cy - TRAIN_H / 2;
+        if (isGap[c]) {
+          imgA.setVisible(false);
+          imgB.setVisible(false);
+          continue;
+        }
 
-        // Train body — dark blue-grey
-        gfx.fillStyle(0x2d3748, 1);
-        gfx.fillRect(sx, sy, TRAIN_W, TRAIN_H);
+        const imgX = c * UNIT_PX;
+        const sourceX = (offset + c * UNIT_PX) / TILE_SCALE;
+        const sourceXMod = ((sourceX % TILE_W) + TILE_W) % TILE_W;
+        const cropEnd = sourceXMod + CELL_SRC;
 
-        // Lighter center band (window stripe)
-        gfx.fillStyle(0x4a5568, 0.6);
-        gfx.fillRect(sx + 2, sy + TRAIN_H / 2 - 4, TRAIN_W - 4, 8);
+        if (cropEnd <= TILE_W + 0.001) {
+          // No split — single sprite fills the cell
+          imgA.setCrop(sourceXMod, 0, CELL_SRC, 50);
+          imgA.setPosition(imgX, imgY);
+          imgA.setScale(TILE_SCALE);
+          imgA.setVisible(true);
+          imgB.setVisible(false);
+        } else {
+          // Split — two sprites tile-edge to tile-edge
+          const rightW = TILE_W - sourceXMod;
+          const leftW = CELL_SRC - rightW;
 
-        // Coupling connector dots on segment edges
-        gfx.fillStyle(0x718096, 1);
-        gfx.fillCircle(sx, cy, 3);
-        gfx.fillCircle(sx + TRAIN_W, cy, 3);
+          imgA.setCrop(sourceXMod, 0, rightW, 50);
+          imgA.setPosition(imgX, imgY);
+          imgA.setScale(TILE_SCALE);
+          imgA.setVisible(true);
+
+          imgB.setCrop(0, 0, leftW,50);
+          imgB.setPosition(imgX + rightW * TILE_SCALE, imgY);
+          imgB.setScale(TILE_SCALE);
+          imgB.setVisible(true);
+        }
       }
     }
   }
