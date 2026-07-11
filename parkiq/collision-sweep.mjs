@@ -44,8 +44,8 @@ function rectsOverlap(px, py, pw, ph, cx, cy, cw, ch) {
          (px - pw/2 < cx + cw/2) && (py - ph/2 < cy + ch/2);
 }
 
-function checkCollisionAt(off1, off2, px, py, tch) {
-  if (inSafeCell(py)) return { type: 'guard-skipped', col: -1, hit: false, py };
+function checkCollisionAt(off1, off2, px, py, tch, skipGuard) {
+  if (!skipGuard && inSafeCell(py)) return { type: 'guard-skipped', col: -1, hit: false, py };
   const g1 = getGapCols(off1, 3), g2 = getGapCols(off2, 3);
   const tchHalf = tch / 2;
   const col = Math.round((px - CONTAINER_OFFSET_X * UNIT_PX) / UNIT_PX);
@@ -78,8 +78,9 @@ function categorizeHit(py) {
 //  FULL SWEEP at Y_STEP=4 (matching baseline)
 // ════════════════════════════════════════════════════════════
 
-function runSweep(tch, label) {
+function runSweep(tch, label, skipGuard) {
   const s = { total:0, none:0, gapProtected:0, expectedOrTransition:0, spawnCell:0, exitCell:0, guardSkipped:0 };
+  const collFn = (o1, o2, px, py, tch) => checkCollisionAt(o1, o2, px, py, tch, skipGuard);
 
   for (let col = 0; col < 6; col++) {
     const px = (col + CONTAINER_OFFSET_X) * UNIT_PX;
@@ -87,7 +88,7 @@ function runSweep(tch, label) {
       const o1 = t * 34, o2 = 96 - t * 34;
       for (let y = Y_MIN; y <= Y_MAX; y += Y_STEP) {
         s.total++;
-        const r = checkCollisionAt(o1, o2, px, y, tch);
+        const r = collFn(o1, o2, px, y, tch);
         if (r.type === 'none')           s.none++;
         else if (r.type === 'gap-protected') s.gapProtected++;
         else if (r.type === 'guard-skipped') s.guardSkipped++;
@@ -119,7 +120,12 @@ console.log('══════════════════════�
 console.log(`\nBaseline resolution: Y_STEP=${Y_STEP}, DT=${DT}s`);
 console.log(`Expected samples: (${(Y_MAX-Y_MIN)/Y_STEP})Y × 6col × ${Math.ceil(CYCLE_DURATION/DT)}time = ${((Y_MAX-Y_MIN)/Y_STEP * 6 * Math.ceil(CYCLE_DURATION/DT)).toFixed(0)}`);
 
-runSweep(32, 'HYBRID GUARD (H=32 + cell bounds)');
+runSweep(32, 'HYBRID GUARD (H=32 + cell bounds)', false);
+
+console.log('────────────────────────────────────────────────────');
+console.log(' NO-GUARD VARIANT — same sweep, guard bypassed');
+console.log('────────────────────────────────────────────────────');
+const noGuard = runSweep(32, 'NO GUARD (H=32 only, cell bounds removed)', true);
 
 // ════════════════════════════════════════════════════════════
 //  COLUMN-SPECIFIC BOUNDARY TABLE
