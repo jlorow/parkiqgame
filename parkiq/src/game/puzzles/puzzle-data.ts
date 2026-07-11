@@ -332,8 +332,8 @@ export const bonusPuzzle: Puzzle = {
   playerCar: { col: 2, row: 5, angle: 0 },
   obstacles: [],
   trains: [
-    { row: 3, direction: 'right', speed: 45, gapUnits: 4, gapPx: 192 },
-    { row: 4, direction: 'left',  speed: 45, gapUnits: 4, gapPx: 192 },
+    { row: 3, direction: 'right', speed: 34, gapUnits: 3, gapPx: 144 },
+    { row: 4, direction: 'left',  speed: 34, gapUnits: 3, gapPx: 144 },
   ],
   exitZone: { col: 2, row: 0, direction: 'top' },
   escapeSteps: [
