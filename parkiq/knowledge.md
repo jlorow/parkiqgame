@@ -974,9 +974,29 @@ VERIFIED:
 
 ---
 
-## Scissor Trap — Status as of 2026-07-11
+## Story 2 — CRASH Overlay (retry feedback) — CLOSED, VERIFIED (2026-07-12)
 
-> **Bonus level (puzzle 16) — all core mechanics closed, three feature stories about to start.**
+**Problem:** Collisions silently reset the car with no visible feedback beyond a particle burst and sound. Players may not notice what happened.
+
+**Solution:** Brief "CRASH!" text overlay + camera shake + 500ms movement pause, auto-resumes. No button, no dismiss, no scene change.
+
+**Implementation:**
+- `crashPausedUntil` timestamp field on PuzzleScene (line 168)
+- Crash pause check in `update()` after `skipExitCheck` clear (line 887) — returns early while `time.now < crashPausedUntil`
+- All feedback lives inside `resetToSpawn()` (line 1443) — covers both normal obstacle and train collisions with zero duplication
+- Camera shake: `cameras.main.shake(200, 0.005)`
+- Text: "CRASH!" at (195, 420), depth 1000, fades alpha to 0 over 500ms, destroyed by tween onComplete
+- Movement freezes for 500ms (update() returns early), trains also freeze (updateTrains not called)
+
+**Guard-flag safety:** `skipExitCheck` is cleared before the crash pause check in update(), so no stale-flag window. `exited`, `ready`, `isBonusLevel` unaffected.
+
+**Verified:** normal obstacle collision, train collision, rapid repeated collisions, no false win, trains freeze during pause.
+
+---
+
+## Scissor Trap — Status as of 2026-07-12
+
+> **Bonus level (puzzle 16) — all core mechanics MERGED TO MAIN, fully live-verified.**
 
 ### 1. Tier Math — CLOSED (unchanged, carried forward)
 
@@ -1040,7 +1060,9 @@ A shared helper `getGapCols(trackIndex)` was extracted at `PuzzleScene.ts:1326-1
 
 The inline duplicates produce `number[]` (list of gap column indices) while the shared helper returns `boolean[]` (presence mask) — the shapes differ slightly. Both blocks are TEMP-marked for removal before story completion, so this is **known follow-up debt** rather than a live inconsistency. If the TEMP audit code is removed as planned, the remaining inline duplicate in `renderTrains()` (lines 1286–1292) should also be migrated to `getGapCols()`.
 
-### 6. Still Open / Not Yet Started
+### 6. Merged Status (2026-07-12)
 
-- **Train.svg real asset swap-in** — about to start as its own story (replacing the procedural `Phaser.Graphics` train segments with a real SVG asset).
+All 29 commits from `feature/scissor-trap-phase2-impl` merged to main via fast-forward. Stories 10.4–15.1 + all 8 scissor-trap commits now on main. Branch deleted locally and on origin.
+
+- **Train.svg real asset swap-in** — DEFERRED past July 15 deadline. Graphics-primitive rendering is the production state. Validated SVG rendering approach lives in `../spike/` (untracked directory, not a git branch) for future pickup — includes the paint-order fix to Train.svg, floor+overlap math, and animated two-sprite scrolling, all verified.
 - **5 cosmetic prop-SVG 404s** — low priority, unaddressed.

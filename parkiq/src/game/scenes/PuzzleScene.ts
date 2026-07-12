@@ -166,6 +166,8 @@ export class PuzzleScene extends Phaser.Scene {
   private collisionEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Collision cooldown: next time (ms) at which crunch sound may fire again */
   private collisionCooldownUntil = 0;
+  /** Crash-pause cooldown: next time (ms) at which movement resumes after a crash overlay */
+  private crashPausedUntil = 0;
   /** True on the frame after reset — prevents same-frame exit-check false win */
   private skipExitCheck = false;
 
@@ -882,6 +884,9 @@ export class PuzzleScene extends Phaser.Scene {
     // Reset per-frame flag that is set by resetToSpawn() when collision fires
     this.skipExitCheck = false;
 
+    // Crash-pause: freeze movement while the CRASH! overlay is showing
+    if (this.time.now < this.crashPausedUntil) return;
+
     const input: DrivingInputState = this.drivingControls.getState();
     const dt = delta / 1000;
 
@@ -1435,5 +1440,30 @@ export class PuzzleScene extends Phaser.Scene {
     // Prevent same-frame exit check — the car was just reset due to collision,
     // so we must not also trigger a win in the same update() pass.
     this.skipExitCheck = true;
+
+    // Crash feedback: overlay + camera shake + movement pause
+    this.crashPausedUntil = this.time.now + 500;
+
+    // Camera shake — 200ms, subtle intensity
+    this.cameras.main.shake(200, 0.005);
+
+    // "CRASH!" text overlay — fades out over 500ms, then destroys
+    const crashText = this.add
+      .text(195, 420, 'CRASH!', {
+        fontSize: '32px',
+        color: '#E8320A',
+        stroke: '#000000',
+        strokeThickness: 4,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(1000);
+
+    this.tweens.add({
+      targets: crashText,
+      alpha: 0,
+      duration: 500,
+      onComplete: () => { crashText.destroy(); },
+    });
   }
 }
