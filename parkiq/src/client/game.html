@@ -16,17 +16,72 @@
         overflow: hidden;
         background: #0F0F0F;
       }
+      #loading {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0F0F0F;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      #loading-car {
+        width: 40px;
+        height: 80px;
+        background: #E8320A;
+        border-radius: 8px 8px 8px 8px;
+        position: relative;
+      }
+      #loading-car::after {
+        content: '';
+        position: absolute;
+        top: 10px;
+        left: 5px;
+        width: 30px;
+        height: 20px;
+        background: #FF5E64;
+        border-radius: 4px;
+      }
+      #loading-title {
+        margin-top: 16px;
+        font-size: 28px;
+        font-weight: bold;
+        color: #E8320A;
+      }
+      #loading-bar-track {
+        margin-top: 16px;
+        width: 200px;
+        height: 8px;
+        background: #2A2A2A;
+        border-radius: 4px;
+      }
+      #loading-bar-fill {
+        width: 0%;
+        height: 100%;
+        background: #E8320A;
+        border-radius: 4px;
+        transition: width 0.1s ease;
+      }
       #root {
+        position: relative;
+        z-index: 2;
         width: 100vw;
         height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #0F0F0F;
+        background: transparent;
       }
     </style>
   </head>
   <body class="h-full">
+    <div id="loading">
+      <div id="loading-car"></div>
+      <div id="loading-title">ParkIQ</div>
+      <div id="loading-bar-track"><div id="loading-bar-fill"></div></div>
+    </div>
     <div id="root" class="h-full"></div>
     <script type="module" src="game.tsx"></script>
   </body>

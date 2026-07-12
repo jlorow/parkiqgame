@@ -162,6 +162,8 @@ export class PuzzleScene extends Phaser.Scene {
   private parkingContainer!: Phaser.GameObjects.Container;
   /** True once loadAndRender() has completed — guards update() against async race */
   private ready = false;
+  /** Loading screen container — destroyed in create() once all assets are loaded */
+  private loadingGroup: Phaser.GameObjects.Container | null = null;
   /** Particle emitter for collision debris burst */
   private collisionEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Collision cooldown: next time (ms) at which crunch sound may fire again */
@@ -199,6 +201,58 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // ── Loading screen — branded car visual + progress bar ──────
+    // All elements are Phaser primitives (Graphics + Text), no loaded assets needed.
+    // Cleaned up in create() via loadingGroup.destroy(true).
+    this.loadingGroup = this.add.container(0, 0).setDepth(9999);
+
+    // Stylized car silhouette — red body rectangle
+    const carBody = this.add.graphics();
+    carBody.fillStyle(0xE8320A, 1);
+    carBody.fillRoundedRect(175, 380, 40, 80, 8);  // centered, 40×80
+    this.loadingGroup.add(carBody);
+
+    // Car windshield accent
+    const carWindshield = this.add.graphics();
+    carWindshield.fillStyle(0xFF5E64, 1);
+    carWindshield.fillRoundedRect(180, 390, 30, 20, 4);
+    this.loadingGroup.add(carWindshield);
+
+    // "ParkIQ" text
+    const titleText = this.add.text(195, 480, 'ParkIQ', {
+      fontSize: '28px',
+      color: '#E8320A',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.loadingGroup.add(titleText);
+
+    // Progress bar — background track
+    const barWidth = 200;
+    const barHeight = 8;
+    const barX = (390 - barWidth) / 2;
+    const barY = 520;
+    const track = this.add.graphics();
+    track.fillStyle(0x2A2A2A, 1);
+    track.fillRect(barX, barY, barWidth, barHeight);
+    this.loadingGroup.add(track);
+
+    // Progress bar — fill (updated by load.on('progress'))
+    const fill = this.add.graphics();
+    this.loadingGroup.add(fill);
+
+    this.load.on('progress', (value: number) => {
+      if (!(this as any)._tloadLogged) {
+        (this as any)._tloadLogged = true;
+        // Remove CSS loading screen on first progress event — Phaser is now actively
+        // rendering the loading elements, so the handoff is seamless.
+        document.getElementById('loading')?.remove();
+      }
+      fill.clear();
+      fill.fillStyle(0xE8320A, 1);
+      fill.fillRect(barX, barY, barWidth * value, barHeight);
+    });
+
+    // ── Asset loading ─────────────────────────────────────────────
     this.load.audio('crunch', 'assets/sounds/crunch.mp3');
     this.load.audio('success', 'assets/sounds/success.mp3');
 
@@ -221,17 +275,18 @@ export class PuzzleScene extends Phaser.Scene {
     // ── Prop SVGs ─────────────────────────────────────────────────
     this.load.svg('prop-tree',       'assets/sprites/props/Prop-Tree.svg',       { width: 64, height: 64 });
     this.load.svg('prop-shrub-1',    'assets/sprites/props/Prop-Shrub-1.svg',    { width: 48, height: 48 });
-    this.load.svg('prop-shrub-2',    'assets/sprites/props/Prop-Shrub-2.svg',    { width: 48, height: 48 });
-    this.load.svg('prop-lamppost',   'assets/sprites/props/Prop-Lamppost.svg',   { width: 32, height: 128 });
-    this.load.svg('prop-cone',       'assets/sprites/props/Prop-Cone.svg',       { width: 32, height: 48 });
-    this.load.svg('prop-barricade-1','assets/sprites/props/Prop-Barricade-1.svg',{ width: 64, height: 48 });
-    this.load.svg('prop-barricade-2','assets/sprites/props/Prop-Barricade-2.svg',{ width: 64, height: 48 });
+    this.load.svg('prop-shrub-2',    'assets/sprites/props/Prop-Shrub-1.svg',    { width: 48, height: 48 });
+    this.load.svg('prop-lamppost',   'assets/sprites/props/Prop-Tree.svg',       { width: 32, height: 128 });
   }
 
   create(): void {
     this.exited = false;
     this.ready = false;
     this.elapsedSeconds = 0;
+
+    // Destroy loading screen — all assets are guaranteed loaded by now
+    this.loadingGroup?.destroy(true);
+    this.loadingGroup = null;
 
     this.input.once('pointerdown', () => {
       void this.webAudio.context.resume();
