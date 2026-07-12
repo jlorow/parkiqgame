@@ -1066,3 +1066,31 @@ All 29 commits from `feature/scissor-trap-phase2-impl` merged to main via fast-f
 
 - **Train.svg real asset swap-in** — DEFERRED past July 15 deadline. Graphics-primitive rendering is the production state. Validated SVG rendering approach lives in `../spike/` (untracked directory, not a git branch) for future pickup — includes the paint-order fix to Train.svg, floor+overlap math, and animated two-sprite scrolling, all verified.
 - **5 cosmetic prop-SVG 404s** — low priority, unaddressed.
+
+---
+
+## Impossible Escape Bonus Puzzle — Semitruck Vehicle — CLOSED, VERIFIED (2026-07-12)
+
+**Branch:** `feature/impossible-escape-puzzle` → merged to `main` via fast-forward.
+
+**What was done:**
+1. **Semitruck vehicle asset & scale:** `Trailer.svg` (200×981 native) loaded at `TRAILER_VISUAL_SCALE=0.15`, rendering at 30×130px on screen. Reads clearly as a distinct long vehicle, visually differentiated from sedans.
+2. **Per-vehicle visual dimensions:** `activeVisW`/`activeVisH` now branch per vehicle type (semitruck, limo, truck) instead of sharing sedan dimensions. Semitruck: `activeVisW = 200 * 0.15 = 30`, `activeVisH = 981 * 0.15 * COUNTER_SCALE_Y ≈ 129.8`.
+3. **Bottom clamp fix:** Old formula `ROW5_CENTER - halfEffH + rowHalf` produced overhang proportional to collision height — 24px for long vehicles (rowHalf=48) vs 8px for sedans (rowHalf=32). Fixed to `GRID_SIZE + BOTTOM_OVERHANG_PX - halfEffH` with `BOTTOM_OVERHANG_PX=24`, giving uniform 24px overhang for ALL vehicles.
+4. **Collision box unchanged:** `LARGE_CAR_W=36, LARGE_CAR_H=96` — locked throughout. Solvability proof depends on these values.
+5. **Debug verification:** Magenta debug line at visual-bottom clamp boundary confirmed `carY` and `spriteY` match exactly (no render/collision desync). Debug code fully removed post-confirmation.
+
+**Regression:** `BOTTOM_OVERHANG_PX=24` gives sedans 37px screen overhang past grid bottom with 52px clearance to OBJECTIVE_Y (500px). All 15 standard sedan puzzles confirmed safe — no visual overflow.
+
+**Key constants (current production):**
+```
+TRAILER_VISUAL_SCALE = 0.15
+LARGE_CAR_W = 36 (collision, unchanged)
+LARGE_CAR_H = 96 (collision, unchanged)
+BOTTOM_OVERHANG_PX = 24 (all vehicles)
+```
+
+**Code locations:** `PuzzleScene.ts:129` (TRAILER_VISUAL_SCALE), `PuzzleScene.ts:776-789` (per-vehicle activeVisW/H), `PuzzleScene.ts:896-899` (setScale), `PuzzleScene.ts:1057-1064` (clamp formula).
+
+**Agent-verifiable:** tsc --noEmit passes clean. `playerVehicle: 'semitruck'` confirmed in puzzle-data.ts line 333. Branch merged, history clean.
+**Human-only:** Visual correctness confirmed by user — truck fills the row, proper size, clean gap to objective text, no overflow into controls.
