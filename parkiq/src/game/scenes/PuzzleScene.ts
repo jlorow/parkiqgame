@@ -125,8 +125,8 @@ const LARGE_CAR_W = 36;
 const LARGE_CAR_H = 96;
 /** Height multiplier vs sedan for the truck visual sprite scale */
 const TRUCK_VISUAL_SCALE_Y = 1.5;
-/** Scale factor for the Trailer.svg sprite (×200×981 loaded, target ~106px visual height) */
-const TRAILER_VISUAL_SCALE = 0.122;
+/** Scale factor for the Trailer.svg sprite (×200×981 loaded, target 30px visual width, 130px height) */
+const TRAILER_VISUAL_SCALE = 0.15;
 
 // Visual display dimensions at CAR_VISUAL_SCALE (container-local)
 const VISUAL_W = 200 * CAR_VISUAL_SCALE;
@@ -167,7 +167,6 @@ export class PuzzleScene extends Phaser.Scene {
   private activeVisH = VISUAL_H;
   /** Truck trailer overlay graphics (null for sedan puzzles) */
   private truckTrailerGfx: Phaser.GameObjects.Graphics | null = null;
-
   /** Player car — baked texture image inside the parking container */
   private playerCarImage!: Phaser.GameObjects.Image;
   private carX = 0;
@@ -772,13 +771,15 @@ export class PuzzleScene extends Phaser.Scene {
     if (this.puzzle.playerVehicle === 'truck' || this.puzzle.playerVehicle === 'limo' || this.puzzle.playerVehicle === 'semitruck') {
       this.activeCarW = LARGE_CAR_W;
       this.activeCarH = LARGE_CAR_H;
-      this.activeVisW = VISUAL_W;
-      // Each unique-asset vehicle has its own native height
+      // Each unique-asset vehicle has its own native dimensions
       if (this.puzzle.playerVehicle === 'limo') {
+        this.activeVisW = 200 * CAR_VISUAL_SCALE; // 40
         this.activeVisH = 605 * CAR_VISUAL_SCALE * COUNTER_SCALE_Y;
       } else if (this.puzzle.playerVehicle === 'semitruck') {
+        this.activeVisW = 200 * TRAILER_VISUAL_SCALE; // 30
         this.activeVisH = 981 * TRAILER_VISUAL_SCALE * COUNTER_SCALE_Y;
       } else {
+        this.activeVisW = VISUAL_W; // 40
         this.activeVisH = VISUAL_H * TRUCK_VISUAL_SCALE_Y; // 70.6 × 1.5 ≈ 106
       }
     } else {
@@ -890,7 +891,7 @@ export class PuzzleScene extends Phaser.Scene {
       if (vehicle === 'limo') {
         playerCar.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y); // limo loaded at 200×605, scale 0.20×0.882
       } else if (vehicle === 'semitruck') {
-        playerCar.setScale(TRAILER_VISUAL_SCALE, TRAILER_VISUAL_SCALE * COUNTER_SCALE_Y); // Trailer.svg loaded at 200×981, scale 0.122×0.882
+        playerCar.setScale(TRAILER_VISUAL_SCALE, TRAILER_VISUAL_SCALE * COUNTER_SCALE_Y); // Trailer.svg loaded at 200×981, scale 0.15×0.882
       } else {
         playerCar.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * TRUCK_VISUAL_SCALE_Y * COUNTER_SCALE_Y);
       }
@@ -1044,16 +1045,18 @@ export class PuzzleScene extends Phaser.Scene {
     const halfEffW = halfVW * sc + halfVH * ss;
     const halfEffH = halfVW * ss + halfVH * sc;
     const colHalf = this.activeCarW / 2;
-    const rowHalf = this.activeCarH / 2;
     candidateX = Math.max(
       (COL0_CENTER - colHalf) + halfEffW,
       Math.min(candidateX, (COL5_CENTER + colHalf) - halfEffW),
     );
     // Top clamp: keep visual edge at screen y = 0 (avoids off-screen clipping).
-    // Bottom clamp: unchanged — 8px overhang past grid bottom.
+    // Bottom clamp: 8px overhang past grid bottom (GRID_SIZE), independent of
+    // vehicle collision height.  The old formula used `rowHalf` which scaled the
+    // overhang with LARGE_CAR_H, giving long vehicles 24px of overflow.
+    const BOTTOM_OVERHANG_PX = 24;
     candidateY = Math.max(
       -CONTAINER_Y / SCALE_Y + halfEffH,
-      Math.min(candidateY, ROW5_CENTER - halfEffH + rowHalf),
+      Math.min(candidateY, GRID_SIZE + BOTTOM_OVERHANG_PX - halfEffH),
     );
 
     // ── 4. Train movement — scroll offsets each frame (bonus level only) ──
