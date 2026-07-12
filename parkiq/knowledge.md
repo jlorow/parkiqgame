@@ -1094,3 +1094,13 @@ BOTTOM_OVERHANG_PX = 24 (all vehicles)
 
 **Agent-verifiable:** tsc --noEmit passes clean. `playerVehicle: 'semitruck'` confirmed in puzzle-data.ts line 333. Branch merged, history clean.
 **Human-only:** Visual correctness confirmed by user — truck fills the row, proper size, clean gap to objective text, no overflow into controls.
+
+### Rejected: Semitruck Horizontal Start (90° spawn) — 2026-07-12
+
+**Idea:** Spawn the semitruck at 90° (facing right) instead of 0° (facing up) to force the player to account for the truck's width before moving.
+
+**Audited and rejected.** The collision box (`LARGE_CAR_W=36 × LARGE_CAR_H=96`) is a fixed AABB in `checkCollision()` — it does NOT rotate with `carAngle`. At 90°, the collision footprint is byte-identical to 0°. A horizontal start produces zero gameplay difference — only the sprite image changes, not the hitbox. The only mandatory player action is rotating left to 0° (~1 second), after which the puzzle is identical.
+
+**Risk identified:** During the rotation animation (90° → 0°), the visual sprite sweeps through angles where it appears to overlap obstacles the collision box doesn't touch — a trust-eroding "that should have crashed" moment. This is a structural property of the angle-invariant collision system, not fixable by puzzle redesign.
+
+**Lesson:** Any feature that relies on the collision box rotating with the sprite requires changing `checkCollision()` to build a rotated AABB (e.g., using `Phaser.Geom.OrientedRectangle` or manual corner projection). That's a separate, larger scope change — not a puzzle-data tweak.
