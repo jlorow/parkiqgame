@@ -75,6 +75,9 @@ export type Puzzle = {
   environment: PuzzleEnvironment;
   /** Player car position and orientation in grid units */
   playerCar: { col: number; row: number; angle: number };
+  /** Vehicle type — 'sedan' (default), 'truck', 'limo' (Limousine.svg), or 'semitruck' (Trailer.svg).
+   *  'truck' | 'limo' | 'semitruck' all use 36×96 collision box. */
+  playerVehicle?: 'sedan' | 'truck' | 'limo' | 'semitruck';
   /** Obstacles in the scene (other cars, pillars, walls) */
   obstacles: Obstacle[];
   /** Optional dual-train scissor trap configuration (bonus / final-boss levels only) */

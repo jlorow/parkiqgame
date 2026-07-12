@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Train SVG — Step 6: Animated Scroll</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: monospace; color: #fff; }
+    h2 { margin-bottom: 12px; font-size: 14px; color: #aaa; }
+    #controls { margin-top: 10px; display: flex; gap: 20px; align-items: center; }
+    #controls label { font-size: 13px; color: #ccc; cursor: pointer; }
+    #controls input[type="checkbox"] { cursor: pointer; }
+    #controls kbd { background: #333; border: 1px solid #555; border-radius: 3px; padding: 1px 5px; font-size: 11px; color: #aaa; }
+    #info { margin-top: 12px; font-size: 12px; color: #888; max-width: 740px; text-align: center; line-height: 1.5; }
+    canvas { border: 1px solid #333; }
+  </style>
+</head>
+<body>
+  <h2>Step 6: Animated scroll — 34px/s, two-sprite split in/out</h2>
+  <div id="game"></div>
+  <div id="controls">
+    <label><input type="checkbox" id="pauseCheck"> Pause at transition (always fires first)</label>
+    <label style="border-left:1px solid #555; padding-left:12px;">Auto-pause when overlap &ge; <input type="number" id="overlapThresh" min="0" max="1" step="0.05" value="0.85" style="width:50px; background:#1a1a2e; color:#ff9900; border:1px solid #ff9900; font-family:monospace; padding:2px 4px;"> px &nbsp;<span id="threshStatus" style="color:#ff9900; font-size:11px;">[ARMED]</span></label>
+    <span style="border-left:1px solid #555; padding-left:12px;"><kbd>Space</kbd> resume | <kbd>P</kbd> manual pause</span>
+  </div>
+  <div id="info">
+    Transitions every ~7.6s. TWO-SPRITE lasts ~1.4s. Page load → first TWO-SPRITE ~10.6s.<br>
+    Floor overlap at join. Red line = seam. Ghosted ref = full tile with crop regions.
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@4.2.0/dist/phaser.min.js"></script>
+  <script>
+    const SCALE = 44 / 50;
+    const NATIVE_W = 294.914;
+    const NATIVE_H = 50;
+    const CELL_SOURCE_W = 48 / SCALE;
+    const TILE_W = NATIVE_W;
+    const SPLIT_THRESHOLD = TILE_W - CELL_SOURCE_W;
+    const SPEED = 34;
+    const DISPLAY_X = 40;
+    const DISPLAY_Y = 50;
+    const DISPLAY_H = NATIVE_H * SCALE;
+    const CYCLE_PX = TILE_W * SCALE;
+    const CYCLE_SEC = CYCLE_SEC_helper();
+
+    function CYCLE_SEC_helper() { return CYCLE_PX / SPEED; }
+
+    let minOverlap = Infinity;
+    let maxOverlap = -Infinity;
+    let transitionCount = 0;
+    let lastMode = null;
+    let prevS1CropW = null;
+    let cropWDiscontinuities = 0;
+    let paused = false;
+    let pauseCheckEl = null;
+
+    class ScrollScene extends Phaser.Scene {
+      constructor() { super('ScrollScene'); }
+
+      preload() {
+        this.load.svg('train-tile', '../parkiq/public/assets/sprites/cars/Train-tile-2x.svg', { width: NATIVE_W, height: NATIVE_H });
+      }
+
+      create() {
+        this.offset = 0;
+        pauseCheckEl = document.getElementById('pauseCheck');
+
+        // --- Mode indicator (large, top of canvas) ---
+        this.modeIndicatorBg = this.add.rectangle(0, 0, 940, 36, 0x222222, 1)
+          .setOrigin(0, 0).setDepth(10);
+        this.modeIndicator = this.add.text(12, 6, 'MODE: SINGLE', {
+          fontSize: '22px', fontFamily: 'monospace', color: '#888',
+          backgroundColor: '#222222', padding: { x: 6, y: 2 }
+        }).setDepth(11);
+
+        // --- Pause overlay ---
+        this.pauseOverlay = this.add.rectangle(0, 0, 940, 180, 0x000000, 0.7)
+          .setOrigin(0, 0).setDepth(20).setVisible(false);
+        this.pauseText = this.add.text(470, 80, 'PAUSED — press Space or P to resume', {
+          fontSize: '18px', fontFamily: 'monospace', color: '#ffdd00',
+          backgroundColor: '#333', padding: { x: 12, y: 6 }
+        }).setOrigin(0.5).setDepth(21).setVisible(false);
+
+        // --- Sprites ---
+        this.s1 = this.add.image(DISPLAY_X, DISPLAY_Y, 'train-tile')
+          .setOrigin(0, 0).setScale(SCALE).setDepth(1);
+        this.s2 = this.add.image(DISPLAY_X, DISPLAY_Y, 'train-tile')
+          .setOrigin(0, 0).setScale(SCALE).setDepth(1).setVisible(false);
+
+        this.seamLine = this.add.rectangle(DISPLAY_X, DISPLAY_Y, 1, DISPLAY_H, 0xff0000, 0.8)
+          .setOrigin(0, 0).setDepth(2);
+
+        // --- Reference tile ---
+        const REF_X = DISPLAY_X + 48 + 40;
+        this.add.image(REF_X, DISPLAY_Y, 'train-tile').setOrigin(0, 0).setAlpha(0.3).setDepth(0);
+        this.refS1 = this.add.rectangle(REF_X, DISPLAY_Y, 0, DISPLAY_H, 0xff0000, 0.15)
+          .setOrigin(0, 0).setDepth(0);
+        this.refS2 = this.add.rectangle(REF_X, DISPLAY_Y, 0, DISPLAY_H, 0x4488ff, 0.15)
+          .setOrigin(0, 0).setDepth(0);
+
+        // --- Detail text ---
+        this.infoText = this.add.text(DISPLAY_X, DISPLAY_Y + DISPLAY_H + 4, '', { fontSize: '11px', color: '#666' });
+        this.modeText = this.add.text(DISPLAY_X, DISPLAY_Y + DISPLAY_H + 18, '', { fontSize: '11px', color: '#888' });
+        this.detailText = this.add.text(DISPLAY_X, DISPLAY_Y + DISPLAY_H + 32, '', { fontSize: '11px', color: '#666' });
+        this.overlapText = this.add.text(DISPLAY_X + 500, DISPLAY_Y + DISPLAY_H + 4, '', { fontSize: '11px', color: '#f90' });
+
+        this.lastSampleTime = 0;
+        this.sampleInterval = 500;
+        this.currentMode = 'SINGLE';
+        this.currentOverlap = 0;
+
+        // --- Keyboard: Space to resume, P to manually pause/unpause ---
+        this.input.keyboard.on('keydown-SPACE', () => {
+          if (paused) {
+            paused = false;
+            this.pauseOverlay.setVisible(false);
+            this.pauseText.setVisible(false);
+          }
+        });
+        this.input.keyboard.on('keydown-P', () => {
+          paused = !paused;
+          if (paused) {
+            this.pauseText.setText(`PAUSED — interOverlap=${this.currentOverlap.toFixed(4)}px\nSpace or P to resume`);
+          }
+          this.pauseOverlay.setVisible(paused);
+          this.pauseText.setVisible(paused);
+          if (paused) console.log(`[PAUSED MANUAL] interOverlap=${this.currentOverlap.toFixed(4)}`);
+        });
+
+        console.log(`=== STEP 6: ANIMATED SCROLL ===`);
+        console.log(`SPEED=${SPEED}px/s | SCALE=${SCALE} | TILE_W=${TILE_W} | CELL_SOURCE_W=${CELL_SOURCE_W.toFixed(4)}`);
+        console.log(`SPLIT_THRESHOLD=${SPLIT_THRESHOLD.toFixed(4)} | cycle=${CYCLE_PX.toFixed(2)}px = ${CYCLE_SEC.toFixed(2)}s`);
+        console.log(`TWO-SPRITE duration per cycle = ${CELL_SOURCE_W / (SPEED / SCALE).toFixed(2)}s`);
+        console.log(`---`);
+
+        // Live threshold status indicator
+        const threshEl = document.getElementById('overlapThresh');
+        const statusEl = document.getElementById('threshStatus');
+        const updateThreshStatus = () => {
+          const v = parseFloat(threshEl.value) || 0;
+          if (v > 0) {
+            statusEl.textContent = `[ARMED @ ${v.toFixed(2)}]`;
+            statusEl.style.color = '#ff9900';
+          } else {
+            statusEl.textContent = '[DISABLED]';
+            statusEl.style.color = '#666';
+          }
+        };
+        threshEl.addEventListener('input', updateThreshStatus);
+        threshEl.addEventListener('change', updateThreshStatus);
+        updateThreshStatus();
+      }
+
+      update(time, delta) {
+        if (paused) return;
+
+        this.offset += SPEED * (delta / 1000);
+        const sourceX_mod = (this.offset / SCALE) % TILE_W;
+        const isTwoSprite = sourceX_mod > SPLIT_THRESHOLD;
+        const currentMode = isTwoSprite ? 'TWO-SPRITE' : 'SINGLE';
+
+        // --- Mode indicator ---
+        if (currentMode !== this.currentMode) {
+          this.currentMode = currentMode;
+          if (isTwoSprite) {
+            this.modeIndicatorBg.setFillStyle(0x1a6b1a, 1);
+            this.modeIndicator.setText('MODE: TWO-SPRITE').setColor('#44ff44');
+          } else {
+            this.modeIndicatorBg.setFillStyle(0x222222, 1);
+            this.modeIndicator.setText('MODE: SINGLE').setColor('#888888');
+          }
+        }
+
+        // --- Transition logging ---
+        if (currentMode !== lastMode) {
+          transitionCount++;
+          lastMode = currentMode;
+
+          if (isTwoSprite) {
+            const s1W = TILE_W - sourceX_mod;
+            const s2W = CELL_SOURCE_W - s1W;
+            const s1Rendered = s1W * SCALE;
+            const s1Floor = Math.floor(s1Rendered);
+            const interOverlap = s1Rendered - s1Floor;
+
+            console.log(`[TRANSITION #${transitionCount}] → TWO-SPRITE | srcX=${sourceX_mod.toFixed(4)} | S1_W=${s1W.toFixed(4)} | s1Rendered=${s1Rendered.toFixed(4)} | floor=${s1Floor} | interOverlap=${interOverlap.toFixed(4)}`);
+
+            if (interOverlap < minOverlap) minOverlap = interOverlap;
+            if (interOverlap > maxOverlap) maxOverlap = interOverlap;
+
+            // --- Pause on transition (only if threshold is NOT armed) ---
+            const threshEl = document.getElementById('overlapThresh');
+            const thresh = parseFloat(threshEl.value) || 0;
+            if (thresh <= 0 && pauseCheckEl && pauseCheckEl.checked) {
+              paused = true;
+              this.pauseOverlay.setVisible(true);
+              this.pauseText.setText(`PAUSED — interOverlap=${interOverlap.toFixed(4)}px\nSpace or P to resume`).setVisible(true);
+              console.log(`[PAUSED TRANSITION] interOverlap=${interOverlap.toFixed(4)}`);
+            }
+          } else {
+            console.log(`[TRANSITION #${transitionCount}] → SINGLE | sourceX_mod=${sourceX_mod.toFixed(4)}`);
+          }
+        }
+
+        // --- Render sprites ---
+        if (isTwoSprite) {
+          const s1W = TILE_W - sourceX_mod;
+          const s2W = CELL_SOURCE_W - s1W;
+          const s1Rendered = s1W * SCALE;
+          const s1Floor = Math.floor(s1Rendered);
+
+          // Crop continuity check
+          if (prevS1CropW !== null) {
+            const d = s1W - prevS1CropW;
+            const expected = -(SPEED / SCALE) * (delta / 1000);
+            const deviation = Math.abs(d - expected);
+            if (deviation > 0.05) {
+              cropWDiscontinuities++;
+              console.log(`[CROP DISC #${cropWDiscontinuities}] prev=${prevS1CropW.toFixed(6)} curr=${s1W.toFixed(6)} delta=${d.toFixed(6)} expected=${expected.toFixed(6)} dev=${deviation.toFixed(6)}`);
+            }
+          }
+          prevS1CropW = s1W;
+
+          this.s1.setVisible(true).setCrop(sourceX_mod, 0, s1W, NATIVE_H);
+          this.s2.setVisible(true).setCrop(0, 0, s2W, NATIVE_H);
+          this.s2.x = DISPLAY_X + s1Floor;
+          this.seamLine.x = this.s2.x;
+          this.seamLine.setVisible(true);
+
+          const interOverlap = s1Rendered - s1Floor;
+          this.currentOverlap = interOverlap;
+          this.refS1.width = s1W * SCALE;
+          this.refS2.x = DISPLAY_X + s1W * SCALE;
+          this.refS2.width = s2W * SCALE;
+
+          // Auto-pause on overlap threshold
+          const threshEl = document.getElementById('overlapThresh');
+          const rawVal = threshEl.value;
+          const thresh = parseFloat(rawVal) || 0;
+          console.log(`[FRAME DEBUG] mode=TWO-SPRITE | threshRaw="${rawVal}" typeof=${typeof rawVal} parsed=${thresh} interOverlap=${interOverlap.toFixed(4)} paused=${paused} check=${thresh > 0 && interOverlap >= thresh && !paused}`);
+          if (thresh > 0 && interOverlap >= thresh && !paused) {
+            paused = true;
+            this.pauseOverlay.setVisible(true);
+            this.pauseText.setText(`PAUSED — overlap=${interOverlap.toFixed(4)}px >= ${thresh.toFixed(2)}px\nSpace or P to resume`).setVisible(true);
+            console.log(`[PAUSED THRESHOLD] interOverlap=${interOverlap.toFixed(4)} >= ${thresh}`);
+          }
+
+          this.modeText.setText(`S1_W=${s1W.toFixed(4)} → ${s1Rendered.toFixed(4)}px → floor=${s1Floor}`);
+          this.detailText.setText(`S2_W=${s2W.toFixed(4)} → ${(s2W * SCALE).toFixed(4)}px | seam at x=${this.s2.x.toFixed(1)}`);
+          this.overlapText.setText(`interOverlap=${interOverlap.toFixed(4)}px | min=${minOverlap.toFixed(4)} max=${maxOverlap.toFixed(4)}`);
+        } else {
+          console.log(`[FRAME DEBUG] mode=SINGLE | srcX=${sourceX_mod.toFixed(4)} < threshold=${SPLIT_THRESHOLD.toFixed(4)}`);
+          this.s1.setVisible(true).setCrop(sourceX_mod, 0, CELL_SOURCE_W, NATIVE_H);
+          this.s2.setVisible(false);
+          this.seamLine.setVisible(false);
+          this.refS1.width = 48;
+          this.refS2.x = DISPLAY_X + 48;
+          this.refS2.width = 0;
+          prevS1CropW = null;
+          this.currentOverlap = 0;
+
+          this.modeText.setText(`Full 48px cell from one sprite`);
+          this.detailText.setText(`No seam in SINGLE mode`);
+          this.overlapText.setText(``);
+        }
+
+        this.infoText.setText(`offset=${this.offset.toFixed(1)}px | srcX_mod=${sourceX_mod.toFixed(1)} | cycle ${(this.offset % CYCLE_PX).toFixed(1)}/${CYCLE_PX.toFixed(1)}px`);
+
+        if (time - this.lastSampleTime >= this.sampleInterval) {
+          this.lastSampleTime = time;
+          console.log(`[SAMPLE] t=${(time / 1000).toFixed(1)}s | srcX=${sourceX_mod.toFixed(4)} | mode=${currentMode}`);
+        }
+      }
+    }
+
+    new Phaser.Game({
+      type: Phaser.AUTO,
+      parent: 'game',
+      width: 940,
+      height: 180,
+      backgroundColor: '#0d0d1a',
+      scene: ScrollScene,
+      antialias: false,
+      pixelArt: true,
+      banner: false,
+    });
+  </script>
+</body>
+</html>

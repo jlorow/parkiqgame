@@ -313,13 +313,13 @@ export const puzzles: Puzzle[] = [
   },
 ];
 
-// ── BONUS PUZZLE (Dual-Train Scissor Trap) ────────────────────────────────
+// ── BONUS PUZZLE (Truck — "Impossible Escape" S-Curve) ────────────────────
 //
-// Outside the 15-puzzle daily rotation. Tier 2 speed/gap from the verified
-// table (45px/s, 4‑unit gap) — first encounter difficulty for the scissor
-// mechanic, with ~3.2× safety margin (T_open = 4.27s vs T_sprint = 1.33s).
-//
-// Trains occupy rows 3–4 (track 1 → right, track 2 → left). Row 0 exit.
+// Outside the 15-puzzle daily rotation. Player drives a longer vehicle
+// (36×96 collision, 1.5× visual height) through an S-curve around two parked
+// sedans. No reverse required per the solvability proof — but the longer body
+// and tighter clearances make the multi-point steering genuinely different
+// from existing puzzles. Proven solvable via walkthrough in Phase 1 audit.
 // ────────────────────────────────────────────────────────────────────────────
 
 export const bonusPuzzle: Puzzle = {
@@ -327,21 +327,21 @@ export const bonusPuzzle: Puzzle = {
   type: 'parallel',
   theme: 'underground',
   difficulty: 5,
-  question: 'Cross both tracks without getting hit!',
+  question: 'Thread the truck through the alley!',
   environment: 'garage',
   playerCar: { col: 2, row: 5, angle: 0 },
-  obstacles: [],
-  trains: [
-    { row: 3, direction: 'right', speed: 34, gapUnits: 3, gapPx: 144 },
-    { row: 4, direction: 'left',  speed: 34, gapUnits: 3, gapPx: 144 },
+  playerVehicle: 'semitruck',
+  obstacles: [
+    { type: 'sedan', col: 2, row: 2, angle: 0 },
+    { type: 'sedan', col: 1, row: 3, angle: 0 },
   ],
   exitZone: { col: 2, row: 0, direction: 'top' },
   escapeSteps: [
-    { step: 1, description: 'Watch both tracks — the gaps scissor past each other.' },
-    { step: 2, description: 'Wait for both gaps to align vertically, then drive through.' },
-    { step: 3, description: 'Continue straight to the exit at the top.' },
+    { step: 1, description: 'Drive up to just below the first sedan.' },
+    { step: 2, description: 'Steer right and go around the parked cars on the open right side.' },
+    { step: 3, description: 'Head back toward the center and drive straight to the exit.' },
   ],
-  expertTip: 'Both trains move at the same speed. The gaps overlap roughly twice per cycle — time your cross.',
+  expertTip: 'The truck is longer — be patient with the turn. You have room on the right side of both sedans.',
 };
 
 /**

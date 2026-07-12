@@ -17,6 +17,8 @@ export interface CarConfig {
   type: 'player' | 'obstacle';
   /** Optional specific obstacle variant (1-5); random if omitted */
   obstacleVariant?: number;
+  /** Override the default player texture (e.g. 'car-limo' for the limousine) */
+  textureKey?: string;
 }
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -38,7 +40,7 @@ export function createCarSprite(
   let key: string;
 
   if (config.type === 'player') {
-    key = TEX_PLAYER;
+    key = config.textureKey ?? TEX_PLAYER;
   } else {
     const v = config.obstacleVariant ?? Phaser.Math.Between(1, 5);
     key = `car-obstacle-${v}`;

@@ -115,6 +115,19 @@ const ROTATION_SPEED = 90;
 const CAR_W = 36;
 const CAR_H = 64;
 
+// ── Truck (long vehicle) collision & visual constants ────────────────
+// Triggered by playerVehicle: 'truck' in puzzle data.
+// Collision box: same width (fits lane), 1.5× height.
+// Visual: existing car sprite stretched vertically + trailer overlay.
+// ─────────────────────────────────────────────────────────────────────
+
+const LARGE_CAR_W = 36;
+const LARGE_CAR_H = 96;
+/** Height multiplier vs sedan for the truck visual sprite scale */
+const TRUCK_VISUAL_SCALE_Y = 1.5;
+/** Scale factor for the Trailer.svg sprite (×200×981 loaded, target ~106px visual height) */
+const TRAILER_VISUAL_SCALE = 0.122;
+
 // Visual display dimensions at CAR_VISUAL_SCALE (container-local)
 const VISUAL_W = 200 * CAR_VISUAL_SCALE;
 const VISUAL_H = 400 * CAR_VISUAL_SCALE * COUNTER_SCALE_Y;
@@ -145,6 +158,15 @@ export class PuzzleScene extends Phaser.Scene {
   private spawnX = 0;
   private spawnY = 0;
   private spawnAngle = 0;
+
+  /** Active collision dimensions — may differ for truck puzzles */
+  private activeCarW = CAR_W;
+  private activeCarH = CAR_H;
+  /** Active visual dimensions for rotation-aware clamp */
+  private activeVisW = VISUAL_W;
+  private activeVisH = VISUAL_H;
+  /** Truck trailer overlay graphics (null for sedan puzzles) */
+  private truckTrailerGfx: Phaser.GameObjects.Graphics | null = null;
 
   /** Player car — baked texture image inside the parking container */
   private playerCarImage!: Phaser.GameObjects.Image;
@@ -263,6 +285,8 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('car-obstacle-3', 'assets/sprites/cars/Car-obstacle-03.svg', { width: 200, height: 400 });
     this.load.svg('car-obstacle-4', 'assets/sprites/cars/Car-obstacle-04.svg', { width: 200, height: 400 });
     this.load.svg('car-obstacle-5', 'assets/sprites/cars/Car-obstacle-05.svg', { width: 200, height: 400 });
+    this.load.svg('car-limo', 'assets/sprites/cars/Limousine.svg', { width: 200, height: 605 });
+    this.load.svg('car-trailer', 'assets/sprites/cars/Trailer.svg', { width: 200, height: 981 });
 
     // ── Road tile SVGs (full 288×288 grid surface per theme) ──────
     this.load.svg('road-street',       'assets/sprites/roads/Road-Street.svg',       { width: 780, height: 780 });
@@ -743,6 +767,27 @@ export class PuzzleScene extends Phaser.Scene {
     this.carY = this.spawnY;
     this.carAngle = this.spawnAngle;
 
+    // Set active dimensions based on vehicle type
+    // All long vehicles (truck/limo/semitruck) share 36×96 collision.
+    if (this.puzzle.playerVehicle === 'truck' || this.puzzle.playerVehicle === 'limo' || this.puzzle.playerVehicle === 'semitruck') {
+      this.activeCarW = LARGE_CAR_W;
+      this.activeCarH = LARGE_CAR_H;
+      this.activeVisW = VISUAL_W;
+      // Each unique-asset vehicle has its own native height
+      if (this.puzzle.playerVehicle === 'limo') {
+        this.activeVisH = 605 * CAR_VISUAL_SCALE * COUNTER_SCALE_Y;
+      } else if (this.puzzle.playerVehicle === 'semitruck') {
+        this.activeVisH = 981 * TRAILER_VISUAL_SCALE * COUNTER_SCALE_Y;
+      } else {
+        this.activeVisH = VISUAL_H * TRUCK_VISUAL_SCALE_Y; // 70.6 × 1.5 ≈ 106
+      }
+    } else {
+      this.activeCarW = CAR_W;
+      this.activeCarH = CAR_H;
+      this.activeVisW = VISUAL_W;
+      this.activeVisH = VISUAL_H;
+    }
+
     const container = this.add.container(CONTAINER_X, CONTAINER_Y);
     container.setScale(SCALE_X, SCALE_Y);
     container.setDepth(5);
@@ -831,16 +876,37 @@ export class PuzzleScene extends Phaser.Scene {
       container.add(obsImg);
     }
 
+    const vehicle = this.puzzle.playerVehicle ?? 'sedan';
     const playerCar = createCarSprite(this, {
       x: pc.col + CONTAINER_OFFSET_X,
       y: pc.row + CONTAINER_OFFSET_Y,
       angle: pc.angle,
       type: 'player',
+      textureKey: vehicle === 'limo' ? 'car-limo' : vehicle === 'semitruck' ? 'car-trailer' : undefined,
     });
+    const isLong = vehicle === 'truck' || vehicle === 'limo' || vehicle === 'semitruck';
     playerCar.setDepth(50);
-    playerCar.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
+    if (isLong) {
+      if (vehicle === 'limo') {
+        playerCar.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y); // limo loaded at 200×605, scale 0.20×0.882
+      } else if (vehicle === 'semitruck') {
+        playerCar.setScale(TRAILER_VISUAL_SCALE, TRAILER_VISUAL_SCALE * COUNTER_SCALE_Y); // Trailer.svg loaded at 200×981, scale 0.122×0.882
+      } else {
+        playerCar.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * TRUCK_VISUAL_SCALE_Y * COUNTER_SCALE_Y);
+      }
+    } else {
+      playerCar.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
+    }
     container.add(playerCar);
     this.playerCarImage = playerCar;
+
+    // ── Trailer overlay (graphics-primitive, 'truck' variant only) ──
+    if (vehicle === 'truck' && !this.truckTrailerGfx) {
+      const trailerGfx = this.add.graphics();
+      trailerGfx.setDepth(49);
+      container.add(trailerGfx);
+      this.truckTrailerGfx = trailerGfx;
+    }
 
     // ── Train tracks (bonus level only) ───────────────────────────
     if (this.puzzle.trains && this.puzzle.trains.length > 0) {
@@ -973,12 +1039,12 @@ export class PuzzleScene extends Phaser.Scene {
     const rc = Phaser.Math.DegToRad(this.carAngle);
     const sc = Math.abs(Math.cos(rc));
     const ss = Math.abs(Math.sin(rc));
-    const halfVW = VISUAL_W / 2;
-    const halfVH = VISUAL_H / 2;
+    const halfVW = this.activeVisW / 2;
+    const halfVH = this.activeVisH / 2;
     const halfEffW = halfVW * sc + halfVH * ss;
     const halfEffH = halfVW * ss + halfVH * sc;
-    const colHalf = CAR_W / 2;
-    const rowHalf = CAR_H / 2;
+    const colHalf = this.activeCarW / 2;
+    const rowHalf = this.activeCarH / 2;
     candidateX = Math.max(
       (COL0_CENTER - colHalf) + halfEffW,
       Math.min(candidateX, (COL5_CENTER + colHalf) - halfEffW),
@@ -1021,6 +1087,11 @@ export class PuzzleScene extends Phaser.Scene {
     // ── 7. Apply to image ──────────────────────────────────
     this.playerCarImage.setPosition(this.carX, this.carY);
     this.playerCarImage.setAngle(this.carAngle);
+
+    // ── 7b. Trailer overlay — update position behind car (graphics-primitive, 'truck' only) ────
+    if (this.truckTrailerGfx) {
+      this.updateTruckTrailer();
+    }
 
     // ── 8. Exit zone check — win flow ──────────────────────
     if (!this.exited && !this.skipExitCheck && this.checkExitReached(this.carX, this.carY)) {
@@ -1096,7 +1167,15 @@ export class PuzzleScene extends Phaser.Scene {
 
   private loadNextPuzzleInPlace(nextIndex: number): void {
     this.ready = false;
+
+    // Destroy trailer overlay BEFORE container (prevents double-destroy)
+    if (this.truckTrailerGfx) {
+      this.truckTrailerGfx.destroy();
+      this.truckTrailerGfx = null;
+    }
+
     // Destroy old parking container (grid + obstacles + player car)
+    // This also destroys any remaining children (train sprites, etc.)
     this.parkingContainer.destroy(true);
 
     // Reset bonus-level state
@@ -1136,10 +1215,10 @@ export class PuzzleScene extends Phaser.Scene {
     if (DEBUG_DISABLE_COLLISIONS) return false;
 
     const playerRect = new Phaser.Geom.Rectangle(
-      cx - CAR_W / 2,
-      cy - CAR_H / 2,
-      CAR_W,
-      CAR_H,
+      cx - this.activeCarW / 2,
+      cy - this.activeCarH / 2,
+      this.activeCarW,
+      this.activeCarH,
     );
 
     for (const obs of this.puzzle.obstacles) {
@@ -1161,10 +1240,10 @@ export class PuzzleScene extends Phaser.Scene {
 
   private checkExitReached(cx: number, cy: number): boolean {
     const carRect = new Phaser.Geom.Rectangle(
-      cx - CAR_W / 2,
-      cy - CAR_H / 2,
-      CAR_W,
-      CAR_H,
+      cx - this.activeCarW / 2,
+      cy - this.activeCarH / 2,
+      this.activeCarW,
+      this.activeCarH,
     );
     const ez = this.puzzle.exitZone;
     const exitPixelX = (ez.col + CONTAINER_OFFSET_X) * UNIT_PX - 48;
@@ -1220,6 +1299,78 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // ──────────────────────────────────────────────────────────
+  //  Truck trailer overlay — rotated rectangle behind car
+  // ──────────────────────────────────────────────────────────
+
+  /** Draw the truck trailer as a filled rotated rectangle behind the player car */
+  private updateTruckTrailer(): void {
+    const gfx = this.truckTrailerGfx;
+    if (!gfx) return;
+
+    const rad = Phaser.Math.DegToRad(this.carAngle);
+    const cosA = Math.cos(rad);
+    const sinA = Math.sin(rad);
+
+    const hw = LARGE_CAR_W / 2;
+    const trailerLen = 40;
+    // Trailer starts at car's rear bumper (LARGE_CAR_H/2 from center, backward direction)
+    const y0 = LARGE_CAR_H / 2;
+    const y1 = y0 + trailerLen;
+
+    // 4 corners in car-local coords (car facing up = 0°)
+    const corners = [
+      { x: -hw, y: y0 },
+      { x:  hw, y: y0 },
+      { x:  hw, y: y1 },
+      { x: -hw, y: y1 },
+    ];
+
+    // Rotate and translate to world position
+    const pts = corners.map((c) => ({
+      x: this.carX + c.x * cosA - c.y * sinA,
+      y: this.carY + c.x * sinA + c.y * cosA,
+    }));
+
+    gfx.clear();
+    // Trailer body fill
+    gfx.fillStyle(0x4a5568, 0.9);
+    gfx.beginPath();
+    gfx.moveTo(pts[0]!.x, pts[0]!.y);
+    for (let i = 1; i < pts.length; i++) {
+      gfx.lineTo(pts[i]!.x, pts[i]!.y);
+    }
+    gfx.closePath();
+    gfx.fillPath();
+
+    // Trailer outline
+    gfx.lineStyle(1, 0x374151, 1.0);
+    gfx.beginPath();
+    gfx.moveTo(pts[0]!.x, pts[0]!.y);
+    for (let i = 1; i < pts.length; i++) {
+      gfx.lineTo(pts[i]!.x, pts[i]!.y);
+    }
+    gfx.closePath();
+    gfx.strokePath();
+
+    // Small hitch line connecting car to trailer
+    gfx.lineStyle(2, 0x6b7280, 0.7);
+    const hitchY0 = LARGE_CAR_H / 2 - 2;
+    const hitchY1 = LARGE_CAR_H / 2 + 2;
+    const h0 = {
+      x: this.carX + 0 * cosA - hitchY0 * sinA,
+      y: this.carY + 0 * sinA + hitchY0 * cosA,
+    };
+    const h1 = {
+      x: this.carX + 0 * cosA - hitchY1 * sinA,
+      y: this.carY + 0 * sinA + hitchY1 * cosA,
+    };
+    gfx.beginPath();
+    gfx.moveTo(h0.x, h0.y);
+    gfx.lineTo(h1.x, h1.y);
+    gfx.strokePath();
+  }
+
+  // ──────────────────────────────────────────────────────────
   //  Bonus Level — Dual-Train Scissor Trap
   // ──────────────────────────────────────────────────────────
 
@@ -1242,6 +1393,9 @@ export class PuzzleScene extends Phaser.Scene {
       this.trainOffsets[1] = 2 * UNIT_PX;
     }
 
+    // Reset truck-specific state for fresh puzzle load
+    this.truckTrailerGfx = null;
+
     // Reuse normal rendering pipeline with bonus puzzle data
     this.renderEnvironment();
     this.renderHUD();
@@ -1252,10 +1406,12 @@ export class PuzzleScene extends Phaser.Scene {
     this.startElapsedTimer();
     this.ready = true;
 
-    // Start looping train movement sound
-    try {
-      this.sound.play('train', { loop: true, volume: 0.4 });
-    } catch { /* audio locked — will play on first pointerdown */ }
+    // Start looping train movement sound (only for train-based bonus levels)
+    if (this.puzzle.trains && this.puzzle.trains.length > 0) {
+      try {
+        this.sound.play('train', { loop: true, volume: 0.4 });
+      } catch { /* audio locked — will play on first pointerdown */ }
+    }
   }
 
   /** Create train track Graphics layers inside the parking container */
@@ -1443,10 +1599,10 @@ export class PuzzleScene extends Phaser.Scene {
     if (this.carY >= ROW2_LO && this.carY <= ROW2_HI) return false;
 
     const playerRect = new Phaser.Geom.Rectangle(
-      this.carX - CAR_W / 2,
-      this.carY - CAR_H / 2,
-      CAR_W,
-      CAR_H,
+      this.carX - this.activeCarW / 2,
+      this.carY - this.activeCarH / 2,
+      this.activeCarW,
+      this.activeCarH,
     );
 
     const TRAIN_COLLISION_H = 32;
@@ -1495,6 +1651,9 @@ export class PuzzleScene extends Phaser.Scene {
     // Prevent same-frame exit check — the car was just reset due to collision,
     // so we must not also trigger a win in the same update() pass.
     this.skipExitCheck = true;
+
+    // Hide graphics trailer overlay — it would otherwise linger at the crash position
+    if (this.truckTrailerGfx) this.truckTrailerGfx.clear();
 
     // Crash feedback: overlay + camera shake + movement pause
     this.crashPausedUntil = this.time.now + 500;
