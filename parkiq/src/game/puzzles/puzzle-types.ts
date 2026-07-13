@@ -32,16 +32,21 @@ export type ObstacleType = 'sedan' | 'suv' | 'pillar' | 'wall';
 
 /**
  * A static obstacle in the parking scene.
- * Position uses grid-space col/row coordinates.
+ * Position can use either grid-space col/row or freeform pixel x/y.
+ * At load time, convertGridToPixel() normalises all to x/y internally.
  */
 export type Obstacle = {
   type: ObstacleType;
-  /** Grid column (0–5, left to right) */
+  /** Grid column (0–5, left to right) — legacy, converted to x at load */
   col: number;
-  /** Grid row (0–5, top to bottom) */
+  /** Grid row (0–5, top to bottom) — legacy, converted to y at load */
   row: number;
   /** Rotation angle in degrees (0 = facing up) */
   angle: number;
+  /** Freeform pixel x (0–288, left to right) — authored directly for new puzzles */
+  x?: number;
+  /** Freeform pixel y (0–288, top to bottom) — authored directly for new puzzles */
+  y?: number;
 };
 
 /** One step in the escape sequence (shown in expertTip flow) */
@@ -50,11 +55,22 @@ export type EscapeStep = {
   description: string;
 };
 
-/** Exit zone — grid position and which edge the player exits through */
+/** Exit zone — grid position and which edge the player exits through.
+ *  Legacy puzzles use col/row/direction; freeform puzzles use x/y/angle/parkingType. */
 export type ExitZone = {
   col: number;
   row: number;
+  /** Legacy exit direction — still used by 15 existing puzzles' rendering */
   direction: 'top' | 'bottom' | 'left' | 'right';
+  /** Freeform pixel x (0–288) */
+  x?: number;
+  /** Freeform pixel y (0–288) */
+  y?: number;
+  /** Exit angle in degrees for the angled parking-type check */
+  angle?: number;
+  /** Parking type for tight position+angle win check.
+   *  When set on ExitZone, overrides the puzzle-level parkingType. */
+  parkingType?: 'parallel' | 'perpendicular' | 'angled';
 };
 
 /**
@@ -74,7 +90,15 @@ export type Puzzle = {
   /** Environment discriminator used by ParkingGrid */
   environment: PuzzleEnvironment;
   /** Player car position and orientation in grid units */
-  playerCar: { col: number; row: number; angle: number };
+  playerCar: {
+    col: number;
+    row: number;
+    angle: number;
+    /** Freeform pixel x (0–288) */
+    x?: number;
+    /** Freeform pixel y (0–288) */
+    y?: number;
+  };
   /** Vehicle type — 'sedan' (default), 'truck', 'limo' (Limousine.svg), or 'semitruck' (Trailer.svg).
    *  'truck' | 'limo' | 'semitruck' all use 36×96 collision box. */
   playerVehicle?: 'sedan' | 'truck' | 'limo' | 'semitruck';
