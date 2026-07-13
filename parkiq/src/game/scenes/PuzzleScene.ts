@@ -115,6 +115,29 @@ const ROTATION_SPEED = 90;
 const CAR_W = 36;
 const CAR_H = 64;
 
+// ── Rotated AABB lookup tables (derived from corrected formula) ───────
+// Keyed by angle bucket. Values are effective AABB {w, h} in pixels.
+// Sedan/suv base 36×64:
+//   0°: 45×69   15°: 58×73   30°: 68×74   45°: 73×73
+//  60°: 74×68   75°: 73×58   90°: 69×45
+const SEDAN_BOX: Record<number, { w: number; h: number }> = {
+  0:  { w: 45, h: 69 },
+  15: { w: 58, h: 73 },
+  30: { w: 68, h: 74 },
+  45: { w: 73, h: 73 },
+  60: { w: 74, h: 68 },
+  75: { w: 73, h: 58 },
+  90: { w: 69, h: 45 },
+};
+
+// Large vehicle (truck/limo/semitruck) base 36×96:
+//   0°: 49×100  45°: 99×99  90°: 100×49
+const LARGE_BOX: Record<number, { w: number; h: number }> = {
+  0:  { w: 49, h: 100 },
+  45: { w: 99, h: 99 },
+  90: { w: 100, h: 49 },
+};
+
 // ── Truck (long vehicle) collision & visual constants ────────────────
 // Triggered by playerVehicle: 'truck' in puzzle data.
 // Collision box: same width (fits lane), 1.5× height.
@@ -1318,25 +1341,62 @@ export class PuzzleScene extends Phaser.Scene {
   //  Collision Detection (container-local coordinates)
   // ──────────────────────────────────────────────────────────
 
+  /** Determines which lookup table to use based on vehicle/obstacle type */
+  private getVehicleTable(type: string): 'sedan' | 'large' {
+    if (type === 'truck' || type === 'limo' || type === 'semitruck') {
+      return 'large';
+    }
+    return 'sedan';
+  }
+
+  /**
+   * Returns the effective rotated AABB size for the given angle.
+   * Snaps to nearest 15° bucket (sedan table) or nearest of {0,45,90} (large table).
+   */
+  private getRotatedBox(table: 'sedan' | 'large', angleDeg: number): { w: number; h: number } {
+    // Rotated AABB is symmetric every 90° (|cos|, |sin| have 90° period)
+    const reduced = ((angleDeg % 90) + 90) % 90;
+
+    if (table === 'sedan') {
+      // 7 buckets: 0/15/30/45/60/75/90 — snap to nearest
+      const bucket = Math.round(reduced / 15) * 15;
+      return SEDAN_BOX[bucket] ?? SEDAN_BOX[0]!;
+    } else {
+      // 3 buckets: 0/45/90
+      const bucket = reduced < 22.5 ? 0 : reduced < 67.5 ? 45 : 90;
+      return LARGE_BOX[bucket] ?? LARGE_BOX[0]!;
+    }
+  }
+
   private checkCollision(cx: number, cy: number): boolean {
     if (DEBUG_DISABLE_COLLISIONS) return false;
 
+    // Player box — lookup table based on current angle + vehicle type
+    const playerTable = this.getVehicleTable(this.puzzle.playerVehicle ?? 'sedan');
+    const playerBox = this.getRotatedBox(playerTable, this.carAngle);
     const playerRect = new Phaser.Geom.Rectangle(
-      cx - this.activeCarW / 2,
-      cy - this.activeCarH / 2,
-      this.activeCarW,
-      this.activeCarH,
+      cx - playerBox.w / 2,
+      cy - playerBox.h / 2,
+      playerBox.w,
+      playerBox.h,
     );
 
     for (const obs of this.puzzle.obstacles) {
-      if (obs.type === 'pillar' || obs.type === 'wall') continue;
-      const ox = (obs.col + CONTAINER_OFFSET_X) * UNIT_PX;
-      const oy = (obs.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+      // 'pillar' is visual-only — no collision footprint
+      if (obs.type === 'pillar') continue;
+
+      // Use pixel x,y if available (from convertGridToPixel), fall back to grid
+      const ox = obs.x ?? (obs.col + CONTAINER_OFFSET_X) * UNIT_PX;
+      const oy = obs.y ?? (obs.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+
+      // Per-obstacle table selection — each obstacle's type determines its box
+      const obsTable = this.getVehicleTable(obs.type);
+      const obsBox = this.getRotatedBox(obsTable, obs.angle);
       const obsRect = new Phaser.Geom.Rectangle(
-        ox - CAR_W / 2,
-        oy - CAR_H / 2,
-        CAR_W,
-        CAR_H,
+        ox - obsBox.w / 2,
+        oy - obsBox.h / 2,
+        obsBox.w,
+        obsBox.h,
       );
       if (Phaser.Geom.Rectangle.Overlaps(playerRect, obsRect)) {
         return true;
