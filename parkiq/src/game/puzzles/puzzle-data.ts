@@ -25,6 +25,7 @@ export const puzzles: Puzzle[] = [
       { type: 'suv',   col: 3, row: 1, angle: 0 },
     ],
     exitZone: { col: 2, row: 0, direction: 'top' },
+    backgroundImage: 'assets/sprites/backgrounds/puzzle1-bg.svg',
     parkingType: 'parallel',
     parkingAngle: 0,
     escapeSteps: [

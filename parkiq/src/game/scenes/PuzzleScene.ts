@@ -311,6 +311,9 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('car-limo', 'assets/sprites/cars/Limousine.svg', { width: 200, height: 605 });
     this.load.svg('car-trailer', 'assets/sprites/cars/Trailer.svg', { width: 200, height: 981 });
 
+    // ── Background images (per-puzzle lot surfaces) ───────────────
+    this.load.svg('bg_1', 'assets/sprites/backgrounds/puzzle1-bg.svg', { width: 288, height: 288 });
+
     this.load.audio('train', 'assets/sounds/train.mp3');
 
   }
