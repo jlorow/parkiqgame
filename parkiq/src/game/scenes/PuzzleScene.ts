@@ -311,19 +311,8 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('car-limo', 'assets/sprites/cars/Limousine.svg', { width: 200, height: 605 });
     this.load.svg('car-trailer', 'assets/sprites/cars/Trailer.svg', { width: 200, height: 981 });
 
-    // ── Road tile SVGs (full 288×288 grid surface per theme) ──────
-    this.load.svg('road-street',       'assets/sprites/roads/Road-Street.svg',       { width: 780, height: 780 });
-    this.load.svg('road-garage',       'assets/sprites/roads/Road-Garage.svg',       { width: 780, height: 780 });
-    this.load.svg('road-underground',  'assets/sprites/roads/Road-Underground.svg',  { width: 780, height: 780 });
-    this.load.svg('road-rooftop',      'assets/sprites/roads/Road-Rooftop.svg',      { width: 780, height: 780 });
-
     this.load.audio('train', 'assets/sounds/train.mp3');
 
-    // ── Prop SVGs ─────────────────────────────────────────────────
-    this.load.svg('prop-tree',       'assets/sprites/props/Prop-Tree.svg',       { width: 64, height: 64 });
-    this.load.svg('prop-shrub-1',    'assets/sprites/props/Prop-Shrub-1.svg',    { width: 48, height: 48 });
-    this.load.svg('prop-shrub-2',    'assets/sprites/props/Prop-Shrub-1.svg',    { width: 48, height: 48 });
-    this.load.svg('prop-lamppost',   'assets/sprites/props/Prop-Tree.svg',       { width: 32, height: 128 });
   }
 
   create(): void {
