@@ -38,9 +38,9 @@ export type ObstacleType = 'sedan' | 'suv' | 'pillar' | 'wall';
 export type Obstacle = {
   type: ObstacleType;
   /** Grid column (0–5, left to right) — legacy, converted to x at load */
-  col: number;
+  col?: number;
   /** Grid row (0–5, top to bottom) — legacy, converted to y at load */
-  row: number;
+  row?: number;
   /** Rotation angle in degrees (0 = facing up) */
   angle: number;
   /** Freeform pixel x (0–288, left to right) — authored directly for new puzzles */
@@ -58,10 +58,12 @@ export type EscapeStep = {
 /** Exit zone — grid position and which edge the player exits through.
  *  Legacy puzzles use col/row/direction; freeform puzzles use x/y/angle/parkingType. */
 export type ExitZone = {
-  col: number;
-  row: number;
-  /** Legacy exit direction — still used by 15 existing puzzles' rendering */
-  direction: 'top' | 'bottom' | 'left' | 'right';
+  /** Grid column (0–5) — legacy, converted to x at load */
+  col?: number;
+  /** Grid row (0–5) — legacy, converted to y at load */
+  row?: number;
+  /** Legacy exit direction — still used by grid-based puzzles' rendering */
+  direction?: 'top' | 'bottom' | 'left' | 'right';
   /** Freeform pixel x (0–288) */
   x?: number;
   /** Freeform pixel y (0–288) */
@@ -89,10 +91,10 @@ export type Puzzle = {
   question: string;
   /** Environment discriminator used by ParkingGrid */
   environment: PuzzleEnvironment;
-  /** Player car position and orientation in grid units */
+  /** Player car position and orientation — grid col/row for legacy puzzles, freeform x/y for new puzzles */
   playerCar: {
-    col: number;
-    row: number;
+    col?: number;
+    row?: number;
     angle: number;
     /** Freeform pixel x (0–288) */
     x?: number;

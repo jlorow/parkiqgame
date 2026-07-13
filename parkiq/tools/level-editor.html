@@ -76,7 +76,7 @@
       max-width: 1100px;
       padding: 0 24px 40px;
       display: grid;
-      grid-template-columns: 288px 1fr;
+        grid-template-columns: 300px 1fr;
       gap: 24px;
       align-items: start;
     }
@@ -90,18 +90,18 @@
     }
     .canvas-wrapper {
       position: relative;
-      width: 288px;
-      height: 288px;
+      width: 300px;
+      height: 649px;
       border: 1px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden;
       cursor: crosshair;
-      background: #1a1a1a;
+      background: #111113;
     }
     .canvas-wrapper canvas {
       display: block;
-      width: 432px;
-      height: 432px;
+      width: 100%;
+      height: 100%;
       image-rendering: auto;
     }
     .canvas-label {
@@ -435,13 +435,8 @@
         align-items: center;
       }
       .canvas-wrapper {
-        width: 288px;
-        height: 288px;
-      }
-      .canvas-wrapper canvas {
-        width: 288px;
-        height: 288px;
-        image-rendering: pixelated;
+        width: 300px;
+        height: 649px;
       }
     }
   </style>
@@ -457,9 +452,9 @@
     <!-- ── Canvas Column ── -->
     <div class="canvas-column">
       <div class="canvas-wrapper">
-        <canvas id="editorCanvas" width="288" height="288"></canvas>
+        <canvas id="editorCanvas" width="390" height="844"></canvas>
       </div>
-      <span class="canvas-label">288 × 288 px &middot; click to place</span>
+      <span class="canvas-label">288 × 288 logical · click to place</span>
     </div>
 
     <!-- ── Right Panel ── -->
@@ -734,17 +729,34 @@
     const W = 288;
     const H = 288;
 
+    // ── Phone screen layout constants (mirror PuzzleScene.ts) ──
+    const PW = 390;
+    const PH = 844;
+    const SCALE_X = 1.35;
+    const SCALE_Y = 1.53;
+    const CONTAINER_X = 1;
+    const CONTAINER_Y = -30;
+    const TITLE_BAR_H = 28;
+
     // ─────────────────────────────────────────────────────────────
     //  Rendering
     // ─────────────────────────────────────────────────────────────
     function render() {
-      ctx.clearRect(0, 0, W, H);
+      ctx.clearRect(0, 0, PW, PH);
 
-      // Background
+      // ── Phone screen background ──
+      ctx.fillStyle = '#111113';
+      ctx.fillRect(0, 0, PW, PH);
+
+      // ── Grid area (drawn with real non-uniform scale transform) ──
+      ctx.save();
+      ctx.translate(CONTAINER_X, CONTAINER_Y);
+      ctx.scale(SCALE_X, SCALE_Y);
+
+      // Grid content (288×288 logical space)
       if (bgImage) {
         ctx.drawImage(bgImage, 0, 0, W, H);
       } else {
-        // Gray background with grid overlay
         ctx.fillStyle = '#1a1a1a';
         ctx.fillRect(0, 0, W, H);
         ctx.strokeStyle = 'rgba(255,255,255,0.06)';
@@ -763,22 +775,85 @@
         }
       }
 
-      // Draw markers
+      // Markers (in 288×288 logical space, scaled by transform)
       for (const m of markers) {
         drawMarker(m);
       }
 
-      // Highlight selected
+      ctx.restore();
+
+      // ── Selection highlight (drawn in phone space for clean circle) ──
       if (selectedId !== null) {
         const sel = markers.find(m => m.id === selectedId);
         if (sel) {
+          const sx = CONTAINER_X + sel.x * SCALE_X;
+          const sy = CONTAINER_Y + sel.y * SCALE_Y;
           ctx.strokeStyle = '#FFD700';
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(sel.x, sel.y, 10, 0, Math.PI * 2);
+          ctx.arc(sx, sy, 12, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
+
+      // ── Title bar (drawn over grid, matching real game header) ──
+      ctx.fillStyle = '#1C1C1E';
+      ctx.fillRect(0, 0, PW, TITLE_BAR_H);
+      ctx.strokeStyle = '#333338';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, TITLE_BAR_H + 0.5);
+      ctx.lineTo(PW, TITLE_BAR_H + 0.5);
+      ctx.stroke();
+      ctx.fillStyle = '#8E8E98';
+      ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('PARKIQ', PW / 2, TITLE_BAR_H / 2);
+
+      // ── Hint / question text area (centered at OBJECTIVE_Y=500) ──
+      const hintH = 70;
+      const hintTop = 500 - hintH / 2;
+      ctx.fillStyle = '#1C1C1E';
+      ctx.strokeStyle = '#333338';
+      ctx.lineWidth = 1;
+      ctx.fillRect(16, hintTop, PW - 32, hintH);
+      ctx.strokeRect(16, hintTop, PW - 32, hintH);
+      ctx.fillStyle = '#63636E';
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Hint / Question Text', PW / 2, 500);
+
+      // ── D-pad control area (centered at CONTROLS_CENTER_Y=690) ──
+      const dpadH = 268;
+      const dpadTop = 690 - dpadH / 2;
+      ctx.fillStyle = '#1C1C1E';
+      ctx.strokeStyle = '#333338';
+      ctx.lineWidth = 1;
+      ctx.fillRect(16, dpadTop, PW - 32, dpadH);
+      ctx.strokeRect(16, dpadTop, PW - 32, dpadH);
+      // D-pad visual: cross + circle
+      const dcx = PW / 2;
+      const dcy = 690;
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(dcx - 40, dcy);
+      ctx.lineTo(dcx + 40, dcy);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(dcx, dcy - 40);
+      ctx.lineTo(dcx, dcy + 40);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(dcx, dcy, 45, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#63636E';
+      ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('D-Pad Controls', dcx, dcy + 60);
     }
 
     function getMarkerProblems(m) {
@@ -911,10 +986,12 @@
     // ─────────────────────────────────────────────────────────────
     canvas.addEventListener('click', (e) => {
       const rect = canvas.getBoundingClientRect();
-      const scaleX = W / rect.width;
-      const scaleY = H / rect.height;
-      const canvasX = (e.clientX - rect.left) * scaleX;
-      const canvasY = (e.clientY - rect.top) * scaleY;
+      // CSS pixels → phone screen coords (390×844)
+      const phoneX = (e.clientX - rect.left) / rect.width * PW;
+      const phoneY = (e.clientY - rect.top) / rect.height * PH;
+      // Phone screen → grid logical coords (288×288)
+      const canvasX = (phoneX - CONTAINER_X) / SCALE_X;
+      const canvasY = (phoneY - CONTAINER_Y) / SCALE_Y;
 
       // First, check if we're clicking an existing marker
       const hit = findMarkerAt(canvasX, canvasY);
@@ -924,7 +1001,8 @@
         return;
       }
 
-      // Place new marker of active type
+      // Only place new markers within grid bounds
+      if (canvasX < 0 || canvasX >= W || canvasY < 0 || canvasY >= H) return;
       addMarker(activeType, canvasX, canvasY);
     });
 

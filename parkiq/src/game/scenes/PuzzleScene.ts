@@ -28,6 +28,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
+const DEBUG_FORCE_PUZZLE: number | null = 16;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
@@ -437,6 +438,10 @@ export class PuzzleScene extends Phaser.Scene {
 
   private async loadAndRender(): Promise<void> {
     let { puzzleIndex } = await getProgress();
+
+    if (DEBUG_FORCE_PUZZLE !== null) {
+      puzzleIndex = DEBUG_FORCE_PUZZLE;
+    }
 
     if (DEBUG_SKIP_PUZZLE_5 && puzzleIndex === 5) {
       puzzleIndex = 6;
@@ -867,8 +872,8 @@ export class PuzzleScene extends Phaser.Scene {
   private renderParkingScene(): void {
     const pc = this.puzzle.playerCar;
 
-    this.spawnX = pc.x ?? (pc.col + CONTAINER_OFFSET_X) * UNIT_PX;
-    this.spawnY = pc.y ?? (pc.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+    this.spawnX = pc.x ?? ((pc.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+    this.spawnY = pc.y ?? ((pc.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
     this.spawnAngle = pc.angle;
     this.carX = this.spawnX;
     this.carY = this.spawnY;
@@ -923,8 +928,8 @@ export class PuzzleScene extends Phaser.Scene {
     const ez = this.puzzle.exitZone;
     const baySize = ez.parkingType ? 48 : 96;
     const halfBay = baySize / 2;
-    const bayCenterX = ez.x ?? (ez.col + CONTAINER_OFFSET_X) * UNIT_PX;
-    const bayCenterY = ez.y ?? (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+    const bayCenterX = ez.x ?? ((ez.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+    const bayCenterY = ez.y ?? ((ez.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
     const exitPixelX = bayCenterX - halfBay;
     const exitPixelY = bayCenterY - halfBay;
     const exitZoneCenterX = exitPixelX + halfBay;
@@ -998,8 +1003,8 @@ export class PuzzleScene extends Phaser.Scene {
 
       const obsImg = createObstacleCar(
         this,
-        obs.x ?? (obs.col + CONTAINER_OFFSET_X) * UNIT_PX,
-        obs.y ?? (obs.row + CONTAINER_OFFSET_Y) * UNIT_PX,
+        obs.x ?? ((obs.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX,
+        obs.y ?? ((obs.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX,
         obs.angle,
       );
       obsImg.setDepth(6);
@@ -1009,8 +1014,8 @@ export class PuzzleScene extends Phaser.Scene {
 
     const vehicle = this.puzzle.playerVehicle ?? 'sedan';
     const playerCar = createCarSprite(this, {
-      x: pc.x ?? (pc.col + CONTAINER_OFFSET_X) * UNIT_PX,
-      y: pc.y ?? (pc.row + CONTAINER_OFFSET_Y) * UNIT_PX,
+      x: pc.x ?? ((pc.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX,
+      y: pc.y ?? ((pc.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX,
       angle: pc.angle,
       type: 'player',
       textureKey: vehicle === 'limo' ? 'car-limo' : vehicle === 'semitruck' ? 'car-trailer' : undefined,
@@ -1253,13 +1258,13 @@ export class PuzzleScene extends Phaser.Scene {
         puzzleId: this.puzzle.id,
       }).catch((error: unknown) => {
         console.error('[exit] puzzleComplete failed:', error);
-        return { puzzleIndex: this.puzzle.id >= 15 ? 1 : this.puzzle.id + 1 };
+        return { puzzleIndex: this.puzzle.id >= 16 ? 1 : this.puzzle.id + 1 };
       });
       nextIndex = result.puzzleIndex;
     }
 
-    // 3. If puzzle 15 cleared — celebrate then load bonus level
-    if (this.puzzle.id === 15) {
+    // 3. If last rotation puzzle cleared — celebrate then load bonus level
+    if (this.puzzle.id === 16) {
       await this.showClearedOverlay();
       this.loadBonusLevel();
       return;
@@ -1395,8 +1400,8 @@ export class PuzzleScene extends Phaser.Scene {
       if (obs.type === 'pillar') continue;
 
       // Use pixel x,y if available (from convertGridToPixel), fall back to grid
-      const ox = obs.x ?? (obs.col + CONTAINER_OFFSET_X) * UNIT_PX;
-      const oy = obs.y ?? (obs.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+      const ox = obs.x ?? ((obs.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+      const oy = obs.y ?? ((obs.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
 
       // Per-obstacle table selection — each obstacle's type determines its box
       const obsTable = this.getVehicleTable(obs.type);
@@ -1429,8 +1434,8 @@ export class PuzzleScene extends Phaser.Scene {
       //          4) angle tolerance: |wrap(carAngle - bayAngle)| <= tol
       const halfBay = 24; // 48×48 bay
 
-      const bayX = ez.x ?? (ez.col + CONTAINER_OFFSET_X) * UNIT_PX;
-      const bayY = ez.y ?? (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+      const bayX = ez.x ?? ((ez.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+      const bayY = ez.y ?? ((ez.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
       const bayAngle = ez.angle ?? 0;
 
       // 1. Offset from bay center
@@ -1457,8 +1462,8 @@ export class PuzzleScene extends Phaser.Scene {
       // ── Legacy touch-only exit (96×96, no angle requirement) ───────────
       const halfBay = 48; // 96×96 bay
 
-      const bayX = ez.x ?? (ez.col + CONTAINER_OFFSET_X) * UNIT_PX;
-      const bayY = ez.y ?? (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+      const bayX = ez.x ?? ((ez.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+      const bayY = ez.y ?? ((ez.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
 
       const playerRect = new Phaser.Geom.Rectangle(
         cx - playerBox.w / 2,

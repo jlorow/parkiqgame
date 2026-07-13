@@ -1,12 +1,13 @@
 import type { Puzzle } from './puzzle-types';
 
 /**
- * All 15 launch puzzles for ParkIQ.
+ * All launch puzzles for ParkIQ.
  * Geometry (col/row/angle/exitZone) matches puzzle-design-doc-v2.md exactly.
  *
  * Tier 1 — Puzzles  1–5:  parallel,    street theme,      angle 0°
  * Tier 2 — Puzzles  6–10: garage,      garage/underground, angle 90°/270°
  * Tier 3 — Puzzles 11–15: reverse_bay, rooftop theme,     angle 180°
+ * Tier 4 — Puzzle    16:  parallel,    garage theme,       freeform x/y, angled exit
  */
 export const puzzles: Puzzle[] = [
   // ── TIER 1: BEGINNER (1–5) ─────────────────────────────────────────────────
@@ -316,11 +317,38 @@ export const puzzles: Puzzle[] = [
     ],
     expertTip: 'Final capstone — combines the hardest squeeze with the side-exit turn.',
   },
+
+  // ── TIER 4: FREEFORM (16+) ──────────────────────────────────────────────
+
+  {
+    id: 16,
+    type: 'parallel',
+    theme: 'garage',
+    difficulty: 3,
+    question: 'Angle out between the parked cars.',
+    environment: 'garage',
+   obstacles: [
+  { type: 'sedan', x: 214, y: 213, angle: 45 },
+  { type: 'sedan', x: 216, y: 139, angle: 45 },
+  { type: 'suv', x: 78, y: 214, angle: 45 },
+  { type: 'suv', x: 71, y: 132, angle: 45 },
+  { type: 'sedan', x: 70, y: 67, angle: 45 },
+  { type: 'sedan', x: 218, y: 73, angle: 45 },
+],
+playerCar: { x: 144, y: 244, angle: 45 },
+exitZone: { x: 143, y: 92, angle: 0, parkingType: 'parallel' },
+    escapeSteps: [
+      { step: 1, description: 'Drive straight up the centre corridor — both rows of parked cars are clear.' },
+      { step: 2, description: 'Veer slightly left to set up the approach angle.' },
+      { step: 3, description: 'Turn right and curve into the angled exit bay at the top.' },
+    ],
+    expertTip: 'Driving straight and turning right clips the right-side car — offset left first, then curve into the bay.',
+  },
 ];
 
 // ── BONUS PUZZLE (Truck — "Impossible Escape" S-Curve) ────────────────────
 //
-// Outside the 15-puzzle daily rotation. Player drives a longer vehicle
+// Outside the normal daily rotation. Player drives a longer vehicle
 // (36×96 collision, 1.5× visual height) through an S-curve around two parked
 // sedans. No reverse required per the solvability proof — but the longer body
 // and tighter clearances make the multi-point steering genuinely different
