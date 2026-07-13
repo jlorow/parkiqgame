@@ -15,7 +15,7 @@ export interface CarConfig {
   /** Optional specific obstacle variant (1-5); random if omitted */
   obstacleVariant?: number;
   /** Override the default player texture (e.g. 'car-limo' for the limousine) */
-  textureKey?: string;
+  textureKey?: string | undefined;
 }
 
 // ── Public API ──────────────────────────────────────────────────────

@@ -28,7 +28,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
-const DEBUG_FORCE_PUZZLE: number | null = 16;  // Force-load specific puzzle (null = use daily rotation)
+const DEBUG_FORCE_PUZZLE: number | null = null;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
@@ -159,7 +159,7 @@ const VISUAL_H = 400 * CAR_VISUAL_SCALE * COUNTER_SCALE_Y;
 // Cell centers for each grid edge (container-local coordinates)
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
-const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
+const _ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
 
 // Both X and Y clamps are computed dynamically per frame in update()
 // using the car's current rotation angle. X keeps the visual ~6px inside
@@ -178,7 +178,7 @@ const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
  * A subtle green-tinted fill keeps the exit-zone signal visible
  * without the old solid-green rectangle look.
  */
-function drawParkingBayMarkings(
+function _drawParkingBayMarkings(
   gfx: Phaser.GameObjects.Graphics,
   x: number,
   y: number,
@@ -1759,12 +1759,12 @@ export class PuzzleScene extends Phaser.Scene {
     const gap1 = this.getGapCols(1);
 
     let firstSafe = -1;
-    let lastSafe = -1;
+    let _lastSafe = -1;
     let overlapCount = 0;
     for (let c = 0; c < 6; c++) {
       if (gap0[c] && gap1[c]) {
         if (firstSafe === -1) firstSafe = c;
-        lastSafe = c;
+        _lastSafe = c;
         overlapCount++;
       }
     }
