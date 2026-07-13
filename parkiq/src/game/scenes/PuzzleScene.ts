@@ -1351,19 +1351,25 @@ export class PuzzleScene extends Phaser.Scene {
 
   /**
    * Returns the effective rotated AABB size for the given angle.
-   * Snaps to nearest 15° bucket (sedan table) or nearest of {0,45,90} (large table).
+   * Snaps to nearest bucket: 15° steps for sedan table, {0,45,90} for large.
+   *
+   * Reduction: 1) r = angle mod 180  2) if r > 90: r = 180 - r  3) snap to bucket.
+   * This correctly maps 90° → 90 (not 0) and 270° → 90 (same as 90).
    */
   private getRotatedBox(table: 'sedan' | 'large', angleDeg: number): { w: number; h: number } {
-    // Rotated AABB is symmetric every 90° (|cos|, |sin| have 90° period)
-    const reduced = ((angleDeg % 90) + 90) % 90;
+    // Step 1: reduce to [0, 180) — rotated AABB has 180° period
+    let r = angleDeg % 180;
+    if (r < 0) r += 180;
+    // Step 2: mirror around 90° — AABB at θ equals AABB at (180 - θ)
+    if (r > 90) r = 180 - r;
 
     if (table === 'sedan') {
-      // 7 buckets: 0/15/30/45/60/75/90 — snap to nearest
-      const bucket = Math.round(reduced / 15) * 15;
+      // Step 3: snap to nearest of {0,15,30,45,60,75,90}
+      const bucket = Math.round(r / 15) * 15;
       return SEDAN_BOX[bucket] ?? SEDAN_BOX[0]!;
     } else {
-      // 3 buckets: 0/45/90
-      const bucket = reduced < 22.5 ? 0 : reduced < 67.5 ? 45 : 90;
+      // Step 3: snap to nearest of {0,45,90}
+      const bucket = r < 22.5 ? 0 : r < 67.5 ? 45 : 90;
       return LARGE_BOX[bucket] ?? LARGE_BOX[0]!;
     }
   }
