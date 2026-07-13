@@ -1412,28 +1412,66 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private checkExitReached(cx: number, cy: number): boolean {
-    const carRect = new Phaser.Geom.Rectangle(
-      cx - this.activeCarW / 2,
-      cy - this.activeCarH / 2,
-      this.activeCarW,
-      this.activeCarH,
-    );
     const ez = this.puzzle.exitZone;
-    const baySize = this.puzzle.parkingType ? 48 : 96;
-    const halfBay = baySize / 2;
-    const exitPixelX = (ez.col + CONTAINER_OFFSET_X) * UNIT_PX - halfBay;
-    const exitPixelY = (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX - halfBay;
-    const exitRect = new Phaser.Geom.Rectangle(exitPixelX, exitPixelY, baySize, baySize);
 
-    if (!Phaser.Geom.Rectangle.Overlaps(carRect, exitRect)) return false;
+    // Player box — same getRotatedBox() as checkCollision() (Step 3/4 consistency)
+    const playerTable = this.getVehicleTable(this.puzzle.playerVehicle ?? 'sedan');
+    const playerBox = this.getRotatedBox(playerTable, this.carAngle);
 
-    // Angle check — applies only to parking-type puzzles
-    if (this.puzzle.parkingAngle !== undefined) {
-      const diff = Math.abs(Phaser.Math.Angle.WrapDegrees(this.carAngle - this.puzzle.parkingAngle));
-      if (diff > 10) return false;
+    if (ez.parkingType) {
+      // ── Parking-type exit: rotated position + angle check ──────────────
+      // Formula: 1) dx,dy = car - bay center
+      //          2) rotate (dx,dy) by -bayAngle into bay's local frame
+      //          3) AABB bounds check: |localX|,|localY| <= halfBay
+      //          4) angle tolerance: |wrap(carAngle - bayAngle)| <= tol
+      const halfBay = 24; // 48×48 bay
+
+      const bayX = ez.x ?? (ez.col + CONTAINER_OFFSET_X) * UNIT_PX;
+      const bayY = ez.y ?? (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+      const bayAngle = ez.angle ?? 0;
+
+      // 1. Offset from bay center
+      const dx = cx - bayX;
+      const dy = cy - bayY;
+
+      // 2. Rotate by -bayAngle into bay's local frame
+      const rad = Phaser.Math.DegToRad(-bayAngle);
+      const cosA = Math.cos(rad);
+      const sinA = Math.sin(rad);
+      const localX = dx * cosA - dy * sinA;
+      const localY = dx * sinA + dy * cosA;
+
+      // 3. AABB bounds check in local frame
+      if (Math.abs(localX) > halfBay || Math.abs(localY) > halfBay) return false;
+
+      // 4. Angle tolerance check
+      const tolerance = ez.parkingType === 'angled' ? 15 : 10;
+      const diff = Math.abs(Phaser.Math.Angle.WrapDegrees(this.carAngle - bayAngle));
+      if (diff > tolerance) return false;
+
+      return true;
+    } else {
+      // ── Legacy touch-only exit (96×96, no angle requirement) ───────────
+      const halfBay = 48; // 96×96 bay
+
+      const bayX = ez.x ?? (ez.col + CONTAINER_OFFSET_X) * UNIT_PX;
+      const bayY = ez.y ?? (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+
+      const playerRect = new Phaser.Geom.Rectangle(
+        cx - playerBox.w / 2,
+        cy - playerBox.h / 2,
+        playerBox.w,
+        playerBox.h,
+      );
+      const exitRect = new Phaser.Geom.Rectangle(
+        bayX - halfBay,
+        bayY - halfBay,
+        96,
+        96,
+      );
+
+      return Phaser.Geom.Rectangle.Overlaps(playerRect, exitRect);
     }
-
-    return true;
   }
 
   // ──────────────────────────────────────────────────────────
