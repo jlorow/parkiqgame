@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ParkIQ — Level Editor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-primary: #0F0F0F;
+      --bg-secondary: #1C1C1E;
+      --bg-tertiary: #252528;
+      --border: #333338;
+      --text-primary: #E8E8ED;
+      --text-secondary: #8E8E98;
+      --text-muted: #63636E;
+      --accent-blue: #5B9BFF;
+      --accent-green: #4ADE80;
+      --accent-red: #FF6B6B;
+      --accent-gray: #9CA3AF;
+      --accent-wall: #6B7280;
+      --spawn-color: #5B9BFF;
+      --exit-color: #4ADE80;
+      --sedan-color: #9CA3AF;
+      --suv-color: #9CA3AF;
+      --wall-color: #6B7280;
+      --radius: 8px;
+      --radius-sm: 4px;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      max-width: 1100px;
+      padding: 20px 24px 12px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    header .badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      padding: 3px 10px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+    }
+    header .subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-left: auto;
+    }
+
+    /* ── Main layout ── */
+    .main {
+      width: 100%;
+      max-width: 1100px;
+      padding: 0 24px 40px;
+      display: grid;
+      grid-template-columns: 288px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ── Canvas column ── */
+    .canvas-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .canvas-wrapper {
+      position: relative;
+      width: 288px;
+      height: 288px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: crosshair;
+      background: #1a1a1a;
+    }
+    .canvas-wrapper canvas {
+      display: block;
+      width: 432px;
+      height: 432px;
+      image-rendering: auto;
+    }
+    .canvas-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    /* ── Right panel ── */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Toolbar row ── */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+    }
+    .toolbar label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .file-input-wrap {
+      position: relative;
+    }
+    .file-input-wrap input[type="file"] {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+    }
+    .file-btn {
+      font-size: 12px;
+      padding: 6px 14px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .file-btn:hover {
+      background: #333;
+    }
+
+    /* ── Type selector (pill buttons) ── */
+    .type-selector {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+    }
+    .type-selector button {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .type-selector button:hover {
+      color: var(--text-primary);
+      background: rgba(255,255,255,0.05);
+    }
+    .type-selector button.active-sedan { background: var(--sedan-color); color: #111; }
+    .type-selector button.active-suv   { background: var(--suv-color); color: #111; }
+    .type-selector button.active-wall  { background: var(--wall-color); color: #eee; }
+    .type-selector button.active-spawn { background: var(--spawn-color); color: #111; }
+    .type-selector button.active-exit  { background: var(--exit-color); color: #111; }
+
+    /* ── Properties panel ── */
+    .properties {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .properties h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .prop-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .prop-row label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 48px;
+      font-weight: 500;
+    }
+    .prop-row .prop-value {
+      font-size: 13px;
+      font-family: monospace;
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      min-width: 60px;
+    }
+    .prop-row input[type="number"] {
+      font-size: 13px;
+      font-family: monospace;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      color: var(--text-primary);
+      width: 80px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .prop-row input[type="number"]:focus {
+      border-color: var(--accent-blue);
+    }
+    .prop-row select {
+      font-size: 13px;
+      font-family: inherit;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      color: var(--text-primary);
+      outline: none;
+      cursor: pointer;
+    }
+    .prop-row select:focus {
+      border-color: var(--accent-blue);
+    }
+    .delete-btn {
+      font-size: 12px;
+      padding: 5px 14px;
+      background: transparent;
+      border: 1px solid var(--accent-red);
+      border-radius: var(--radius-sm);
+      color: var(--accent-red);
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-top: 4px;
+      font-family: inherit;
+      font-weight: 600;
+    }
+    .delete-btn:hover {
+      background: var(--accent-red);
+      color: #111;
+    }
+    .tolerance-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 6px;
+      padding: 6px 10px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+    }
+    .no-selection {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    /* ── Marker list ── */
+    .marker-list-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .marker-list-section h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .marker-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    .marker-table th {
+      text-align: left;
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .marker-table td {
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .marker-table tr:hover td {
+      background: var(--bg-tertiary);
+    }
+    .marker-table tr.selected td {
+      background: rgba(91, 155, 255, 0.1);
+      color: var(--text-primary);
+    }
+    .dot-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    /* ── Export section ── */
+    .export-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .export-section h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .export-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .copy-btn {
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 20px;
+      background: var(--accent-blue);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #111;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .copy-btn:hover {
+      filter: brightness(1.15);
+    }
+    .copy-btn:active {
+      transform: scale(0.97);
+    }
+    .copy-btn.copied {
+      background: var(--accent-green);
+    }
+    .export-textarea {
+      width: 100%;
+      min-height: 160px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: monospace;
+      font-size: 12px;
+      padding: 12px;
+      resize: vertical;
+      outline: none;
+      tab-size: 2;
+      line-height: 1.6;
+    }
+    .export-textarea:focus {
+      border-color: var(--accent-blue);
+    }
+
+    /* ── Validation messages ── */
+    .validation {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .validation .warn {
+      font-size: 11px;
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.25);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+    }
+    .validation .ok {
+      font-size: 11px;
+      color: var(--accent-green);
+      background: rgba(74, 222, 128, 0.1);
+      border: 1px solid rgba(74, 222, 128, 0.25);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* ── Responsive tweaks ── */
+    @media (max-width: 720px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+      .canvas-column {
+        align-items: center;
+      }
+      .canvas-wrapper {
+        width: 288px;
+        height: 288px;
+      }
+      .canvas-wrapper canvas {
+        width: 288px;
+        height: 288px;
+        image-rendering: pixelated;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🅿️ ParkIQ</h1>
+    <span class="badge">Level Editor · Phase 1</span>
+    <span class="subtitle">Pixel-coordinate freeform puzzle designer</span>
+  </header>
+
+  <div class="main">
+    <!-- ── Canvas Column ── -->
+    <div class="canvas-column">
+      <div class="canvas-wrapper">
+        <canvas id="editorCanvas" width="288" height="288"></canvas>
+      </div>
+      <span class="canvas-label">288 × 288 px &middot; click to place</span>
+    </div>
+
+    <!-- ── Right Panel ── -->
+    <div class="panel">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <label>Image</label>
+        <div class="file-input-wrap">
+          <input type="file" id="bgInput" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+          <span class="file-btn">Load Background</span>
+        </div>
+
+        <label style="margin-left:6px;">Type</label>
+        <div class="type-selector" id="typeSelector">
+          <button data-type="sedan" class="active-sedan">Sedan</button>
+          <button data-type="suv">SUV</button>
+          <button data-type="wall">Wall</button>
+          <button data-type="spawn">Spawn</button>
+          <button data-type="exit">Exit</button>
+        </div>
+      </div>
+
+      <!-- Properties Panel -->
+      <div class="properties" id="propertiesPanel">
+        <h3>Properties</h3>
+        <div id="propertiesContent">
+          <div class="no-selection">Click a marker on the canvas to edit</div>
+        </div>
+      </div>
+
+      <!-- Marker List -->
+      <div class="marker-list-section">
+        <h3>Markers</h3>
+        <div id="markerListContainer">
+          <table class="marker-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Type</th>
+                <th>X</th>
+                <th>Y</th>
+                <th>Angle</th>
+                <th>Parking</th>
+                <th style="text-align:center">Status</th>
+              </tr>
+            </thead>
+            <tbody id="markerTableBody"></tbody>
+          </table>
+          <div id="emptyListMsg" style="font-size:13px;color:var(--text-muted);text-align:center;padding:16px 0;">
+            No markers placed yet. Click the canvas to begin.
+          </div>
+        </div>
+      </div>
+
+      <!-- Export -->
+      <div class="export-section">
+        <h3>Export</h3>
+        <div class="export-actions">
+          <button class="copy-btn" id="copyBtn">📋 Copy as Puzzle Data</button>
+        </div>
+        <textarea class="export-textarea" id="exportTextarea" readonly placeholder="Click 'Copy as Puzzle Data' or place markers to generate export data…"></textarea>
+        <div class="validation" id="validationMessages"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────
+    //  State
+    // ─────────────────────────────────────────────────────────────
+    const COLORS = {
+      sedan: '#9CA3AF',
+      suv:   '#9CA3AF',
+      wall:  '#6B7280',
+      spawn: '#5B9BFF',
+      exit:  '#4ADE80',
+    };
+
+    const TOLERANCE = {
+      parallel:      '±10°',
+      perpendicular: '±10°',
+      angled:        '±15°',
+    };
+
+    // ═════════════════════════════════════════════════════════════
+    //  Collision Math — mirrors PuzzleScene.ts EXACTLY
+    // ═════════════════════════════════════════════════════════════
+
+    const CAR_W = 36;    // All vehicle collision width  (sedan, suv, player)
+    const CAR_H = 64;    // All vehicle collision height (sedan, suv, player)
+    const PLAYFIELD = 288;
+
+    function makeRect(cx, cy, w, h) {
+      return { left: cx - w / 2, right: cx + w / 2, top: cy - h / 2, bottom: cy + h / 2 };
+    }
+
+    function rectsOverlap(a, b) {
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+
+    /**
+     * Edge-clearance test: returns overflow info for a rect at (x,y) with given w/h.
+     * fullInside: true if rect is completely within 0..PLAYFIELD on both axes.
+     */
+    function getAABBExtents(x, y, w, h) {
+      const r = makeRect(x, y, w, h);
+      return {
+        left: r.left, right: r.right, top: r.top, bottom: r.bottom,
+        insideX: r.left >= 0 && r.right <= PLAYFIELD,
+        insideY: r.top >= 0 && r.bottom <= PLAYFIELD,
+        fullyInside: r.left >= 0 && r.right <= PLAYFIELD && r.top >= 0 && r.bottom <= PLAYFIELD,
+        overflowLeft: Math.max(0, -r.left),
+        overflowRight: Math.max(0, r.right - PLAYFIELD),
+        overflowTop: Math.max(0, -r.top),
+        overflowBottom: Math.max(0, r.bottom - PLAYFIELD),
+      };
+    }
+
+    /**
+     * Result of a single collision check.
+     */
+    class CollisionIssue {
+      constructor(marker, type, detail) {
+        this.marker = marker;  // reference to the marker object
+        this.type = type;      // 'overlap', 'edge', 'visual-edge'
+        this.detail = detail;  // human-readable description
+      }
+    }
+
+    /**
+     * Runs ALL live checks against all markers.
+     * Returns { issues: CollisionIssue[], markerProblems: Map<markerId, string[]> }
+     *
+     * Mirrors the real engine's AABB collision logic from PuzzleScene.ts:
+     *   - Cars (sedan/suv): 36×64 AABB centered on position, no rotation
+     *   - Walls: NO collision — excluded from overlap checks entirely
+     *   - Spawn (player): treated as 36×64 car rect for overlap checks
+     *   - Exit zone: 48×48 AABB centered on marker position
+     *   - Playfield: 288×288, origin top-left
+     */
+    function runCollisionChecks() {
+      const issues = [];
+      const problemMap = new Map();  // markerId -> string[]
+
+      const cars = markers.filter(m => m.type === 'sedan' || m.type === 'suv');
+      const walls = markers.filter(m => m.type === 'wall');
+      const spawn = markers.find(m => m.type === 'spawn');
+      const exit  = markers.find(m => m.type === 'exit');
+
+      function addProblem(marker, msg) {
+        if (!problemMap.has(marker.id)) problemMap.set(marker.id, []);
+        problemMap.get(marker.id).push(msg);
+      }
+
+      // ── 1a. Car-vs-car overlap ─────────────────────────────────
+      for (let i = 0; i < cars.length; i++) {
+        for (let j = i + 1; j < cars.length; j++) {
+          const a = cars[i];
+          const b = cars[j];
+          const rectA = makeRect(a.x, a.y, CAR_W, CAR_H);
+          const rectB = makeRect(b.x, b.y, CAR_W, CAR_H);
+          if (rectsOverlap(rectA, rectB)) {
+            const msg = `Overlaps ${a.type} #${a.id} at (${a.x}, ${a.y})`;
+            const msgRev = `Overlaps ${b.type} #${b.id} at (${b.x}, ${b.y})`;
+            issues.push(new CollisionIssue(a, 'overlap', msg));
+            issues.push(new CollisionIssue(b, 'overlap', msgRev));
+            addProblem(a, msg);
+            addProblem(b, msgRev);
+          }
+        }
+      }
+
+      // ── 1b. Car vs spawn overlap ───────────────────────────────
+      if (spawn) {
+        const spawnRect = makeRect(spawn.x, spawn.y, CAR_W, CAR_H);
+        for (const car of cars) {
+          const carRect = makeRect(car.x, car.y, CAR_W, CAR_H);
+          if (rectsOverlap(carRect, spawnRect)) {
+            const msg = `Overlaps spawn at (${spawn.x}, ${spawn.y})`;
+            const spawnMsg = `Overlaps ${car.type} #${car.id} at (${car.x}, ${car.y})`;
+            issues.push(new CollisionIssue(car, 'overlap', msg));
+            issues.push(new CollisionIssue(spawn, 'overlap', spawnMsg));
+            addProblem(car, msg);
+            addProblem(spawn, spawnMsg);
+          }
+        }
+      }
+
+      // ── 1c. Car vs exit zone overlap ───────────────────────────
+      if (exit) {
+        const exitRect = makeRect(exit.x, exit.y, 48, 48);
+        for (const car of cars) {
+          const carRect = makeRect(car.x, car.y, CAR_W, CAR_H);
+          if (rectsOverlap(carRect, exitRect)) {
+            const msg = `Overlaps exit zone at (${exit.x}, ${exit.y})`;
+            issues.push(new CollisionIssue(car, 'overlap', msg));
+            addProblem(car, msg);
+          }
+        }
+        // Also check spawn vs exit
+        if (spawn) {
+          const spawnRect = makeRect(spawn.x, spawn.y, CAR_W, CAR_H);
+          if (rectsOverlap(spawnRect, exitRect)) {
+            const msg = `Overlaps exit zone at (${exit.x}, ${exit.y})`;
+            issues.push(new CollisionIssue(spawn, 'overlap', msg));
+            addProblem(spawn, msg);
+          }
+        }
+      }
+
+      // ── 2a. Edge clearance — collision-relevant (cars + spawn) ─
+      const collisionMarkers = [...cars];
+      if (spawn) collisionMarkers.push(spawn);
+      for (const m of collisionMarkers) {
+        const ext = getAABBExtents(m.x, m.y, CAR_W, CAR_H);
+        if (!ext.fullyInside) {
+          const over = [];
+          if (ext.overflowLeft > 0) over.push(`${ext.overflowLeft.toFixed(0)}px past left edge`);
+          if (ext.overflowRight > 0) over.push(`${ext.overflowRight.toFixed(0)}px past right edge`);
+          if (ext.overflowTop > 0) over.push(`${ext.overflowTop.toFixed(0)}px past top edge`);
+          if (ext.overflowBottom > 0) over.push(`${ext.overflowBottom.toFixed(0)}px past bottom edge`);
+          const detail = `${m.type} extends ${over.join(', ')}`;
+          issues.push(new CollisionIssue(m, 'edge', detail));
+          addProblem(m, detail);
+        }
+      }
+
+      // ── 2b. Edge clearance — visual only (walls) ───────────────
+      for (const m of walls) {
+        // Use same 36×64 as proxy for visual extent (wall dimensions undefined in engine)
+        const ext = getAABBExtents(m.x, m.y, 36, 64);
+        if (!ext.fullyInside) {
+          const over = [];
+          if (ext.overflowLeft > 0) over.push(`${ext.overflowLeft.toFixed(0)}px past left edge`);
+          if (ext.overflowRight > 0) over.push(`${ext.overflowRight.toFixed(0)}px past right edge`);
+          if (ext.overflowTop > 0) over.push(`${ext.overflowTop.toFixed(0)}px past top edge`);
+          if (ext.overflowBottom > 0) over.push(`${ext.overflowBottom.toFixed(0)}px past bottom edge`);
+          const detail = `(visual) wall extends ${over.join(', ')}`;
+          issues.push(new CollisionIssue(m, 'visual-edge', detail));
+          addProblem(m, detail);
+        }
+      }
+
+      // ── 2c. Edge clearance — exit zone ─────────────────────────
+      if (exit) {
+        const ext = getAABBExtents(exit.x, exit.y, 48, 48);
+        if (!ext.fullyInside) {
+          const over = [];
+          if (ext.overflowLeft > 0) over.push(`${ext.overflowLeft.toFixed(0)}px past left edge`);
+          if (ext.overflowRight > 0) over.push(`${ext.overflowRight.toFixed(0)}px past right edge`);
+          if (ext.overflowTop > 0) over.push(`${ext.overflowTop.toFixed(0)}px past top edge`);
+          if (ext.overflowBottom > 0) over.push(`${ext.overflowBottom.toFixed(0)}px past bottom edge`);
+          const detail = `exit zone extends ${over.join(', ')}`;
+          issues.push(new CollisionIssue(exit, 'edge', detail));
+          addProblem(exit, detail);
+        }
+      }
+
+      return { issues, problemMap };
+    }
+
+    let markers = [];            // { id, type, x, y, angle, parkingType? }
+    let nextId = 0;
+    let selectedId = null;
+    let activeType = 'sedan';
+    let bgImage = null;
+    /** Latest collision-check results — updated every render cycle */
+    let collisionState = { issues: [], problemMap: new Map() };          // HTMLImageElement | null
+
+    const canvas = document.getElementById('editorCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = 288;
+    const H = 288;
+
+    // ─────────────────────────────────────────────────────────────
+    //  Rendering
+    // ─────────────────────────────────────────────────────────────
+    function render() {
+      ctx.clearRect(0, 0, W, H);
+
+      // Background
+      if (bgImage) {
+        ctx.drawImage(bgImage, 0, 0, W, H);
+      } else {
+        // Gray background with grid overlay
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= W; x += 48) {
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, 0);
+          ctx.lineTo(x + 0.5, H);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= H; y += 48) {
+          ctx.beginPath();
+          ctx.moveTo(0, y + 0.5);
+          ctx.lineTo(W, y + 0.5);
+          ctx.stroke();
+        }
+      }
+
+      // Draw markers
+      for (const m of markers) {
+        drawMarker(m);
+      }
+
+      // Highlight selected
+      if (selectedId !== null) {
+        const sel = markers.find(m => m.id === selectedId);
+        if (sel) {
+          ctx.strokeStyle = '#FFD700';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(sel.x, sel.y, 10, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function getMarkerProblems(m) {
+      return collisionState.problemMap.get(m.id) || [];
+    }
+
+    function drawMarker(m) {
+      const color = COLORS[m.type] || '#888';
+      const size = m.type === 'wall' ? 5 : 4;
+      const problems = getMarkerProblems(m);
+      const hasProblems = problems.length > 0;
+      const hasCollision = problems.some(p => p.startsWith('Overlaps'));
+      const hasEdgeIssue = problems.some(p => p.includes('extends'));
+
+      // Direction line (clock hand) — 0° = up, positive = clockwise
+      const rad = (m.angle - 90) * Math.PI / 180; // offset so 0° draws upward
+      const lineLen = 14;
+
+      ctx.save();
+
+      // ── Problem indicator: red ring behind marker ───────────────
+      if (hasProblems) {
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, 12, 0, Math.PI * 2);
+        if (hasCollision) {
+          ctx.fillStyle = 'rgba(255, 50, 50, 0.2)';
+          ctx.fill();
+          ctx.strokeStyle = '#FF3333';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        } else if (hasEdgeIssue) {
+          ctx.strokeStyle = '#FF8800';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
+      // Glow
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+
+      // Dot
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, size, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+
+      // Direction line
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(m.x, m.y);
+      ctx.lineTo(m.x + Math.cos(rad) * lineLen, m.y + Math.sin(rad) * lineLen);
+      ctx.stroke();
+
+      // Type label for special markers
+      if (m.type === 'spawn' || m.type === 'exit') {
+        ctx.fillStyle = color;
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(m.type.toUpperCase(), m.x, m.y + 20);
+      }
+
+      ctx.restore();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Marker management
+    // ─────────────────────────────────────────────────────────────
+    function addMarker(type, x, y) {
+      // Clamp to canvas bounds
+      x = Math.round(Math.max(0, Math.min(W - 1, x)));
+      y = Math.round(Math.max(0, Math.min(H - 1, y)));
+
+      // Spawn/exit: replace old
+      if (type === 'spawn') {
+        const existing = markers.filter(m => m.type === 'spawn');
+        for (const m of existing) removeMarkerById(m.id);
+      }
+      if (type === 'exit') {
+        const existing = markers.filter(m => m.type === 'exit');
+        for (const m of existing) removeMarkerById(m.id);
+      }
+
+      const marker = {
+        id: nextId++,
+        type,
+        x,
+        y,
+        angle: 0,
+      };
+      if (type === 'exit') {
+        marker.parkingType = 'parallel';
+      }
+      markers.push(marker);
+      selectedId = marker.id;
+      updateAll();
+    }
+
+    function removeMarkerById(id) {
+      markers = markers.filter(m => m.id !== id);
+      if (selectedId === id) selectedId = null;
+      updateAll();
+    }
+
+    function updateMarkerProp(id, key, value) {
+      const m = markers.find(m => m.id === id);
+      if (!m) return;
+      m[key] = value;
+      updateAll();
+    }
+
+    function findMarkerAt(x, y, radius = 10) {
+      // Iterate in reverse so topmost (last-placed) is selected first
+      for (let i = markers.length - 1; i >= 0; i--) {
+        const m = markers[i];
+        const dx = m.x - x;
+        const dy = m.y - y;
+        if (dx * dx + dy * dy <= radius * radius) return m;
+      }
+      return null;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Canvas interaction
+    // ─────────────────────────────────────────────────────────────
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const scaleY = H / rect.height;
+      const canvasX = (e.clientX - rect.left) * scaleX;
+      const canvasY = (e.clientY - rect.top) * scaleY;
+
+      // First, check if we're clicking an existing marker
+      const hit = findMarkerAt(canvasX, canvasY);
+      if (hit) {
+        selectedId = hit.id;
+        updateAll();
+        return;
+      }
+
+      // Place new marker of active type
+      addMarker(activeType, canvasX, canvasY);
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    //  Type selector
+    // ─────────────────────────────────────────────────────────────
+    const typeButtons = document.querySelectorAll('#typeSelector button');
+    function setActiveType(type) {
+      activeType = type;
+      for (const btn of typeButtons) {
+        const t = btn.dataset.type;
+        btn.className = '';
+        if (t === type) {
+          btn.classList.add('active-' + t);
+        }
+      }
+    }
+    for (const btn of typeButtons) {
+      btn.addEventListener('click', () => {
+        setActiveType(btn.dataset.type);
+      });
+    }
+    setActiveType('sedan');
+
+    // ─────────────────────────────────────────────────────────────
+    //  Properties panel
+    // ─────────────────────────────────────────────────────────────
+    function renderProperties() {
+      const container = document.getElementById('propertiesContent');
+      const sel = markers.find(m => m.id === selectedId);
+
+      if (!sel) {
+        container.innerHTML = `<div class="no-selection">Click a marker on the canvas to edit</div>`;
+        return;
+      }
+
+      let html = '';
+      // Read-only X, Y
+      html += `<div class="prop-row">
+        <label>X</label>
+        <span class="prop-value" id="propX">${sel.x}</span>
+        <label>Y</label>
+        <span class="prop-value" id="propY">${sel.y}</span>
+      </div>`;
+
+      // Angle input
+      html += `<div class="prop-row">
+        <label>Angle</label>
+        <input type="number" id="propAngle" min="0" max="359" step="1" value="${sel.angle}">
+        <span style="font-size:10px;color:var(--text-muted)">°</span>
+      </div>`;
+
+      // Exit-specific: parkingType dropdown
+      if (sel.type === 'exit') {
+        const pt = sel.parkingType || 'parallel';
+        html += `<div class="prop-row">
+          <label>Parking</label>
+          <select id="propParkingType">
+            <option value="parallel"      ${pt === 'parallel'      ? 'selected' : ''}>Parallel</option>
+            <option value="perpendicular" ${pt === 'perpendicular' ? 'selected' : ''}>Perpendicular</option>
+            <option value="angled"        ${pt === 'angled'        ? 'selected' : ''}>Angled</option>
+          </select>
+        </div>`;
+        html += `<div class="tolerance-note">Angle tolerance: ${TOLERANCE[pt] || '±10°'}</div>`;
+      }
+
+      // Delete button
+      html += `<div class="prop-row" style="margin-top:6px;">
+        <button class="delete-btn" id="propDelete">🗑 Delete</button>
+      </div>`;
+
+      container.innerHTML = html;
+
+      // Wire up events
+      const angleInput = document.getElementById('propAngle');
+      if (angleInput) {
+        angleInput.addEventListener('input', () => {
+          let v = parseInt(angleInput.value, 10) || 0;
+          v = Math.max(0, Math.min(359, v));
+          updateMarkerProp(selectedId, 'angle', v);
+          // Update live without re-rendering properties (avoid losing focus)
+          render();
+          updateMarkerList();
+          updateExport();
+          updateValidation();
+        });
+      }
+
+      const parkingSelect = document.getElementById('propParkingType');
+      if (parkingSelect) {
+        parkingSelect.addEventListener('change', () => {
+          const v = parkingSelect.value;
+          updateMarkerProp(selectedId, 'parkingType', v);
+          // Re-render properties to show updated tolerance note
+          renderProperties();
+          render();
+          updateMarkerList();
+          updateExport();
+          updateValidation();
+        });
+      }
+
+      const delBtn = document.getElementById('propDelete');
+      if (delBtn) {
+        delBtn.addEventListener('click', () => {
+          removeMarkerById(selectedId);
+        });
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Marker list
+    // ─────────────────────────────────────────────────────────────
+    function getStatusHtml(m) {
+      const problems = getMarkerProblems(m);
+      if (problems.length === 0) {
+        return '<span style="color:var(--accent-green)">✓</span>';
+      }
+      const hasCollision = problems.some(p => p.startsWith('Overlaps'));
+      const hasEdge = problems.some(p => p.includes('extends'));
+      if (hasCollision) return '<span style="color:#FF3333;font-weight:700">✗</span>';
+      if (hasEdge) return '<span style="color:#FF8800">⚠</span>';
+      return '<span style="color:var(--text-muted)">?</span>';
+    }
+
+    function renderMarkerList() {
+      const tbody = document.getElementById('markerTableBody');
+      const emptyMsg = document.getElementById('emptyListMsg');
+
+      if (markers.length === 0) {
+        tbody.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        return;
+      }
+      emptyMsg.style.display = 'none';
+
+      let html = '';
+      for (const m of markers) {
+        const color = COLORS[m.type] || '#888';
+        const parkingDisplay = m.type === 'exit' ? (m.parkingType || '—') : '—';
+        const statusHtml = getStatusHtml(m);
+        html += `<tr class="${m.id === selectedId ? 'selected' : ''}" data-id="${m.id}">
+          <td>${m.id}</td>
+          <td><span class="dot-indicator" style="background:${color}"></span>${m.type}</td>
+          <td>${m.x}</td>
+          <td>${m.y}</td>
+          <td>${m.angle}°</td>
+          <td style="font-size:10px">${parkingDisplay}</td>
+          <td style="text-align:center">${statusHtml}</td>
+        </tr>`;
+      }
+      tbody.innerHTML = html;
+
+      // Click row to select
+      for (const row of tbody.querySelectorAll('tr')) {
+        row.addEventListener('click', () => {
+          const id = parseInt(row.dataset.id, 10);
+          selectedId = id;
+          updateAll();
+        });
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Export
+    // ─────────────────────────────────────────────────────────────
+    function generateExport() {
+      const obstacles = markers.filter(m => m.type === 'sedan' || m.type === 'suv' || m.type === 'wall');
+      const spawn = markers.find(m => m.type === 'spawn');
+      const exit = markers.find(m => m.type === 'exit');
+
+      let lines = [];
+      lines.push('obstacles: [');
+      for (const o of obstacles) {
+        lines.push(`  { type: '${o.type}', x: ${o.x}, y: ${o.y}, angle: ${o.angle} },`);
+      }
+      lines.push('],');
+
+      if (spawn) {
+        lines.push(`playerCar: { x: ${spawn.x}, y: ${spawn.y}, angle: ${spawn.angle} },`);
+      } else {
+        lines.push('// playerCar: — no spawn marker placed');
+      }
+
+      if (exit) {
+        const pt = exit.parkingType || 'parallel';
+        lines.push(`exitZone: { x: ${exit.x}, y: ${exit.y}, angle: ${exit.angle}, parkingType: '${pt}' },`);
+      } else {
+        lines.push('// exitZone: — no exit marker placed');
+      }
+
+      return lines.join('\n');
+    }
+
+    function updateExport() {
+      const textarea = document.getElementById('exportTextarea');
+      textarea.value = generateExport();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Validation
+    // ─────────────────────────────────────────────────────────────
+    function updateValidation() {
+      const container = document.getElementById('validationMessages');
+      const msgs = [];
+
+      const spawn = markers.find(m => m.type === 'spawn');
+      const exit = markers.find(m => m.type === 'exit');
+
+      if (!spawn) msgs.push({ level: 'warn', text: '⚠ No spawn marker placed — playerCar will be missing' });
+      if (!exit) msgs.push({ level: 'warn', text: '⚠ No exit marker placed — exitZone will be missing' });
+
+      // Duplicate position check
+      const seen = new Map();
+      for (const m of markers) {
+        const key = `${m.x},${m.y}`;
+        if (seen.has(key)) {
+          msgs.push({ level: 'warn', text: `⚠ Duplicate position (${m.x}, ${m.y}): marker #${seen.get(key)} and #${m.id}` });
+        }
+        seen.set(key, m.id);
+      }
+
+      // ── Collision issues summary ───────────────────────────────
+      const { issues } = collisionState;
+
+      // Group issues by type for a concise summary
+      const overlapIssues = issues.filter(i => i.type === 'overlap');
+      const edgeIssues = issues.filter(i => i.type === 'edge');
+      const visualEdgeIssues = issues.filter(i => i.type === 'visual-edge');
+
+      // De-duplicate: for pair overlaps, show one summary per marker involved
+      if (overlapIssues.length > 0) {
+        const involvedIds = new Set(overlapIssues.map(i => i.marker.id));
+        for (const id of involvedIds) {
+          const m = markers.find(x => x.id === id);
+          if (!m) continue;
+          const specificMsgs = overlapIssues
+            .filter(i => i.marker.id === id)
+            .map(i => i.detail);
+          msgs.push({ level: 'warn', text: `⚠ ${m.type} #${id} @ (${m.x}, ${m.y}): ${specificMsgs.join('; ')}` });
+        }
+      }
+
+      // Edge issues (collision-relevant)
+      for (const issue of edgeIssues) {
+        const m = issue.marker;
+        msgs.push({ level: 'warn', text: `⚠ ${m.type} #${m.id} @ (${m.x}, ${m.y}): ${issue.detail}` });
+      }
+
+      // Visual-only edge issues (lower severity)
+      for (const issue of visualEdgeIssues) {
+        const m = issue.marker;
+        msgs.push({ level: 'warn', text: `ℹ ${m.type} #${m.id} @ (${m.x}, ${m.y}): ${issue.detail}` });
+      }
+
+      // ── Positive confirmation if clean ─────────────────────────
+      const hasSpawnExitIssue = issues.some(i => i.marker?.type === 'spawn' || i.marker?.type === 'exit');
+      const collisionOrEdge = overlapIssues.length > 0 || edgeIssues.length > 0;
+
+      if (!collisionOrEdge && spawn && exit) {
+        msgs.push({ level: 'ok', text: '✓ No overlaps or edge issues detected — layout is geometrically clean' });
+      } else if (!collisionOrEdge && (!spawn || !exit)) {
+        // Still show positive note about geometries, separate from spawn/exit warnings
+        msgs.push({ level: 'ok', text: '✓ No overlaps or edge issues among placed markers' });
+      }
+
+      container.innerHTML = msgs.map(m =>
+        `<span class="${m.level}">${m.text}</span>`
+      ).join('');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Update everything
+    // ─────────────────────────────────────────────────────────────
+    function updateAll() {
+      // Run collision checks against current markers
+      collisionState = runCollisionChecks();
+      render();
+      renderProperties();
+      renderMarkerList();
+      updateExport();
+      updateValidation();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Copy button
+    // ─────────────────────────────────────────────────────────────
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      const textarea = document.getElementById('exportTextarea');
+      const btn = document.getElementById('copyBtn');
+
+      // Make sure export is fresh
+      updateExport();
+
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+        btn.textContent = '✅ Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = '📋 Copy as Puzzle Data';
+          btn.classList.remove('copied');
+        }, 2000);
+      } catch {
+        // Fallback: select text for manual copy
+        textarea.select();
+        btn.textContent = '📋 Select text & copy (Ctrl+C)';
+        setTimeout(() => {
+          btn.textContent = '📋 Copy as Puzzle Data';
+        }, 3000);
+      }
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    //  Background image loading
+    // ─────────────────────────────────────────────────────────────
+    document.getElementById('bgInput').addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          bgImage = img;
+          render();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    //  Keyboard shortcut: Delete/Backspace removes selected marker
+    // ─────────────────────────────────────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId !== null) {
+        // Don't delete when editing an input
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        removeMarkerById(selectedId);
+      }
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    //  Initial render
+    // ─────────────────────────────────────────────────────────────
+    updateAll();
+
+    // Report ready
+    console.log('ParkIQ Level Editor v1 loaded — ready');
+  </script>
+</body>
+</html>
