@@ -27,7 +27,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
-const DEBUG_FORCE_PUZZLE: number | null = 16;  // Force-load specific puzzle (null = use daily rotation)
+const DEBUG_FORCE_PUZZLE: number | null = null;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
@@ -735,8 +735,6 @@ export class PuzzleScene extends Phaser.Scene {
     const exitZoneCenterX = exitPixelX + halfBay;
     const exitZoneCenterY = exitPixelY + halfBay;
     const exitGfx = this.add.graphics();
-
-    console.log(`[MARKINGS] ez.parkingType=${ez.parkingType}, ez.angle=${ez.angle}, baySize=${baySize}, exitPos=(${exitPixelX.toFixed(1)}, ${exitPixelY.toFixed(1)}), branch=${ez.parkingType ? 'PARKING_MARKINGS' : 'LEGACY_RECT'}`);
 
     if (ez.parkingType) {
       // ── Parking-type exit zone: 48×48 bay with style-appropriate markings ───
