@@ -820,9 +820,9 @@ export class PuzzleScene extends Phaser.Scene {
         // Filled rotated rectangle — dark green fill (consistent with other parking-type markings)
         exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.25);
         exitGfx.beginPath();
-        exitGfx.moveTo(worldCorners[0].x, worldCorners[0].y);
+        exitGfx.moveTo(worldCorners[0]!.x, worldCorners[0]!.y);
         for (let i = 1; i < worldCorners.length; i++) {
-          exitGfx.lineTo(worldCorners[i].x, worldCorners[i].y);
+          exitGfx.lineTo(worldCorners[i]!.x, worldCorners[i]!.y);
         }
         exitGfx.closePath();
         exitGfx.fillPath();
@@ -830,9 +830,9 @@ export class PuzzleScene extends Phaser.Scene {
         // Brighter green border stroke
         exitGfx.lineStyle(2, 0x8fcf90, 0.85);
         exitGfx.beginPath();
-        exitGfx.moveTo(worldCorners[0].x, worldCorners[0].y);
+        exitGfx.moveTo(worldCorners[0]!.x, worldCorners[0]!.y);
         for (let i = 1; i < worldCorners.length; i++) {
-          exitGfx.lineTo(worldCorners[i].x, worldCorners[i].y);
+          exitGfx.lineTo(worldCorners[i]!.x, worldCorners[i]!.y);
         }
         exitGfx.closePath();
         exitGfx.strokePath();
