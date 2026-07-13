@@ -27,7 +27,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
-const DEBUG_FORCE_PUZZLE: number | null = null;  // Force-load specific puzzle (null = use daily rotation)
+const DEBUG_FORCE_PUZZLE: number | null = 16;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
@@ -158,96 +158,10 @@ const VISUAL_H = 400 * CAR_VISUAL_SCALE * COUNTER_SCALE_Y;
 // Cell centers for each grid edge (container-local coordinates)
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
-const _ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
 
 // Both X and Y clamps are computed dynamically per frame in update()
 // using the car's current rotation angle. X keeps the visual ~6px inside
 // the grid edge; Y allows ~8px overhang (car nosing out of the bay).
-
-// ──────────────────────────────────────────────────────────
-//  Parking Bay Marking Renderer
-// ──────────────────────────────────────────────────────────
-
-/**
- * Draws real parking-style bay markings inside the exit zone.
- *
- * - `parallel`: two horizontal curb lines flanking the bay + corner ticks
- * - `perpendicular`: vertical stall-divider lines + back line + top ticks
- *
- * A subtle green-tinted fill keeps the exit-zone signal visible
- * without the old solid-green rectangle look.
- */
-function _drawParkingBayMarkings(
-  gfx: Phaser.GameObjects.Graphics,
-  x: number,
-  y: number,
-  size: number,
-  type: 'parallel' | 'perpendicular',
-): void {
-  console.log(`[MARKINGS] drawParkingBayMarkings called: type=${type}, bounds=(${x.toFixed(1)}, ${y.toFixed(1)}, ${size}x${size})`);
-  const inset = 3;
-  const tickLen = 10;
-  const lineW = 2;
-  const tickW = 1.5;
-  const lineColor = 0xffffff;
-
-  // Subtle green tint fill — signals "goal" without the old solid rectangle
-  gfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
-  gfx.fillRect(x, y, size, size);
-
-  if (type === 'parallel') {
-    // ── Parallel curb lines ──
-    // Two horizontal lines (top / bottom) mark the stall boundaries.
-    // Corner ticks extend inward to suggest the curb edges.
-    gfx.lineStyle(lineW, lineColor, 0.85);
-    gfx.beginPath();
-    // Top line
-    gfx.moveTo(x + inset, y + inset);
-    gfx.lineTo(x + size - inset, y + inset);
-    // Bottom line
-    gfx.moveTo(x + inset, y + size - inset);
-    gfx.lineTo(x + size - inset, y + size - inset);
-    gfx.strokePath();
-
-    // Corner ticks (short vertical strokes at each corner)
-    gfx.lineStyle(tickW, lineColor, 0.6);
-    gfx.beginPath();
-    gfx.moveTo(x + inset, y + inset);
-    gfx.lineTo(x + inset, y + inset + tickLen);
-    gfx.moveTo(x + size - inset, y + inset);
-    gfx.lineTo(x + size - inset, y + inset + tickLen);
-    gfx.moveTo(x + inset, y + size - inset);
-    gfx.lineTo(x + inset, y + size - inset - tickLen);
-    gfx.moveTo(x + size - inset, y + size - inset);
-    gfx.lineTo(x + size - inset, y + size - inset - tickLen);
-    gfx.strokePath();
-  } else {
-    // ── Perpendicular stall dividers ──
-    // Two vertical lines (left / right) + back line (bottom).
-    // Short horizontal ticks at the top suggest the open lane edge.
-    gfx.lineStyle(lineW, lineColor, 0.85);
-    gfx.beginPath();
-    // Left line
-    gfx.moveTo(x + inset, y + inset);
-    gfx.lineTo(x + inset, y + size - inset);
-    // Right line
-    gfx.moveTo(x + size - inset, y + inset);
-    gfx.lineTo(x + size - inset, y + size - inset);
-    // Back / bottom line
-    gfx.moveTo(x + inset, y + size - inset);
-    gfx.lineTo(x + size - inset, y + size - inset);
-    gfx.strokePath();
-
-    // Top ticks (short horizontal strokes at the open edge)
-    gfx.lineStyle(tickW, lineColor, 0.6);
-    gfx.beginPath();
-    gfx.moveTo(x + inset, y + inset);
-    gfx.lineTo(x + inset + tickLen, y + inset);
-    gfx.moveTo(x + size - inset, y + inset);
-    gfx.lineTo(x + size - inset - tickLen, y + inset);
-    gfx.strokePath();
-  }
-}
 
 // ──────────────────────────────────────────────────────────
 //  Scene
@@ -1648,12 +1562,10 @@ export class PuzzleScene extends Phaser.Scene {
     const gap1 = this.getGapCols(1);
 
     let firstSafe = -1;
-    let _lastSafe = -1;
     let overlapCount = 0;
     for (let c = 0; c < 6; c++) {
       if (gap0[c] && gap1[c]) {
         if (firstSafe === -1) firstSafe = c;
-        _lastSafe = c;
         overlapCount++;
       }
     }
