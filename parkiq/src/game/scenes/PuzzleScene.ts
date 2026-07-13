@@ -159,6 +159,14 @@ const VISUAL_H = 400 * CAR_VISUAL_SCALE * COUNTER_SCALE_Y;
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
 
+// ── Angled exit zone dimensions (asymmetric to match car proportions) ──
+// These are the VISUAL rendering AND collision-check dimensions for
+// parkingType='angled' exit zones. 40px wide × 70px long, roughly
+// matching a sedan's rotated AABB (36×64 base) plus margin.
+// Defined once at module level to prevent visual/collision drift.
+const ANGLE_EXIT_HALF_W = 20;  // 40px total width
+const ANGLE_EXIT_HALF_H = 35;  // 70px total length
+
 // Both X and Y clamps are computed dynamically per frame in update()
 // using the car's current rotation angle. X keeps the visual ~6px inside
 // the grid edge; Y allows ~8px overhang (car nosing out of the bay).
@@ -786,19 +794,21 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.lineTo(exitPixelX + baySize - inset - tickLen, exitPixelY + inset);
         exitGfx.strokePath();
       } else {
-        // 'angled' — rotated rectangle matching exitZone.angle
-        // Using the same cosA/sinA corner-rotation pattern as updateTruckTrailer()
-        const halfSize = baySize / 2;
+        // 'angled' — rotated car-shaped rectangle matching exitZone.angle
+        // Uses asymmetric dimensions (40×70) to match car proportions,
+        // using the same cosA/sinA corner-rotation pattern as updateTruckTrailer().
+        // Shared constants ANGLE_EXIT_HALF_W / ANGLE_EXIT_HALF_H keep the
+        // visual and collision shapes in sync.
         const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
         const cosA = Math.cos(rad);
         const sinA = Math.sin(rad);
 
-        // 4 corners of the unrotated 48×48 rectangle centered at origin
+        // 4 corners of the unrotated 40×70 rectangle centered at origin
         const localCorners = [
-          { x: -halfSize, y: -halfSize },
-          { x:  halfSize, y: -halfSize },
-          { x:  halfSize, y:  halfSize },
-          { x: -halfSize, y:  halfSize },
+          { x: -ANGLE_EXIT_HALF_W, y: -ANGLE_EXIT_HALF_H },
+          { x:  ANGLE_EXIT_HALF_W, y: -ANGLE_EXIT_HALF_H },
+          { x:  ANGLE_EXIT_HALF_W, y:  ANGLE_EXIT_HALF_H },
+          { x: -ANGLE_EXIT_HALF_W, y:  ANGLE_EXIT_HALF_H },
         ];
 
         // Rotate each corner and translate to bay center
@@ -1314,8 +1324,10 @@ export class PuzzleScene extends Phaser.Scene {
       // collision box can touch the bay edge — the Y boundary clamp prevents
       // the car center from reaching the bay center at row 0.
       // Angle tolerance: ±10° for parallel/perpendicular, ±15° for angled.
-      const halfBay = 24; // 48×48 bay
-      const baySize = 48;
+      // Angled zones use asymmetric dimensions (40×70) matching car proportions;
+      // parallel/perpendicular stay at 48×48.
+      const halfW = ez.parkingType === 'angled' ? ANGLE_EXIT_HALF_W : 24;
+      const halfH = ez.parkingType === 'angled' ? ANGLE_EXIT_HALF_H : 24;
 
       const bayX = ez.x ?? ((ez.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
       const bayY = ez.y ?? ((ez.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
@@ -1329,10 +1341,10 @@ export class PuzzleScene extends Phaser.Scene {
         playerBox.h,
       );
       const bayRect = new Phaser.Geom.Rectangle(
-        bayX - halfBay,
-        bayY - halfBay,
-        baySize,
-        baySize,
+        bayX - halfW,
+        bayY - halfH,
+        halfW * 2,
+        halfH * 2,
       );
       if (!Phaser.Geom.Rectangle.Overlaps(playerRect, bayRect)) return false;
 

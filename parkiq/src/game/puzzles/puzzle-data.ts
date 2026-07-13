@@ -45,12 +45,14 @@ exitZone: { x: 143, y: 92, angle: 0, parkingType: 'parallel' },
     difficulty: 2,
     question: 'Drive out without hitting another car.',
     environment: 'street',
-    playerCar: { col: 2, row: 5, angle: 0 },
-    obstacles: [
-      { type: 'sedan', col: 0, row: 1, angle: 0 },
-      { type: 'suv',   col: 4, row: 4, angle: 0 },
-    ],
-    exitZone: { col: 4, row: 0, direction: 'top' },
+   obstacles: [
+  { type: 'sedan', x: 58,  y: 195, angle: 0 },   // lower-left (58→right edge=80.5 < player left at 45°=82.5)
+  { type: 'suv',   x: 195, y: 165, angle: 0 },   // mid-right, forces swing back left
+  { type: 'sedan', x: 38,  y: 90,  angle: 45 },  // left flank (38→AABB left=1.5≥0, right edge=74.5)
+  { type: 'suv',   x: 206, y: 90,  angle: 45 },  // right flank (206→AABB right=242.5≤288, left edge=169.5)
+],
+playerCar: { x: 144, y: 244, angle: 0 },
+exitZone: { x: 119, y: 90, angle: 45, parkingType: 'angled' },
     escapeSteps: [
       { step: 1, description: 'The left lane (col 0) looks open near the start but is blocked further up.' },
       { step: 2, description: 'The right lane (col 4) has a car close by, but the top is clear — go right.' },
