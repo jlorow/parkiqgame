@@ -739,19 +739,66 @@ export class PuzzleScene extends Phaser.Scene {
     console.log(`[MARKINGS] ez.parkingType=${ez.parkingType}, ez.angle=${ez.angle}, baySize=${baySize}, exitPos=(${exitPixelX.toFixed(1)}, ${exitPixelY.toFixed(1)}), branch=${ez.parkingType ? 'PARKING_MARKINGS' : 'LEGACY_RECT'}`);
 
     if (ez.parkingType) {
-      // Position diagnostic — container-local → scene-space mapping
-      const sceneTop = CONTAINER_Y + exitPixelY * SCALE_Y;
-      const sceneBottom = CONTAINER_Y + (exitPixelY + baySize) * SCALE_Y;
-      const sceneLeft = CONTAINER_X + exitPixelX * SCALE_X;
-      const sceneRight = CONTAINER_X + (exitPixelX + baySize) * SCALE_X;
-      console.log(`[MARKINGS] scene-space box: top=${sceneTop.toFixed(1)} bottom=${sceneBottom.toFixed(1)} left=${sceneLeft.toFixed(1)} right=${sceneRight.toFixed(1)} (canvas 0..844, container top=${CONTAINER_Y})`);
-      console.log(`[MARKINGS] MAGENTA test at depth=5 — is it visible?`);
-
-      // TEST: Solid magenta at depth=5, no tween, 100% alpha
-      exitGfx.fillStyle(0xff00ff, 1);
+      // ── Parking-type exit zone: 48×48 bay with style-appropriate markings ───
+      // Subtle green-tinted fill signals the goal zone
+      exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
       exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
-      exitGfx.lineStyle(3, 0xff00ff, 1);
-      exitGfx.strokeRect(exitPixelX, exitPixelY, baySize, baySize);
+
+      const inset = 3;
+      const tickLen = 8;
+      const lineColor = 0xffffff;
+
+      if (ez.parkingType === 'parallel') {
+        // Two horizontal curb lines + corner ticks
+        exitGfx.lineStyle(2, lineColor, 0.85);
+        exitGfx.beginPath();
+        exitGfx.moveTo(exitPixelX + inset, exitPixelY + inset);
+        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + inset);
+        exitGfx.moveTo(exitPixelX + inset, exitPixelY + baySize - inset);
+        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        exitGfx.strokePath();
+
+        exitGfx.lineStyle(1.5, lineColor, 0.6);
+        exitGfx.beginPath();
+        for (const corner of [{x: exitPixelX + inset, y: exitPixelY + inset},
+                              {x: exitPixelX + baySize - inset, y: exitPixelY + inset},
+                              {x: exitPixelX + inset, y: exitPixelY + baySize - inset},
+                              {x: exitPixelX + baySize - inset, y: exitPixelY + baySize - inset}]) {
+          exitGfx.moveTo(corner.x, corner.y);
+          exitGfx.lineTo(corner.x, corner.y + (corner.y < exitPixelY + baySize / 2 ? tickLen : -tickLen));
+        }
+        exitGfx.strokePath();
+      } else if (ez.parkingType === 'perpendicular') {
+        // Two vertical stall divider lines + back line + top ticks
+        exitGfx.lineStyle(2, lineColor, 0.85);
+        exitGfx.beginPath();
+        exitGfx.moveTo(exitPixelX + inset, exitPixelY + inset);
+        exitGfx.lineTo(exitPixelX + inset, exitPixelY + baySize - inset);
+        exitGfx.moveTo(exitPixelX + baySize - inset, exitPixelY + inset);
+        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        exitGfx.moveTo(exitPixelX + inset, exitPixelY + baySize - inset);
+        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        exitGfx.strokePath();
+
+        exitGfx.lineStyle(1.5, lineColor, 0.6);
+        exitGfx.beginPath();
+        exitGfx.moveTo(exitPixelX + inset, exitPixelY + inset);
+        exitGfx.lineTo(exitPixelX + inset + tickLen, exitPixelY + inset);
+        exitGfx.moveTo(exitPixelX + baySize - inset, exitPixelY + inset);
+        exitGfx.lineTo(exitPixelX + baySize - inset - tickLen, exitPixelY + inset);
+        exitGfx.strokePath();
+      } else {
+        // 'angled' — subtle border + corner chevrons to suggest the offset approach
+        exitGfx.lineStyle(1.5, lineColor, 0.7);
+        exitGfx.strokeRect(exitPixelX + inset, exitPixelY + inset, baySize - inset * 2, baySize - inset * 2);
+        exitGfx.lineStyle(1.5, lineColor, 0.5);
+        exitGfx.beginPath();
+        exitGfx.moveTo(exitPixelX + inset, exitPixelY + baySize - inset);
+        exitGfx.lineTo(exitPixelX + baySize / 2, exitPixelY + baySize / 2);
+        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        exitGfx.strokePath();
+      }
+
       exitGfx.setDepth(5);
     } else {
       // Legacy: filled rectangle + border + direction chevron
