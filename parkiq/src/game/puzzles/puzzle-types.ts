@@ -84,6 +84,15 @@ export type Puzzle = {
   trains?: TrainConfig[];
   /** Exit zone — grid position and exit direction */
   exitZone: ExitZone;
+  /** Optional parking type for tight position+angle win check.
+   *  If set, the exit zone shrinks to 48×48 and requires the
+   *  player to be within ±10° of parkingAngle. If unset, legacy
+   *  96×96 touch-only exit check applies. */
+  parkingType?: 'parallel' | 'perpendicular';
+  /** Target angle in degrees for the parking-type win check.
+   *  0 = parallel (facing up), 90 = perpendicular (facing right).
+   *  Only used when parkingType is set. */
+  parkingAngle?: number;
   /** Escape steps describing the correct maneuver */
   escapeSteps: EscapeStep[];
   /** Driving tip shown after solving */

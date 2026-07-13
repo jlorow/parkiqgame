@@ -20,10 +20,12 @@ export const puzzles: Puzzle[] = [
     environment: 'street',
     playerCar: { col: 2, row: 5, angle: 0 },
     obstacles: [
-      { type: 'sedan', col: 0, row: 1, angle: 0 },
-      { type: 'suv',   col: 4, row: 1, angle: 0 },
+      { type: 'sedan', col: 1, row: 1, angle: 0 },
+      { type: 'suv',   col: 3, row: 1, angle: 0 },
     ],
     exitZone: { col: 2, row: 0, direction: 'top' },
+    parkingType: 'parallel',
+    parkingAngle: 0,
     escapeSteps: [
       { step: 1, description: 'Hold forward — lane is clear.' },
     ],
@@ -98,15 +100,18 @@ export const puzzles: Puzzle[] = [
     playerCar: { col: 2, row: 5, angle: 0 },
     obstacles: [
       { type: 'sedan', col: 0, row: 2, angle: 0 },
+      { type: 'sedan', col: 2, row: 2, angle: 0 },
       { type: 'suv',   col: 3, row: 1, angle: 0 },
     ],
-    exitZone: { col: 1, row: 0, direction: 'top' },
+    exitZone: { col: 0, row: 0, direction: 'top' },
+    parkingType: 'parallel',
+    parkingAngle: 0,
     escapeSteps: [
-      { step: 1, description: 'Ease forward while drifting slightly left toward the center of the gap.' },
-      { step: 2, description: 'Hold that line precisely as you pass between the two cars.' },
-      { step: 3, description: 'Continue straight to the exit.' },
+      { step: 1, description: 'Pass between the two parked cars — stay centered in the gap.' },
+      { step: 2, description: 'Turn hard left toward the exit bay at the far left edge.' },
+      { step: 3, description: 'Straighten out and park in the bay.' },
     ],
-    expertTip: 'The real "no way that fits" moment. It does, exactly, with zero margin.',
+    expertTip: 'Pass between both cars, then steer sharply left — you have room to straighten out in the exit bay. The angle check is forgiving, but you must be pointed forward when you stop.',
   },
 
   // ── TIER 2: INTERMEDIATE (6–10) ────────────────────────────────────────────

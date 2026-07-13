@@ -25,9 +25,9 @@ const CONTAINER_OFFSET_Y = 0.5;
 //  Developer Testing Flags  —  set true to bypass mechanics
 // ════════════════════════════════════════════════════════════
 
-const DEBUG_SKIP_PUZZLE_5 = true;    // Skip puzzle 5 → load puzzle 6
+const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
-const DEBUG_LOAD_BONUS = true;          // Force-load bonus Dual-Train level on start
+const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
 
 // ════════════════════════════════════════════════════════════
 
@@ -140,6 +140,91 @@ const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
 // Both X and Y clamps are computed dynamically per frame in update()
 // using the car's current rotation angle. X keeps the visual ~6px inside
 // the grid edge; Y allows ~8px overhang (car nosing out of the bay).
+
+// ──────────────────────────────────────────────────────────
+//  Parking Bay Marking Renderer
+// ──────────────────────────────────────────────────────────
+
+/**
+ * Draws real parking-style bay markings inside the exit zone.
+ *
+ * - `parallel`: two horizontal curb lines flanking the bay + corner ticks
+ * - `perpendicular`: vertical stall-divider lines + back line + top ticks
+ *
+ * A subtle green-tinted fill keeps the exit-zone signal visible
+ * without the old solid-green rectangle look.
+ */
+function drawParkingBayMarkings(
+  gfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  size: number,
+  type: 'parallel' | 'perpendicular',
+): void {
+  console.log(`[MARKINGS] drawParkingBayMarkings called: type=${type}, bounds=(${x.toFixed(1)}, ${y.toFixed(1)}, ${size}x${size})`);
+  const inset = 3;
+  const tickLen = 10;
+  const lineW = 2;
+  const tickW = 1.5;
+  const lineColor = 0xffffff;
+
+  // Subtle green tint fill — signals "goal" without the old solid rectangle
+  gfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
+  gfx.fillRect(x, y, size, size);
+
+  if (type === 'parallel') {
+    // ── Parallel curb lines ──
+    // Two horizontal lines (top / bottom) mark the stall boundaries.
+    // Corner ticks extend inward to suggest the curb edges.
+    gfx.lineStyle(lineW, lineColor, 0.85);
+    gfx.beginPath();
+    // Top line
+    gfx.moveTo(x + inset, y + inset);
+    gfx.lineTo(x + size - inset, y + inset);
+    // Bottom line
+    gfx.moveTo(x + inset, y + size - inset);
+    gfx.lineTo(x + size - inset, y + size - inset);
+    gfx.strokePath();
+
+    // Corner ticks (short vertical strokes at each corner)
+    gfx.lineStyle(tickW, lineColor, 0.6);
+    gfx.beginPath();
+    gfx.moveTo(x + inset, y + inset);
+    gfx.lineTo(x + inset, y + inset + tickLen);
+    gfx.moveTo(x + size - inset, y + inset);
+    gfx.lineTo(x + size - inset, y + inset + tickLen);
+    gfx.moveTo(x + inset, y + size - inset);
+    gfx.lineTo(x + inset, y + size - inset - tickLen);
+    gfx.moveTo(x + size - inset, y + size - inset);
+    gfx.lineTo(x + size - inset, y + size - inset - tickLen);
+    gfx.strokePath();
+  } else {
+    // ── Perpendicular stall dividers ──
+    // Two vertical lines (left / right) + back line (bottom).
+    // Short horizontal ticks at the top suggest the open lane edge.
+    gfx.lineStyle(lineW, lineColor, 0.85);
+    gfx.beginPath();
+    // Left line
+    gfx.moveTo(x + inset, y + inset);
+    gfx.lineTo(x + inset, y + size - inset);
+    // Right line
+    gfx.moveTo(x + size - inset, y + inset);
+    gfx.lineTo(x + size - inset, y + size - inset);
+    // Back / bottom line
+    gfx.moveTo(x + inset, y + size - inset);
+    gfx.lineTo(x + size - inset, y + size - inset);
+    gfx.strokePath();
+
+    // Top ticks (short horizontal strokes at the open edge)
+    gfx.lineStyle(tickW, lineColor, 0.6);
+    gfx.beginPath();
+    gfx.moveTo(x + inset, y + inset);
+    gfx.lineTo(x + inset + tickLen, y + inset);
+    gfx.moveTo(x + size - inset, y + inset);
+    gfx.lineTo(x + size - inset - tickLen, y + inset);
+    gfx.strokePath();
+  }
+}
 
 // ──────────────────────────────────────────────────────────
 //  Scene
@@ -811,54 +896,73 @@ export class PuzzleScene extends Phaser.Scene {
     });
     container.add(grid);
 
-    // ── Step 3: Exit zone visual — gate/chevron redesign ────────────
+    // ── Step 3: Exit zone visual ────────────────────────────────────
     const ez = this.puzzle.exitZone;
-    const exitPixelX = (ez.col + CONTAINER_OFFSET_X) * UNIT_PX - 48;
-    const exitPixelY = (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX - 48;
-    const exitZoneCenterX = exitPixelX + 48;
-    const exitZoneCenterY = exitPixelY + 48;
+    const baySize = this.puzzle.parkingType ? 48 : 96;
+    const halfBay = baySize / 2;
+    const exitPixelX = (ez.col + CONTAINER_OFFSET_X) * UNIT_PX - halfBay;
+    const exitPixelY = (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX - halfBay;
+    const exitZoneCenterX = exitPixelX + halfBay;
+    const exitZoneCenterY = exitPixelY + halfBay;
     const exitGfx = this.add.graphics();
 
-    // Exit zone fill / border / chevron — sourced from ThemeRegistry
-    exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
-    exitGfx.fillRect(exitPixelX, exitPixelY, 96, 96);
+    console.log(`[MARKINGS] puzzle.parkingType=${this.puzzle.parkingType}, puzzle.parkingAngle=${this.puzzle.parkingAngle}, baySize=${baySize}, exitPos=(${exitPixelX.toFixed(1)}, ${exitPixelY.toFixed(1)}), branch=${this.puzzle.parkingType ? 'PARKING_MARKINGS' : 'LEGACY_RECT'}`);
 
-    // Bright border — reads as a gate frame
-    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.85);
-    exitGfx.strokeRect(exitPixelX, exitPixelY, 96, 96);
+    if (this.puzzle.parkingType) {
+      // Position diagnostic — container-local → scene-space mapping
+      const sceneTop = CONTAINER_Y + exitPixelY * SCALE_Y;
+      const sceneBottom = CONTAINER_Y + (exitPixelY + baySize) * SCALE_Y;
+      const sceneLeft = CONTAINER_X + exitPixelX * SCALE_X;
+      const sceneRight = CONTAINER_X + (exitPixelX + baySize) * SCALE_X;
+      console.log(`[MARKINGS] scene-space box: top=${sceneTop.toFixed(1)} bottom=${sceneBottom.toFixed(1)} left=${sceneLeft.toFixed(1)} right=${sceneRight.toFixed(1)} (canvas 0..844, container top=${CONTAINER_Y})`);
+      console.log(`[MARKINGS] MAGENTA test at depth=5 — is it visible?`);
 
-    // Chevron arrows pointing in the exit direction
-    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.75);
-    exitGfx.beginPath();
-    if (ez.direction === 'top') {
-      // Upward-pointing chevron (^)
-      exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY + 8);
-      exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY - 8);
-      exitGfx.lineTo(exitZoneCenterX + 18, exitZoneCenterY + 8);
-    } else if (ez.direction === 'bottom') {
-      exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY - 8);
-      exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY + 8);
-      exitGfx.lineTo(exitZoneCenterX + 18, exitZoneCenterY - 8);
-    } else if (ez.direction === 'left') {
-      exitGfx.moveTo(exitZoneCenterX + 8, exitZoneCenterY - 18);
-      exitGfx.lineTo(exitZoneCenterX - 8, exitZoneCenterY);
-      exitGfx.lineTo(exitZoneCenterX + 8, exitZoneCenterY + 18);
-    } else if (ez.direction === 'right') {
-      exitGfx.moveTo(exitZoneCenterX - 8, exitZoneCenterY - 18);
-      exitGfx.lineTo(exitZoneCenterX + 8, exitZoneCenterY);
-      exitGfx.lineTo(exitZoneCenterX - 8, exitZoneCenterY + 18);
+      // TEST: Solid magenta at depth=5, no tween, 100% alpha
+      exitGfx.fillStyle(0xff00ff, 1);
+      exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
+      exitGfx.lineStyle(3, 0xff00ff, 1);
+      exitGfx.strokeRect(exitPixelX, exitPixelY, baySize, baySize);
+      exitGfx.setDepth(5);
+    } else {
+      // Legacy: filled rectangle + border + direction chevron
+      exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
+      exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
+      exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.85);
+      exitGfx.strokeRect(exitPixelX, exitPixelY, baySize, baySize);
+
+      exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.75);
+      exitGfx.beginPath();
+      if (ez.direction === 'top') {
+        exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY + 8);
+        exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY - 8);
+        exitGfx.lineTo(exitZoneCenterX + 18, exitZoneCenterY + 8);
+      } else if (ez.direction === 'bottom') {
+        exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY - 8);
+        exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY + 8);
+        exitGfx.lineTo(exitZoneCenterX + 18, exitZoneCenterY - 8);
+      } else if (ez.direction === 'left') {
+        exitGfx.moveTo(exitZoneCenterX + 8, exitZoneCenterY - 18);
+        exitGfx.lineTo(exitZoneCenterX - 8, exitZoneCenterY);
+        exitGfx.lineTo(exitZoneCenterX + 8, exitZoneCenterY + 18);
+      } else if (ez.direction === 'right') {
+        exitGfx.moveTo(exitZoneCenterX - 8, exitZoneCenterY - 18);
+        exitGfx.lineTo(exitZoneCenterX + 8, exitZoneCenterY);
+        exitGfx.lineTo(exitZoneCenterX - 8, exitZoneCenterY + 18);
+      }
+      exitGfx.strokePath();
     }
-    exitGfx.strokePath();
 
     container.add(exitGfx);
-    this.tweens.add({
-      targets: exitGfx,
-      alpha: { from: 0.3, to: 0.5 },
-      duration: 1200,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+    if (!this.puzzle.parkingType) {
+      this.tweens.add({
+        targets: exitGfx,
+        alpha: { from: 0.3, to: 0.5 },
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
 
     // ── Themed foreground elements framing the grid ────────────
     this.addThemeForeground(container, this.puzzle.theme);
@@ -1249,11 +1353,21 @@ export class PuzzleScene extends Phaser.Scene {
       this.activeCarH,
     );
     const ez = this.puzzle.exitZone;
-    const exitPixelX = (ez.col + CONTAINER_OFFSET_X) * UNIT_PX - 48;
-    const exitPixelY = (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX - 48;
-    const exitRect = new Phaser.Geom.Rectangle(exitPixelX, exitPixelY, 96, 96);
+    const baySize = this.puzzle.parkingType ? 48 : 96;
+    const halfBay = baySize / 2;
+    const exitPixelX = (ez.col + CONTAINER_OFFSET_X) * UNIT_PX - halfBay;
+    const exitPixelY = (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX - halfBay;
+    const exitRect = new Phaser.Geom.Rectangle(exitPixelX, exitPixelY, baySize, baySize);
 
-    return Phaser.Geom.Rectangle.Overlaps(carRect, exitRect);
+    if (!Phaser.Geom.Rectangle.Overlaps(carRect, exitRect)) return false;
+
+    // Angle check — applies only to parking-type puzzles
+    if (this.puzzle.parkingAngle !== undefined) {
+      const diff = Math.abs(Phaser.Math.Angle.WrapDegrees(this.carAngle - this.puzzle.parkingAngle));
+      if (diff > 10) return false;
+    }
+
+    return true;
   }
 
   // ──────────────────────────────────────────────────────────

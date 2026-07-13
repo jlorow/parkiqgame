@@ -1,60 +1,66 @@
 import './index.css';
 
-import { navigateTo } from '@devvit/web/client';
 import { context, requestExpandedMode } from '@devvit/web/client';
+import { useEffect, useState } from 'react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
+const BG_FALLBACK = '#0f0f14';
+
 export const Splash = () => {
+  const [bgReady, setBgReady] = useState(false);
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => setBgReady(true);
+    img.onerror = () =>
+      console.warn(
+        '[ParkIQ] public/splash-bg.png not found — using fallback solid background.',
+      );
+    img.src = '/splash-bg.png';
+  }, []);
+
   return (
-    <div className="flex relative flex-col justify-center items-center min-h-screen gap-4 bg-white dark:bg-gray-900">
-      <img
-        className="object-contain w-1/2 max-w-[250px] mx-auto"
-        src="/snoo.png"
-        alt="Snoo"
-      />
-      <div className="flex flex-col items-center gap-2">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white">
-          Hey {context.username ?? 'user'} 👋
-        </h1>
-        <p className="text-base text-center text-gray-600 dark:text-gray-300">
-          Edit{' '}
-          <span className="bg-[#e5ebee] dark:bg-gray-700 px-1 py-0.5 rounded">
-            src/client/splash.tsx
-          </span>{' '}
-          to get started.
-        </p>
-      </div>
-      <div className="flex items-center justify-center mt-5">
-        <button
-          className="flex items-center justify-center bg-[#d93900] dark:bg-orange-600 text-white w-auto h-10 rounded-full cursor-pointer transition-colors px-4 hover:bg-[#c23300] dark:hover:bg-orange-700"
-          onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
-        >
-          Tap to Start
-        </button>
-      </div>
-      <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 text-[0.8em] text-gray-600 dark:text-gray-400">
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://developers.reddit.com/docs')}
-        >
-          Docs
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://www.reddit.com/r/Devvit')}
-        >
-          r/Devvit
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://discord.com/invite/R7yu2wh9Qz')}
-        >
-          Discord
-        </button>
-      </footer>
+    <div
+      className="flex relative flex-col justify-center items-center min-h-screen"
+      style={{
+        backgroundColor: BG_FALLBACK,
+        backgroundImage: bgReady ? 'url(/splash-bg.png)' : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
+      {/* PLAY button */}
+      <button
+        onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
+        className="cursor-pointer select-none"
+        style={{
+          backgroundColor: '#E8320A',
+          color: '#FFFFFF',
+          fontSize: '28px',
+          fontWeight: 800,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          letterSpacing: '4px',
+          padding: '14px 48px',
+          border: '3px solid #000000',
+          borderRadius: '6px',
+          boxShadow: '0 4px 0 #000000, 0 6px 12px rgba(0,0,0,0.5)',
+        }}
+      >
+        PLAY
+      </button>
+
+      {/* Credit — bottom-left */}
+      <span
+        className="absolute bottom-3 left-3"
+        style={{
+          color: 'rgba(255,255,255,0.45)',
+          fontSize: '11px',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+        }}
+      >
+        Made by u/{context.username ?? 'ParkIQ'}
+      </span>
     </div>
   );
 };
@@ -62,5 +68,5 @@ export const Splash = () => {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Splash />
-  </StrictMode>
+  </StrictMode>,
 );
