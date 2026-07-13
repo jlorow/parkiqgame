@@ -233,6 +233,8 @@ export class PuzzleScene extends Phaser.Scene {
   private gapIndicatorTween: Phaser.Tweens.Tween | null = null;
   /** True while the gap indicator rect is being drawn (tracks open/close transitions) */
   private gapIndicatorActive = false;
+  /** Tracks whether the first load progress event has fired (for loading screen handoff) */
+  private tloadLogged = false;
 
 
   private get webAudio(): Phaser.Sound.WebAudioSoundManager {
@@ -284,8 +286,8 @@ export class PuzzleScene extends Phaser.Scene {
     this.loadingGroup.add(fill);
 
     this.load.on('progress', (value: number) => {
-      if (!(this as any)._tloadLogged) {
-        (this as any)._tloadLogged = true;
+      if (!this.tloadLogged) {
+        this.tloadLogged = true;
         // Remove CSS loading screen on first progress event — Phaser is now actively
         // rendering the loading elements, so the handoff is seamless.
         document.getElementById('loading')?.remove();
