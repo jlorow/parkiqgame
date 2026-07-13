@@ -27,7 +27,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
-const DEBUG_FORCE_PUZZLE: number | null = null;  // Force-load specific puzzle (null = use daily rotation)
+const DEBUG_FORCE_PUZZLE: number | null = 2;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
@@ -312,7 +312,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('car-trailer', 'assets/sprites/cars/Trailer.svg', { width: 200, height: 981 });
 
     // ── Background images (per-puzzle lot surfaces) ───────────────
-    this.load.svg('bg_1', 'assets/sprites/backgrounds/puzzle1-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_1', 'assets/sprites/backgrounds/Road-Garage.svg', { width: 288, height: 288 });
 
     this.load.audio('train', 'assets/sounds/train.mp3');
 
@@ -786,14 +786,45 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.lineTo(exitPixelX + baySize - inset - tickLen, exitPixelY + inset);
         exitGfx.strokePath();
       } else {
-        // 'angled' — subtle border + corner chevrons to suggest the offset approach
-        exitGfx.lineStyle(1.5, lineColor, 0.7);
-        exitGfx.strokeRect(exitPixelX + inset, exitPixelY + inset, baySize - inset * 2, baySize - inset * 2);
-        exitGfx.lineStyle(1.5, lineColor, 0.5);
+        // 'angled' — rotated rectangle matching exitZone.angle
+        // Using the same cosA/sinA corner-rotation pattern as updateTruckTrailer()
+        const halfSize = baySize / 2;
+        const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
+        const cosA = Math.cos(rad);
+        const sinA = Math.sin(rad);
+
+        // 4 corners of the unrotated 48×48 rectangle centered at origin
+        const localCorners = [
+          { x: -halfSize, y: -halfSize },
+          { x:  halfSize, y: -halfSize },
+          { x:  halfSize, y:  halfSize },
+          { x: -halfSize, y:  halfSize },
+        ];
+
+        // Rotate each corner and translate to bay center
+        const worldCorners = localCorners.map(c => ({
+          x: bayCenterX + c.x * cosA - c.y * sinA,
+          y: bayCenterY + c.x * sinA + c.y * cosA,
+        }));
+
+        // Filled rotated rectangle — dark green fill (consistent with other parking-type markings)
+        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.25);
         exitGfx.beginPath();
-        exitGfx.moveTo(exitPixelX + inset, exitPixelY + baySize - inset);
-        exitGfx.lineTo(exitPixelX + baySize / 2, exitPixelY + baySize / 2);
-        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        exitGfx.moveTo(worldCorners[0].x, worldCorners[0].y);
+        for (let i = 1; i < worldCorners.length; i++) {
+          exitGfx.lineTo(worldCorners[i].x, worldCorners[i].y);
+        }
+        exitGfx.closePath();
+        exitGfx.fillPath();
+
+        // Brighter green border stroke
+        exitGfx.lineStyle(2, 0x8fcf90, 0.85);
+        exitGfx.beginPath();
+        exitGfx.moveTo(worldCorners[0].x, worldCorners[0].y);
+        for (let i = 1; i < worldCorners.length; i++) {
+          exitGfx.lineTo(worldCorners[i].x, worldCorners[i].y);
+        }
+        exitGfx.closePath();
         exitGfx.strokePath();
       }
 
@@ -828,7 +859,16 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
     container.add(exitGfx);
-    if (!ez.parkingType) {
+    if (ez.parkingType === 'angled') {
+      this.tweens.add({
+        targets: exitGfx,
+        alpha: { from: 0.65, to: 0.95 },
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    } else if (!ez.parkingType) {
       this.tweens.add({
         targets: exitGfx,
         alpha: { from: 0.3, to: 0.5 },
