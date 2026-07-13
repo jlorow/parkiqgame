@@ -119,6 +119,10 @@ export type Puzzle = {
    *  0 = parallel (facing up), 90 = perpendicular (facing right).
    *  Only used when parkingType is set. */
   parkingAngle?: number;
+  /** Optional per-puzzle lot surface image (PNG or SVG).
+   *  Rendered at 288×288 in container-local coords, below all cars/exit markings.
+   *  If unset, a solid neutral-gray fill is used as fallback. */
+  backgroundImage?: string;
   /** Escape steps describing the correct maneuver */
   escapeSteps: EscapeStep[];
   /** Driving tip shown after solving */
