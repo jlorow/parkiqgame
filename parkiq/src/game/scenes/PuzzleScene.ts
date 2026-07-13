@@ -867,8 +867,8 @@ export class PuzzleScene extends Phaser.Scene {
   private renderParkingScene(): void {
     const pc = this.puzzle.playerCar;
 
-    this.spawnX = (pc.col + CONTAINER_OFFSET_X) * UNIT_PX;
-    this.spawnY = (pc.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+    this.spawnX = pc.x ?? (pc.col + CONTAINER_OFFSET_X) * UNIT_PX;
+    this.spawnY = pc.y ?? (pc.row + CONTAINER_OFFSET_Y) * UNIT_PX;
     this.spawnAngle = pc.angle;
     this.carX = this.spawnX;
     this.carY = this.spawnY;
@@ -921,17 +921,19 @@ export class PuzzleScene extends Phaser.Scene {
 
     // ── Step 3: Exit zone visual ────────────────────────────────────
     const ez = this.puzzle.exitZone;
-    const baySize = this.puzzle.parkingType ? 48 : 96;
+    const baySize = ez.parkingType ? 48 : 96;
     const halfBay = baySize / 2;
-    const exitPixelX = (ez.col + CONTAINER_OFFSET_X) * UNIT_PX - halfBay;
-    const exitPixelY = (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX - halfBay;
+    const bayCenterX = ez.x ?? (ez.col + CONTAINER_OFFSET_X) * UNIT_PX;
+    const bayCenterY = ez.y ?? (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+    const exitPixelX = bayCenterX - halfBay;
+    const exitPixelY = bayCenterY - halfBay;
     const exitZoneCenterX = exitPixelX + halfBay;
     const exitZoneCenterY = exitPixelY + halfBay;
     const exitGfx = this.add.graphics();
 
-    console.log(`[MARKINGS] puzzle.parkingType=${this.puzzle.parkingType}, puzzle.parkingAngle=${this.puzzle.parkingAngle}, baySize=${baySize}, exitPos=(${exitPixelX.toFixed(1)}, ${exitPixelY.toFixed(1)}), branch=${this.puzzle.parkingType ? 'PARKING_MARKINGS' : 'LEGACY_RECT'}`);
+    console.log(`[MARKINGS] ez.parkingType=${ez.parkingType}, ez.angle=${ez.angle}, baySize=${baySize}, exitPos=(${exitPixelX.toFixed(1)}, ${exitPixelY.toFixed(1)}), branch=${ez.parkingType ? 'PARKING_MARKINGS' : 'LEGACY_RECT'}`);
 
-    if (this.puzzle.parkingType) {
+    if (ez.parkingType) {
       // Position diagnostic — container-local → scene-space mapping
       const sceneTop = CONTAINER_Y + exitPixelY * SCALE_Y;
       const sceneBottom = CONTAINER_Y + (exitPixelY + baySize) * SCALE_Y;
@@ -976,7 +978,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
     container.add(exitGfx);
-    if (!this.puzzle.parkingType) {
+    if (!ez.parkingType) {
       this.tweens.add({
         targets: exitGfx,
         alpha: { from: 0.3, to: 0.5 },
@@ -991,12 +993,13 @@ export class PuzzleScene extends Phaser.Scene {
     this.addThemeForeground(container, this.puzzle.theme);
 
     for (const obs of this.puzzle.obstacles) {
-      if (obs.type === 'pillar' || obs.type === 'wall') continue;
+      // 'pillar' is visual-only — walls now render (collision changed in Step 3)
+      if (obs.type === 'pillar') continue;
 
       const obsImg = createObstacleCar(
         this,
-        obs.col + CONTAINER_OFFSET_X,
-        obs.row + CONTAINER_OFFSET_Y,
+        obs.x ?? (obs.col + CONTAINER_OFFSET_X) * UNIT_PX,
+        obs.y ?? (obs.row + CONTAINER_OFFSET_Y) * UNIT_PX,
         obs.angle,
       );
       obsImg.setDepth(6);
@@ -1006,8 +1009,8 @@ export class PuzzleScene extends Phaser.Scene {
 
     const vehicle = this.puzzle.playerVehicle ?? 'sedan';
     const playerCar = createCarSprite(this, {
-      x: pc.col + CONTAINER_OFFSET_X,
-      y: pc.row + CONTAINER_OFFSET_Y,
+      x: pc.x ?? (pc.col + CONTAINER_OFFSET_X) * UNIT_PX,
+      y: pc.y ?? (pc.row + CONTAINER_OFFSET_Y) * UNIT_PX,
       angle: pc.angle,
       type: 'player',
       textureKey: vehicle === 'limo' ? 'car-limo' : vehicle === 'semitruck' ? 'car-trailer' : undefined,
