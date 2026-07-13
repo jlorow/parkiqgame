@@ -48,14 +48,65 @@ export function convertGridToPixel(puzzle: Puzzle): Puzzle {
   return { ...puzzle, playerCar, obstacles, exitZone };
 }
 
-// ── Puzzle validation — fires once at import, catches row-5 obstacles ─────
+// ── Puzzle validation — fires once at import ────────────────────────────
+// Handles both legacy grid-based (col/row) and new freeform pixel-based (x/y) puzzles.
+// Grid validation: rows 1–4 for obstacles.
+// Freeform validation: x,y in 0–288 playfield bounds.
 function validatePuzzleData(): void {
+  const PLAYFIELD = 288;
+
   for (const p of puzzles) {
-    for (const obs of p.obstacles) {
-      if (obs.row < 1 || obs.row > 4) {
+    // ── Player car ────────────────────────────────────────────────────
+    const pc = p.playerCar;
+    if (pc.x !== undefined || pc.y !== undefined) {
+      if (pc.x !== undefined && (pc.x < 0 || pc.x > PLAYFIELD)) {
         throw new Error(
-          `Puzzle ${p.id}: obstacle at col ${obs.col} row ${obs.row} — ` +
-          'obstacle rows must be in 1–4 (row 0 reserved for exit, row 5 reserved for player spawn).',
+          `Puzzle ${p.id}: playerCar x=${pc.x} — must be 0–${PLAYFIELD}.`,
+        );
+      }
+      if (pc.y !== undefined && (pc.y < 0 || pc.y > PLAYFIELD)) {
+        throw new Error(
+          `Puzzle ${p.id}: playerCar y=${pc.y} — must be 0–${PLAYFIELD}.`,
+        );
+      }
+    }
+
+    // ── Obstacles ────────────────────────────────────────────────────
+    for (const obs of p.obstacles) {
+      if (obs.x !== undefined || obs.y !== undefined) {
+        // Freeform pixel-based: validate playfield bounds
+        if (obs.x !== undefined && (obs.x < 0 || obs.x > PLAYFIELD)) {
+          throw new Error(
+            `Puzzle ${p.id}: obstacle x=${obs.x} — must be 0–${PLAYFIELD}.`,
+          );
+        }
+        if (obs.y !== undefined && (obs.y < 0 || obs.y > PLAYFIELD)) {
+          throw new Error(
+            `Puzzle ${p.id}: obstacle y=${obs.y} — must be 0–${PLAYFIELD}.`,
+          );
+        }
+      } else {
+        // Legacy grid-based: validate row range
+        if (obs.row < 1 || obs.row > 4) {
+          throw new Error(
+            `Puzzle ${p.id}: obstacle at col ${obs.col} row ${obs.row} — ` +
+            'obstacle rows must be in 1–4 (row 0 reserved for exit, row 5 reserved for player spawn).',
+          );
+        }
+      }
+    }
+
+    // ── Exit zone ────────────────────────────────────────────────────
+    const ez = p.exitZone;
+    if (ez.x !== undefined || ez.y !== undefined) {
+      if (ez.x !== undefined && (ez.x < 0 || ez.x > PLAYFIELD)) {
+        throw new Error(
+          `Puzzle ${p.id}: exitZone x=${ez.x} — must be 0–${PLAYFIELD}.`,
+        );
+      }
+      if (ez.y !== undefined && (ez.y < 0 || ez.y > PLAYFIELD)) {
+        throw new Error(
+          `Puzzle ${p.id}: exitZone y=${ez.y} — must be 0–${PLAYFIELD}.`,
         );
       }
     }
