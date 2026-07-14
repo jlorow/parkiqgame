@@ -86,6 +86,9 @@ const PROP_VISUAL_SCALE: Record<string, number> = {
   'shrub-1':    103 / 200,  // 0.515
   'shrub-2':    118 / 200,  // 0.59
   'tree':        88 / 200,  // 0.44
+  // Wall: loaded at 33×191 native, scaled to match collision width (48px)
+  // scale = 48 / loadWidth(200) = 0.24 → renders 48px wide
+  'wall':       48 / 200,  // 0.24
 };
 
 // ──────────────────────────────────────────────────────────
@@ -354,6 +357,9 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('prop-shrub-1',     'assets/sprites/props/Prop-Shrub-1.svg',     { width: 200, height: 117 });
     this.load.svg('prop-shrub-2',     'assets/sprites/props/Prop-Shrub-2.svg',     { width: 200, height: 117 });
     this.load.svg('prop-tree',        'assets/sprites/props/Prop-Tree.svg',         { width: 200, height: 202 });
+
+    // ── Wall SVG ───────────────────────────────────────────────────
+    this.load.svg('prop-wall', 'assets/sprites/props/Wall.svg', { width: 200 });
 
     // ── Background images (per-puzzle lot surfaces) ───────────────
     this.load.svg('bg_1', 'assets/sprites/backgrounds/Road-Garage.svg', { width: 288, height: 288 });
@@ -1034,14 +1040,13 @@ export class PuzzleScene extends Phaser.Scene {
       const oy = obs.y ?? ((obs.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
 
       if (obs.type === 'wall') {
-        // Wall: Graphics-drawn 48×48 filled rectangle (no SVG asset)
-        const wallGfx = this.add.graphics();
-        wallGfx.fillStyle(0x6b7280, 0.9);
-        wallGfx.fillRect(ox - 24, oy - 24, 48, 48);
-        wallGfx.lineStyle(1, 0x4b5563, 1.0);
-        wallGfx.strokeRect(ox - 24, oy - 24, 48, 48);
-        wallGfx.setDepth(6);
-        container.add(wallGfx);
+        // Wall: SVG image (replaces old Graphics-drawn placeholder)
+        const scale = PROP_VISUAL_SCALE['wall'] ?? 0.24;
+        const img = this.add.image(ox, oy, 'prop-wall');
+        img.setAngle(obs.angle);
+        img.setDepth(6);
+        img.setScale(scale, scale * COUNTER_SCALE_Y);
+        container.add(img);
       } else if (obs.type === 'barricade-1' || obs.type === 'barricade' ||
                  obs.type === 'cone' || obs.type === 'shrub-1' ||
                  obs.type === 'shrub-2' || obs.type === 'tree') {

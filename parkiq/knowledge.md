@@ -543,7 +543,110 @@ Touches game state management.
 
 ---
 
-# Story 15.5 — Gameplay Validation Pass
+# ---
+
+## Asset Replacement Process — Adding/Replacing SVG Assets
+
+When you replace a placeholder SVG or add a new one from Figma, follow these steps in order. This avoids the most common mistakes (wrong dimensions, collision/visual mismatch, stale Graphics code).
+
+### Step 1 — Place the SVG file
+
+Save the exported SVG into the correct directory:
+
+| Asset type | Directory |
+|---|---|
+| Car SVGs | `public/assets/sprites/cars/` |
+| Prop SVGs | `public/assets/sprites/props/` |
+| Background tiles | `public/assets/sprites/backgrounds/` |
+
+File naming: use `PascalCase` matching convention (e.g. `Wall.svg`, `Prop-cone.svg`). The name must match what the preload code loads.
+
+### Step 2 — Check the SVG viewBox
+
+Open the SVG file and read the `viewBox` attribute. This tells you the asset's **native width and height**.
+
+```
+<svg width="33" height="191" viewBox="0 0 33 191"> → native size = 33×191
+```
+
+**If the SVG viewBox doesn't match what the game expects**, flag it before proceeding. A mismatch means the collision box won't match the visual.
+
+### Step 3 — Add preload line
+
+In `PuzzleScene.ts` → `preload()`, add a `load.svg()` call. Convention: **load at 200px width** (matching all existing car and prop SVGs). Phaser auto-calculates height from the SVG's aspect ratio.
+
+```typescript
+// New asset (200px wide, auto height):
+this.load.svg('prop-wall', 'assets/sprites/props/Wall.svg', { width: 200 });
+
+// Existing pattern — car at explicit width × height:
+this.load.svg('car-player', 'assets/sprites/cars/Car-Player.svg', { width: 200, height: 400 });
+
+// Existing pattern — prop at explicit width × height:
+this.load.svg('prop-cone', 'assets/sprites/props/Prop-cone.svg', { width: 200, height: 200 });
+```
+
+**Asset key convention:** `prop-{typeName}` for props, `car-player` / `car-obstacle-{N}` / `car-limo` / `car-trailer` for vehicles, `bg_{id}` for backgrounds.
+
+### Step 4 — Add or update visual scale
+
+The game renders SVGs at 200px load width, then scales them down. The scale factor determines the final rendered pixel width:
+
+```
+renderWidth = 200 × scale
+```
+
+For props, the scale should make the **rendered visual width match the collision box width**:
+
+```typescript
+// In PROP_VISUAL_SCALE:
+'wall': 48 / 200,  // 0.24 → renders 48px wide = matches WALL_BOX (48×48)
+```
+
+For vehicles, `CAR_VISUAL_SCALE = 0.20` is used (200 × 0.20 = 40px visual width for a 36px collision width).
+
+**Always set scale = collisionWidth / 200** so the visual and hitbox align.
+
+### Step 5 — Update rendering code
+
+Find the obstacle render loop in `renderParkingScene()` (search for `for (const obs of this.puzzle.obstacles)`). Add or update the branch for your asset type:
+
+```typescript
+if (obs.type === 'wall') {
+  // SVG image — replaces old Graphics-drawn placeholder
+  const scale = PROP_VISUAL_SCALE['wall'] ?? 0.24;
+  const img = this.add.image(ox, oy, 'prop-wall');          // ← asset key from Step 3
+  img.setAngle(obs.angle);
+  img.setDepth(6);                           // same depth as all obstacles
+  img.setScale(scale, scale * COUNTER_SCALE_Y);  // COUNTER_SCALE_Y compensates container's non-uniform scale
+  container.add(img);
+}
+```
+
+**Pattern for all prop types:** this is the same pattern used by all 6 props. Each uses `prop-${obs.type}` as the dynamic texture key.
+
+### Step 6 — Verify
+
+1. `npx tsc --noEmit` — must pass clean
+2. Play the game and verify the asset renders at the expected position with the expected rotation
+3. Verify collision feels correct (the visual should match where collisions happen)
+
+### Common pitfalls
+
+| Pitfall | Symptom | Fix |
+|---|---|---|
+| Missing preload | SVG doesn't show — console shows "texture not found" error | Add `this.load.svg()` call |
+| Wrong asset key in preload vs rendering | Same as above — texture key mismatch | Make sure the key in `load.svg()` matches the key in `this.add.image()` |
+| Wrong scale | Asset looks too big or too small | Adjust scale in `PROP_VISUAL_SCALE` — should be `collisionWidth / loadWidth` |
+| Missing `COUNTER_SCALE_Y` | Asset looks vertically stretched in the container | Always multiply Y scale by `COUNTER_SCALE_Y` (SCALE_X / SCALE_Y) |
+| viewBox mismatch | Visual doesn't match collision box | Check the SVG's `viewBox` dimensions — update collision box OR visual scale to match |
+| Stale Graphics code | Old rectangle shows BEHIND the new SVG (both render) | Remove the old `add.graphics()` / `fillRect` code branch |
+
+---
+
+## Epic 15 — Gameplay Integrity & Movement
+
+### Story 15.5 — Gameplay Validation Pass
 
 ### Problem
 
