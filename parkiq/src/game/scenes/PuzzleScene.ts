@@ -366,6 +366,20 @@ export class PuzzleScene extends Phaser.Scene {
 
     // ── Background images (per-puzzle lot surfaces) ───────────────
     this.load.svg('bg_1', 'assets/sprites/backgrounds/puzzle1-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_2', 'assets/sprites/backgrounds/puzzle2-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_3', 'assets/sprites/backgrounds/puzzle3-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_4', 'assets/sprites/backgrounds/puzzle4-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_5', 'assets/sprites/backgrounds/puzzle5-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_6', 'assets/sprites/backgrounds/puzzle6-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_7', 'assets/sprites/backgrounds/puzzle7-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_8', 'assets/sprites/backgrounds/puzzle8-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_9', 'assets/sprites/backgrounds/puzzle9-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_10', 'assets/sprites/backgrounds/puzzle10-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_11', 'assets/sprites/backgrounds/puzzle11-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_12', 'assets/sprites/backgrounds/puzzle12-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_13', 'assets/sprites/backgrounds/puzzle13-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_14', 'assets/sprites/backgrounds/puzzle14-bg.svg', { width: 288, height: 288 });
+    this.load.svg('bg_15', 'assets/sprites/backgrounds/puzzle15-bg.svg', { width: 288, height: 288 });
 
     this.load.audio('train', 'assets/sounds/train.mp3');
 
