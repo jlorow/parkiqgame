@@ -567,8 +567,6 @@
     //  Collision Math — mirrors PuzzleScene.ts EXACTLY
     // ═════════════════════════════════════════════════════════════
 
-    const WALL_BOX = { w: 48, h: 48 };
-
     // ── Per-type collision box lookup (mirrors PuzzleScene.ts PROP_BOX + WALL_BOX) ──
     const OBSTACLE_BOX = {
       'sedan':        { w: 36, h: 64 },
@@ -640,9 +638,20 @@
       const spawn = markers.find(m => m.type === 'spawn');
       const exit  = markers.find(m => m.type === 'exit');
 
-      function getBox(type) {
+      /** Returns collision box with barricade angle swap, mirroring engine's getObstacleBox() */
+      function getBox(type, angle) {
+        angle = angle || 0;
         const b = OBSTACLE_BOX[type];
         if (!b) return { w: 36, h: 64 };
+        // Barricades: swap w/h if angle ≥45° (mirrors engine's getObstacleBox)
+        if (type === 'barricade' || type === 'barricade-1') {
+          let r = angle % 180;
+          if (r < 0) r += 180;
+          if (r > 90) r = 180 - r;
+          if (r >= 45) {
+            return { w: b.h, h: b.w };
+          }
+        }
         return b;
       }
 
@@ -656,8 +665,8 @@
         for (let j = i + 1; j < cars.length; j++) {
           const a = cars[i];
           const b = cars[j];
-          const ba = getBox(a.type);
-          const bb = getBox(b.type);
+          const ba = getBox(a.type, a.angle);
+          const bb = getBox(b.type, b.angle);
           const rectA = makeRect(a.x, a.y, ba.w, ba.h);
           const rectB = makeRect(b.x, b.y, bb.w, bb.h);
           if (rectsOverlap(rectA, rectB)) {
@@ -673,10 +682,10 @@
 
       // ── 1b. All obstacles vs spawn overlap ────────────────────────
       if (spawn) {
-        const spawnBox = getBox(spawn.type);
+        const spawnBox = getBox(spawn.type, spawn.angle);
         const spawnRect = makeRect(spawn.x, spawn.y, spawnBox.w, spawnBox.h);
         for (const obs of obstacles) {
-          const ob = getBox(obs.type);
+          const ob = getBox(obs.type, obs.angle);
           const obsRect = makeRect(obs.x, obs.y, ob.w, ob.h);
           if (rectsOverlap(obsRect, spawnRect)) {
             const msg = `Overlaps spawn at (${spawn.x}, ${spawn.y})`;
@@ -693,7 +702,7 @@
       if (exit) {
         const exitRect = makeRect(exit.x, exit.y, 48, 48);
         for (const obs of obstacles) {
-          const ob = getBox(obs.type);
+          const ob = getBox(obs.type, obs.angle);
           const obsRect = makeRect(obs.x, obs.y, ob.w, ob.h);
           if (rectsOverlap(obsRect, exitRect)) {
             const msg = `Overlaps exit zone at (${exit.x}, ${exit.y})`;
@@ -703,7 +712,7 @@
         }
         // Also check spawn vs exit
         if (spawn) {
-          const spawnBox = getBox(spawn.type);
+          const spawnBox = getBox(spawn.type, spawn.angle);
           const spawnRect = makeRect(spawn.x, spawn.y, spawnBox.w, spawnBox.h);
           if (rectsOverlap(spawnRect, exitRect)) {
             const msg = `Overlaps exit zone at (${exit.x}, ${exit.y})`;
@@ -717,7 +726,7 @@
       const collisionMarkers = [...obstacles];
       if (spawn) collisionMarkers.push(spawn);
       for (const m of collisionMarkers) {
-        const mb = getBox(m.type);
+        const mb = getBox(m.type, m.angle);
         const ext = getAABBExtents(m.x, m.y, mb.w, mb.h);
         if (!ext.fullyInside) {
           const over = [];
