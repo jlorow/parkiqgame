@@ -31,6 +31,7 @@
       --shrub1-color: #68B345;
       --shrub2-color: #4A8F2F;
       --tree-color: #79AE28;
+      --tree-sm-color: #79AE28;
       --radius: 8px;
       --radius-sm: 4px;
     }
@@ -286,6 +287,23 @@
       background: var(--accent-red);
       color: #111;
     }
+    .fine-btn {
+      font-size: 11px;
+      padding: 2px 6px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+      font-weight: 600;
+    }
+    .fine-btn:hover {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: #111;
+    }
     .tolerance-note {
       font-size: 11px;
       color: var(--text-muted);
@@ -352,6 +370,37 @@
       border-radius: 50%;
       margin-right: 4px;
       vertical-align: middle;
+    }
+
+    /* ── Path test section ── */
+    .path-test-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .path-test-section h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .path-test-section .path-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .path-instruction {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 6px 10px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+      line-height: 1.5;
     }
 
     /* ── Export section ── */
@@ -492,9 +541,20 @@
           <button data-type="shrub-1">Shrub-1</button>
           <button data-type="shrub-2">Shrub-2</button>
           <button data-type="tree">Tree</button>
+          <button data-type="tree-sm">Tree-SM</button>
           <button data-type="spawn">Spawn</button>
           <button data-type="exit">Exit</button>
         </div>
+
+        <div style="width:1px;height:24px;background:var(--border);margin:0 6px;"></div>
+
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;" id="hitboxToggleLabel">
+          <input type="checkbox" id="showHitboxesCheck" style="cursor:pointer;">
+          <span style="font-size:12px;font-weight:600;color:var(--text-secondary)">Show Hitboxes</span>
+        </label>
+
+        <button class="file-btn" id="testPathBtn" style="border-color:var(--accent-green);color:var(--accent-green);font-weight:600;">🧪 Test Path</button>
+        <button class="file-btn" id="clearPathBtn" style="border-color:var(--accent-red);color:var(--accent-red);display:none;" hidden>✕ Clear Path</button>
       </div>
 
       <!-- Properties Panel -->
@@ -529,6 +589,17 @@
         </div>
       </div>
 
+      <!-- Path Test -->
+      <div class="path-test-section" id="pathTestSection" style="display:none;">
+        <h3>🧪 Path Test</h3>
+        <div class="path-toolbar">
+          <button class="copy-btn" id="clearPathBtn2" style="background:var(--accent-red);font-size:12px;padding:5px 14px;font-family:inherit;">✕ Clear Waypoints</button>
+        </div>
+        <div class="path-instruction" id="pathInstruction">Click on the canvas to add waypoints. Path starts from the spawn marker.</div>
+        <div id="pathResultsDisplay" style="font-size:12px;font-family:monospace;line-height:1.6;min-height:30px;padding:6px 0;"></div>
+        <div id="pathWaypointList" style="font-size:11px;font-family:monospace;color:var(--text-secondary);max-height:80px;overflow-y:auto;"></div>
+      </div>
+
       <!-- Export -->
       <div class="export-section">
         <h3>Export</h3>
@@ -555,6 +626,7 @@
       'shrub-1':     '#68B345',
       'shrub-2':     '#4A8F2F',
       'tree':        '#79AE28',
+      'tree-sm':     '#79AE28',
       spawn: '#5B9BFF',
       exit:  '#4ADE80',
     };
@@ -580,9 +652,30 @@
       'shrub-1':      { w: 103, h: 60 },
       'shrub-2':      { w: 118, h: 69 },
       'tree':         { w: 88, h: 89 },
+      'tree-sm':      { w: 41, h: 42 },
     };
     const PLAYFIELD = 288;
     const STORAGE_KEY = 'parkiq-level-editor-state';
+
+    /**
+     * Returns collision box with barricade angle swap, mirroring engine's getObstacleBox().
+     * Hoisted to top level so both runCollisionChecks() and runPathTest() share the SAME function.
+     */
+    function getBox(type, angle) {
+      angle = angle || 0;
+      const b = OBSTACLE_BOX[type];
+      if (!b) return { w: 36, h: 64 };
+      // Barricades: swap w/h if angle ≥45° (mirrors engine's getObstacleBox)
+      if (type === 'barricade' || type === 'barricade-1') {
+        let r = angle % 180;
+        if (r < 0) r += 180;
+        if (r > 90) r = 180 - r;
+        if (r >= 45) {
+          return { w: b.h, h: b.w };
+        }
+      }
+      return b;
+    }
 
     function makeRect(cx, cy, w, h) {
       return { left: cx - w / 2, right: cx + w / 2, top: cy - h / 2, bottom: cy + h / 2 };
@@ -622,6 +715,54 @@
     }
 
     /**
+     * Draw a rotated rectangle outline on the canvas context.
+     * Uses the same OBSTACLE_BOX/getBox() dimensions that runCollisionChecks() uses.
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {number} cx - center x
+     * @param {number} cy - center y
+     * @param {number} w - box width
+     * @param {number} h - box height
+     * @param {number} angleDeg - rotation angle in degrees (0=up, clockwise)
+     * @param {string} strokeStyle - CSS color string
+     * @param {number} lineWidth
+     */
+    function drawRotatedBox(ctx, cx, cy, w, h, angleDeg, strokeStyle, lineWidth) {
+      const rad = angleDeg * Math.PI / 180;  // game angle 0°=up, same as movement code
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const hw = w / 2;
+      const hh = h / 2;
+
+      // 4 corners of unrotated rectangle centered at origin
+      const corners = [
+        { x: -hw, y: -hh },
+        { x:  hw, y: -hh },
+        { x:  hw, y:  hh },
+        { x: -hw, y:  hh },
+      ];
+
+      // Rotate and translate each corner
+      const pts = corners.map(c => ({
+        x: cx + c.x * cos - c.y * sin,
+        y: cy + c.x * sin + c.y * cos,
+      }));
+
+      ctx.save();
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    /**
      * Runs ALL live checks against all markers.
      * Returns { issues: CollisionIssue[], markerProblems: Map<markerId, string[]> }
      *
@@ -640,23 +781,6 @@
       const obstacles = markers.filter(m => OBSTACLE_BOX[m.type] !== undefined);
       const spawn = markers.find(m => m.type === 'spawn');
       const exit  = markers.find(m => m.type === 'exit');
-
-      /** Returns collision box with barricade angle swap, mirroring engine's getObstacleBox() */
-      function getBox(type, angle) {
-        angle = angle || 0;
-        const b = OBSTACLE_BOX[type];
-        if (!b) return { w: 36, h: 64 };
-        // Barricades: swap w/h if angle ≥45° (mirrors engine's getObstacleBox)
-        if (type === 'barricade' || type === 'barricade-1') {
-          let r = angle % 180;
-          if (r < 0) r += 180;
-          if (r > 90) r = 180 - r;
-          if (r >= 45) {
-            return { w: b.h, h: b.w };
-          }
-        }
-        return b;
-      }
 
       function addProblem(marker, msg) {
         if (!problemMap.has(marker.id)) problemMap.set(marker.id, []);
@@ -763,6 +887,155 @@
       return { issues, problemMap };
     }
 
+    /**
+     * Test a sequence of waypoints as a rough player path.
+     * Samples points every PATH_SAMPLE_STEP pixels along each segment,
+     * checks the player's collision box (36×64, rotated to segment direction)
+     * against every obstacle's real collision box.
+     *
+     * Returns { collisionFree, collisionAt, exitReached, exitDist, exitAngleDiff, totalSamples, segments, exitCheck }
+     * where segments is an array of { from, to, angle, collisionAt, samples }.
+     *
+     * Uses the SAME getBox() and rectsOverlap() as runCollisionChecks().
+     */
+    function runPathTest(waypoints, spawnMarker, exitMarker) {
+      if (waypoints.length === 0) return null;
+
+      const obstacles = markers.filter(m => OBSTACLE_BOX[m.type] !== undefined);
+      const totalSamples = [];
+      const segments = [];
+
+      let prevPoint = { x: spawnMarker ? spawnMarker.x : waypoints[0].x, y: spawnMarker ? spawnMarker.y : waypoints[0].y };
+
+      for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        const dx = wp.x - prevPoint.x;
+        const dy = wp.y - prevPoint.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 0.5) continue;  // skip degenerate segments
+
+        // Inferred angle from segment direction (game convention: 0°=up, clockwise)
+        const angleRad = Math.atan2(dx, -dy);
+        const segmentAngle = ((angleRad * 180 / Math.PI) % 360 + 360) % 360;
+
+        // Sample along segment
+        const numSamples = Math.max(2, Math.floor(dist / PATH_SAMPLE_STEP));
+        let collisionAt = null;
+        const samplePoints = [];
+
+        for (let s = 0; s <= numSamples; s++) {
+          const t = s / numSamples;
+          const sx = prevPoint.x + dx * t;
+          const sy = prevPoint.y + dy * t;
+          samplePoints.push({ x: sx, y: sy });
+          totalSamples.push({ x: sx, y: sy });
+
+          // Player box at this point (sedan base, rotated to segment angle)
+          const playerBox = getBox('sedan', segmentAngle);  // { w: 36, h: 64 }
+          const playerRect = makeRect(sx, sy, playerBox.w, playerBox.h);
+
+          // Check against every obstacle
+          for (const obs of obstacles) {
+            const obsBox = getBox(obs.type, obs.angle);
+            const obsRect = makeRect(obs.x, obs.y, obsBox.w, obsBox.h);
+            if (rectsOverlap(playerRect, obsRect)) {
+              collisionAt = { x: sx, y: sy, obstacle: obs, obstacleType: obs.type };
+              break;
+            }
+          }
+          if (collisionAt) break;
+        }
+
+        segments.push({
+          from: { x: prevPoint.x, y: prevPoint.y },
+          to: { x: wp.x, y: wp.y },
+          angle: segmentAngle,
+          collisionAt,
+          samples: samplePoints,
+        });
+
+        if (collisionAt) {
+          // Stop on first collision — no point checking later segments
+          break;
+        }
+
+        prevPoint = { x: wp.x, y: wp.y };
+      }
+
+      // ── Exit zone check (final waypoint + last segment's angle) ──
+      let exitCheck = { passed: false, reason: '' };
+      if (exitMarker && segments.length > 0 && !segments[segments.length - 1].collisionAt) {
+        const lastWp = waypoints[waypoints.length - 1];
+        const lastSeg = segments[segments.length - 1];
+        const exitX = exitMarker.x;
+        const exitY = exitMarker.y;
+        const exitAngle = exitMarker.angle || 0;
+        const pt = exitMarker.parkingType || 'parallel';
+        const angleTol = pt === 'angled' ? 15 : 10;
+
+        const dx = Math.abs(lastWp.x - exitX);
+        const dy = Math.abs(lastWp.y - exitY);
+        const posTol = 8;
+        const posOk = dx <= posTol && dy <= posTol;
+
+        let angleDiff = Math.abs(lastSeg.angle - exitAngle);
+        if (angleDiff > 180) angleDiff = 360 - angleDiff;
+        const angleOk = angleDiff <= angleTol;
+
+        // Also check: does the player's car at the final position, rotated to exit angle,
+        // overlap any obstacle? (The segment collision check used the segment's inferred
+        // angle, but the exit tolerance check cares about the exit angle)
+        let exitPositionCollides = null;
+        if (posOk) {
+          const playerBox = getBox('sedan', exitAngle);
+          const playerRect = makeRect(lastWp.x, lastWp.y, playerBox.w, playerBox.h);
+          const obsAtExit = obstacles.filter(o => OBSTACLE_BOX[o.type] !== undefined);
+          for (const obs of obsAtExit) {
+            const obsBox = getBox(obs.type, obs.angle);
+            const obsRect = makeRect(obs.x, obs.y, obsBox.w, obsBox.h);
+            if (rectsOverlap(playerRect, obsRect)) {
+              exitPositionCollides = { obstacle: obs, obstacleType: obs.type };
+              break;
+            }
+          }
+        }
+
+        const exitCollisionReason = exitPositionCollides
+          ? `⚠ Final position collides with ${exitPositionCollides.obstacleType} #${exitPositionCollides.obstacle.id} at exit angle`
+          : '';
+
+        exitCheck = {
+          passed: posOk && angleOk && !exitPositionCollides,
+          reason: [
+            posOk ? `✓ dx=${dx.toFixed(1)}/8px dy=${dy.toFixed(1)}/8px` : `✗ dx=${dx.toFixed(1)}/8px dy=${dy.toFixed(1)}/8px`,
+            angleOk ? `✓ angle diff=${angleDiff.toFixed(1)}°/${angleTol}°` : `✗ angle diff=${angleDiff.toFixed(1)}°/${angleTol}°`,
+            exitPositionCollides ? `✗ collides with ${exitPositionCollides.obstacleType} at exit angle` : '✓ exit position collision-free',
+          ].join(' · '),
+          dx,
+          dy,
+          posTol,
+          angleDiff,
+          angleTol,
+          exitPositionCollides,
+        };
+      } else if (!exitMarker) {
+        exitCheck = { passed: false, reason: 'No exit marker placed', dx: 0, dy: 0, posTol: 8, angleDiff: 0, angleTol: 10 };
+      }
+
+      const collisionFree = segments.every(s => !s.collisionAt);
+      const collisionAt = segments.find(s => s.collisionAt);
+
+      return {
+        collisionFree,
+        collisionAt: collisionAt ? collisionAt.collisionAt : null,
+        exitReached: exitCheck.passed,
+        exitCheck,
+        totalSamples: totalSamples.length,
+        segments,
+        waypoints,
+      };
+    }
+
     let markers = [];            // { id, type, x, y, angle, parkingType? }
     let nextId = 0;
     let selectedId = null;
@@ -771,6 +1044,17 @@
     /** Latest collision-check results — updated every render cycle */
     let collisionState = { issues: [], problemMap: new Map() };          // HTMLImageElement | null
     let lastSavedTime = null;
+
+    // ── Feature A: Show Hitboxes ──
+    let showHitboxes = false;
+
+    // ── Feature B: Path Test ──
+    let testPathMode = false;
+    /** @type Array<{x:number, y:number}> */
+    let pathWaypoints = [];
+    /** @type {pathResult|null} */
+    let pathResult = null;
+    const PATH_SAMPLE_STEP = 6;  // px between collision samples along each segment
 
     // ─────────────────────────────────────────────────────────────
     //  localStorage — auto-save & restore
@@ -782,6 +1066,8 @@
           nextId,
           bgImageDataUrl: null,
           savedAt: new Date().toISOString(),
+          showHitboxes,
+          pathWaypoints,
         };
         if (bgImage) {
           data.bgImageDataUrl = bgImage.src || null;
@@ -802,6 +1088,13 @@
         if (!data.markers || !Array.isArray(data.markers)) return false;
         markers = data.markers;
         nextId = data.nextId || 0;
+        if (data.showHitboxes !== undefined) {
+          showHitboxes = data.showHitboxes;
+          document.getElementById('showHitboxesCheck').checked = showHitboxes;
+        }
+        if (data.pathWaypoints && Array.isArray(data.pathWaypoints)) {
+          pathWaypoints = data.pathWaypoints;
+        }
         if (data.bgImageDataUrl && typeof data.bgImageDataUrl === 'string') {
           const img = new Image();
           img.onload = () => {
@@ -816,6 +1109,10 @@
         }
         if (data.savedAt) {
           lastSavedTime = new Date(data.savedAt);
+        }
+        // Re-run path test if waypoints exist
+        if (pathWaypoints.length > 0) {
+          runAndDisplayPathTest();
         }
         return true;
       } catch (e) {
@@ -832,6 +1129,12 @@
       bgImage = null;
       selectedId = null;
       lastSavedTime = null;
+      showHitboxes = false;
+      document.getElementById('showHitboxesCheck').checked = false;
+      pathWaypoints = [];
+      pathResult = null;
+      document.getElementById('pathResultsDisplay').textContent = '';
+      document.getElementById('pathWaypointList').textContent = '';
       updateAll();
     }
 
@@ -859,6 +1162,128 @@
         el.style.color = 'var(--text-muted)';
       }
     }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Feature A & B — Toolbar event handlers
+    // ─────────────────────────────────────────────────────────────
+
+    function runAndDisplayPathTest() {
+      const spawnM = markers.find(m => m.type === 'spawn');
+      const exitM = markers.find(m => m.type === 'exit');
+
+      if (pathWaypoints.length === 0) {
+        pathResult = null;
+        document.getElementById('pathResultsDisplay').textContent = 'No waypoints yet.';
+        return;
+      }
+
+      pathResult = runPathTest(pathWaypoints, spawnM, exitM);
+      updatePathTestDisplay();
+    }
+
+    function updatePathTestDisplay() {
+      const display = document.getElementById('pathResultsDisplay');
+      const list = document.getElementById('pathWaypointList');
+
+      if (!pathResult) {
+        display.textContent = 'Click canvas to add waypoints.';
+        list.textContent = '';
+        return;
+      }
+
+      // Collision check
+      let collisionLine = '';
+      if (pathResult.collisionFree) {
+        collisionLine = `✅ Collision-free  (${pathResult.totalSamples} samples checked, 0 collisions)`;
+      } else if (pathResult.collisionAt) {
+        const cAt = pathResult.collisionAt;
+        collisionLine = `❌ Collision at (${cAt.x}, ${cAt.y}) with ${cAt.obstacleType} #${cAt.obstacle.id}`;
+      }
+
+      // Exit zone check
+      let exitLine = '';
+      const exitM = markers.find(m => m.type === 'exit');
+      if (exitM && pathResult.collisionFree) {
+        const ec = pathResult.exitCheck;
+        exitLine = ec.passed
+          ? `✅ Exit zone reached  ${ec.reason}`
+          : `❌ Exit zone MISS  ${ec.reason}`;
+      } else if (!exitM) {
+        exitLine = '⚠ No exit marker — exit check skipped';
+      }
+
+      // Waypoint list
+      let waypointHtml = '';
+      for (let i = 0; i < pathWaypoints.length; i++) {
+        const wp = pathWaypoints[i];
+        const seg = pathResult.segments && pathResult.segments[i];
+        const segAngle = seg ? seg.angle.toFixed(1) : '?';
+        const status = pathResult.collisionFree ? '✓' :
+          (seg && seg.collisionAt ? '✗' : '…');
+        waypointHtml += `<span style="display:inline-block;margin-right:8px;color:${status === '✗' ? '#FF3333' : status === '✓' ? 'var(--accent-green)' : 'var(--text-muted)'}">${status} WP${i+1} (${wp.x}, ${wp.y}) ∠${segAngle}°</span>`;
+      }
+      list.innerHTML = waypointHtml;
+
+      display.innerHTML = `
+        <div style="color:${pathResult.collisionFree ? 'var(--accent-green)' : '#FF3333'}">${collisionLine}</div>
+        ${exitLine ? `<div style="color:${pathResult.exitCheck && pathResult.exitCheck.passed ? 'var(--accent-green)' : '#FF8800'};margin-top:4px">${exitLine}</div>` : ''}
+      `;
+    }
+
+    // ── Show Hitboxes checkbox ──
+    document.getElementById('showHitboxesCheck').addEventListener('change', (e) => {
+      showHitboxes = e.target.checked;
+      render();
+      saveState();
+    });
+
+    // ── Test Path button ──
+    document.getElementById('testPathBtn').addEventListener('click', () => {
+      const spawnM = markers.find(m => m.type === 'spawn');
+      if (!spawnM) {
+        alert('Place a Spawn marker first — path testing starts from the spawn position.');
+        return;
+      }
+      testPathMode = !testPathMode;
+      const btn = document.getElementById('testPathBtn');
+      const section = document.getElementById('pathTestSection');
+      const clearBtn = document.getElementById('clearPathBtn');
+      if (testPathMode) {
+        btn.style.borderColor = '#4ADE80';
+        btn.style.background = 'rgba(74,222,128,0.15)';
+        btn.textContent = '🧪 Exit Test Path';
+        section.style.display = 'block';
+        clearBtn.style.display = '';
+        clearBtn.hidden = false;
+        // Re-run existing path test
+        if (pathWaypoints.length > 0) runAndDisplayPathTest();
+        render();
+      } else {
+        btn.style.borderColor = 'var(--accent-green)';
+        btn.style.background = 'transparent';
+        btn.textContent = '🧪 Test Path';
+        section.style.display = 'none';
+        clearBtn.style.display = 'none';
+        clearBtn.hidden = true;
+        render();
+      }
+    });
+
+    // ── Clear Path buttons ──
+    function clearPathTest() {
+      pathWaypoints = [];
+      pathResult = null;
+      document.getElementById('pathResultsDisplay').textContent = 'Waypoints cleared.';
+      document.getElementById('pathWaypointList').textContent = '';
+      render();
+      saveState();
+    }
+    document.getElementById('clearPathBtn').addEventListener('click', clearPathTest);
+    document.getElementById('clearPathBtn2').addEventListener('click', () => {
+      clearPathTest();
+      // Refresh display
+      document.getElementById('pathResultsDisplay').textContent = 'Waypoints cleared. Click canvas to add new waypoints.';
+    });
 
     const canvas = document.getElementById('editorCanvas');
     const ctx = canvas.getContext('2d');
@@ -914,6 +1339,104 @@
       // Markers (in 288×288 logical space, scaled by transform)
       for (const m of markers) {
         drawMarker(m);
+      }
+
+      // ── Feature A: Hitboxes overlay (drawn AFTER markers so outline is on top) ──
+      if (showHitboxes) {
+        const obstacleTypes = new Set(['sedan', 'suv', 'wall', 'barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree', 'tree-sm', 'spawn', 'exit']);
+        for (const m of markers) {
+          if (!obstacleTypes.has(m.type)) continue;
+          const box = m.type === 'exit' ? { w: 48, h: 48 } : getBox(m.type, m.angle || 0);
+          let color = 'rgba(255,255,255,0.35)';
+          const problems = getMarkerProblems(m);
+          if (problems.some(p => p.startsWith('Overlaps'))) {
+            color = 'rgba(255,50,50,0.5)';
+          } else if (problems.some(p => p.includes('extends'))) {
+            color = 'rgba(255,136,0,0.5)';
+          }
+          if (m.type === 'spawn') color = 'rgba(91,155,255,0.4)';
+          if (m.type === 'exit') color = 'rgba(74,222,128,0.4)';
+          drawRotatedBox(ctx, m.x, m.y, box.w, box.h, m.type === 'exit' ? 0 : (m.angle || 0), color, 1.5);
+        }
+      }
+
+      // ── Feature B: Path waypoints + results (drawn in logical 288×288 space) ──
+      if (testPathMode && pathWaypoints.length > 0) {
+        // Find spawn and exit for reference
+        const spawnM = markers.find(m => m.type === 'spawn');
+        const exitM = markers.find(m => m.type === 'exit');
+        const startX = spawnM ? spawnM.x : pathWaypoints[0].x;
+        const startY = spawnM ? spawnM.y : pathWaypoints[0].y;
+
+        // Draw start point (spawn position)
+        ctx.save();
+        ctx.fillStyle = 'rgba(91, 155, 255, 0.6)';
+        ctx.beginPath();
+        ctx.arc(startX, startY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        const result = pathResult;
+
+        for (let i = 0; i < pathWaypoints.length; i++) {
+          const wp = pathWaypoints[i];
+          const prevX = i === 0 ? startX : pathWaypoints[i - 1].x;
+          const prevY = i === 0 ? startY : pathWaypoints[i - 1].y;
+
+          // Check if this segment has a collision
+          const hasCollision = result && result.segments && result.segments[i] && result.segments[i].collisionAt;
+          const segColor = hasCollision ? 'rgba(255,50,50,0.8)' : 'rgba(74,222,128,0.6)';
+
+          // Draw segment line
+          ctx.save();
+          ctx.strokeStyle = segColor;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(prevX, prevY);
+          ctx.lineTo(wp.x, wp.y);
+          ctx.stroke();
+          ctx.restore();
+
+          // Draw waypoint dot
+          ctx.save();
+          ctx.fillStyle = segColor;
+          ctx.beginPath();
+          ctx.arc(wp.x, wp.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+
+          // Label waypoint number
+          ctx.save();
+          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+          ctx.font = '9px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${i + 1}`, wp.x, wp.y - 10);
+          ctx.restore();
+
+          // If collision occurred on this segment, draw collision marker
+          if (hasCollision && result.segments[i].collisionAt) {
+            const cAt = result.segments[i].collisionAt;
+            ctx.save();
+            ctx.fillStyle = 'rgba(255,50,50,0.3)';
+            ctx.beginPath();
+            ctx.arc(cAt.x, cAt.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#FF3333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cAt.x - 6, cAt.y - 6);
+            ctx.lineTo(cAt.x + 6, cAt.y + 6);
+            ctx.moveTo(cAt.x + 6, cAt.y - 6);
+            ctx.lineTo(cAt.x - 6, cAt.y + 6);
+            ctx.stroke();
+            ctx.restore();
+            // Stop drawing further segments
+            break;
+          }
+        }
       }
 
       ctx.restore();
@@ -998,7 +1521,7 @@
 
     function drawMarker(m) {
       const color = COLORS[m.type] || '#888';
-      const props = new Set(['barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree']);
+      const props = new Set(['barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree', 'tree-sm']);
       const size = props.has(m.type) ? 5 : (m.type === 'wall' ? 5 : 4);
       const problems = getMarkerProblems(m);
       const hasProblems = problems.length > 0;
@@ -1130,6 +1653,15 @@
       const canvasX = (phoneX - CONTAINER_X) / SCALE_X;
       const canvasY = (phoneY - CONTAINER_Y) / SCALE_Y;
 
+      // In path test mode: add waypoint instead of placing/selecting markers
+      if (testPathMode) {
+        if (canvasX < 0 || canvasX >= W || canvasY < 0 || canvasY >= H) return;
+        pathWaypoints.push({ x: Math.round(canvasX), y: Math.round(canvasY) });
+        runAndDisplayPathTest();
+        updateAll();
+        return;
+      }
+
       // First, check if we're clicking an existing marker
       const hit = findMarkerAt(canvasX, canvasY);
       if (hit) {
@@ -1156,6 +1688,27 @@
           btn.classList.add('active-' + t);
         }
       }
+      // Auto-exit Test Path mode when user selects a marker type (they want to place markers, not waypoints)
+      if (testPathMode) {
+        exitTestPathMode();
+      }
+    }
+    function exitTestPathMode() {
+      testPathMode = false;
+      const btn = document.getElementById('testPathBtn');
+      const section = document.getElementById('pathTestSection');
+      const clearBtn = document.getElementById('clearPathBtn');
+      if (btn) {
+        btn.style.borderColor = 'var(--accent-green)';
+        btn.style.background = 'transparent';
+        btn.textContent = '🧪 Test Path';
+      }
+      if (section) section.style.display = 'none';
+      if (clearBtn) {
+        clearBtn.style.display = 'none';
+        clearBtn.hidden = true;
+      }
+      render();
     }
     for (const btn of typeButtons) {
       btn.addEventListener('click', () => {
@@ -1177,19 +1730,39 @@
       }
 
       let html = '';
-      // Read-only X, Y
+      // Editable X with input field and up/down buttons
       html += `<div class="prop-row">
         <label>X</label>
-        <span class="prop-value" id="propX">${sel.x}</span>
+        <div style="display:flex;align-items:center;gap:2px;">
+          <button class="fine-btn" id="xMinus1" style="padding:1px 5px;font-size:10px;">▼</button>
+          <input type="number" id="propX" min="0" max="288" step="1" value="${Math.round(sel.x)}" style="width:44px;text-align:center;font-size:12px;padding:1px 2px;">
+          <button class="fine-btn" id="xPlus1" style="padding:1px 5px;font-size:10px;">▲</button>
+        </div>
         <label>Y</label>
-        <span class="prop-value" id="propY">${sel.y}</span>
+        <div style="display:flex;align-items:center;gap:2px;">
+          <button class="fine-btn" id="yMinus1" style="padding:1px 5px;font-size:10px;">▼</button>
+          <input type="number" id="propY" min="0" max="288" step="1" value="${Math.round(sel.y)}" style="width:44px;text-align:center;font-size:12px;padding:1px 2px;">
+          <button class="fine-btn" id="yPlus1" style="padding:1px 5px;font-size:10px;">▲</button>
+        </div>
       </div>`;
 
-      // Angle input
+      // Angle: dropdown for quick picks + fine-tune buttons
+      const anglePresets = [0, 30, 45, 60, 90, 120, 135, 150, 180, 210, 225, 240, 270, 300, 315, 330];
+      const normalizedAngle = ((sel.angle % 360) + 360) % 360;
+      const angleOptions = anglePresets.map(a =>
+        `<option value="${a}" ${a === normalizedAngle ? 'selected' : ''}>${a}°</option>`
+      ).join('');
       html += `<div class="prop-row">
         <label>Angle</label>
-        <input type="number" id="propAngle" min="-359" max="359" step="1" value="${sel.angle}">
+        <select id="propAnglePreset">${angleOptions}</select>
         <span style="font-size:10px;color:var(--text-muted)">°</span>
+      </div>`;
+      html += `<div class="prop-row" style="justify-content:center;gap:4px;">
+        <button class="fine-btn" id="angleMinus10" style="padding:2px 6px;font-size:11px;">-10</button>
+        <button class="fine-btn" id="angleMinus1" style="padding:2px 6px;font-size:11px;">-1</button>
+        <span id="angleValue" style="font-size:13px;font-weight:600;min-width:36px;text-align:center;">${sel.angle}°</span>
+        <button class="fine-btn" id="anglePlus1" style="padding:2px 6px;font-size:11px;">+1</button>
+        <button class="fine-btn" id="anglePlus10" style="padding:2px 6px;font-size:11px;">+10</button>
       </div>`;
 
       // Exit-specific: parkingType dropdown
@@ -1214,19 +1787,109 @@
       container.innerHTML = html;
 
       // Wire up events
-      const angleInput = document.getElementById('propAngle');
-      if (angleInput) {
-        angleInput.addEventListener('input', () => {
-          let v = parseInt(angleInput.value, 10) || 0;
-          v = ((v % 360) + 360) % 360;
-          angleInput.value = v;
-          updateMarkerProp(selectedId, 'angle', v);
-          // Update live without re-rendering properties (avoid losing focus)
-          render();
-          updateMarkerList();
-          updateExport();
-          updateValidation();
+      function applyAngle(v) {
+        v = ((v % 360) + 360) % 360;
+        updateMarkerProp(selectedId, 'angle', v);
+        render();
+        updateMarkerList();
+        updateExport();
+        updateValidation();
+        const angleValue = document.getElementById('angleValue');
+        if (angleValue) angleValue.textContent = v + '°';
+      }
+
+      const anglePreset = document.getElementById('propAnglePreset');
+      if (anglePreset) {
+        anglePreset.addEventListener('change', () => {
+          applyAngle(parseInt(anglePreset.value, 10) || 0);
         });
+      }
+
+      const angleMinus10 = document.getElementById('angleMinus10');
+      if (angleMinus10) {
+        angleMinus10.addEventListener('click', () => {
+          applyAngle(sel.angle - 10);
+          renderProperties();
+        });
+      }
+
+      const angleMinus1 = document.getElementById('angleMinus1');
+      if (angleMinus1) {
+        angleMinus1.addEventListener('click', () => {
+          applyAngle(sel.angle - 1);
+          renderProperties();
+        });
+      }
+
+      const anglePlus1 = document.getElementById('anglePlus1');
+      if (anglePlus1) {
+        anglePlus1.addEventListener('click', () => {
+          applyAngle(sel.angle + 1);
+          renderProperties();
+        });
+      }
+
+      const anglePlus10 = document.getElementById('anglePlus10');
+      if (anglePlus10) {
+        anglePlus10.addEventListener('click', () => {
+          applyAngle(sel.angle + 10);
+          renderProperties();
+        });
+      }
+
+      // X/Y position controls
+      function applyXY(dx, dy) {
+        const marker = markers.find(m => m.id === selectedId);
+        if (!marker) return;
+        marker.x = Math.max(0, Math.min(288, marker.x + dx));
+        marker.y = Math.max(0, Math.min(288, marker.y + dy));
+        render();
+        updateMarkerList();
+        updateExport();
+        updateValidation();
+        const propX = document.getElementById('propX');
+        const propY = document.getElementById('propY');
+        if (propX) propX.value = Math.round(marker.x);
+        if (propY) propY.value = Math.round(marker.y);
+      }
+
+      function setXYFromInput() {
+        const marker = markers.find(m => m.id === selectedId);
+        if (!marker) return;
+        const propX = document.getElementById('propX');
+        const propY = document.getElementById('propY');
+        if (propX) marker.x = Math.max(0, Math.min(288, parseInt(propX.value, 10) || 0));
+        if (propY) marker.y = Math.max(0, Math.min(288, parseInt(propY.value, 10) || 0));
+        render();
+        updateMarkerList();
+        updateExport();
+        updateValidation();
+      }
+
+      const propXInput = document.getElementById('propX');
+      if (propXInput) {
+        propXInput.addEventListener('input', setXYFromInput);
+      }
+      const propYInput = document.getElementById('propY');
+      if (propYInput) {
+        propYInput.addEventListener('input', setXYFromInput);
+      }
+
+      const xMinus1 = document.getElementById('xMinus1');
+      if (xMinus1) {
+        xMinus1.addEventListener('click', () => applyXY(-1, 0));
+      }
+      const xPlus1 = document.getElementById('xPlus1');
+      if (xPlus1) {
+        xPlus1.addEventListener('click', () => applyXY(1, 0));
+      }
+      const yMinus1 = document.getElementById('yMinus1');
+      if (yMinus1) {
+        yMinus1.addEventListener('click', () => applyXY(0, 1));
+      }
+      const yPlus1 = document.getElementById('yPlus1');
+      if (yPlus1) {
+        yPlus1.addEventListener('click', () => applyXY(0, -1));
       }
 
       const parkingSelect = document.getElementById('propParkingType');
@@ -1308,7 +1971,7 @@
     //  Export
     // ─────────────────────────────────────────────────────────────
     function generateExport() {
-      const obstacleTypes = new Set(['sedan', 'suv', 'wall', 'barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree']);
+      const obstacleTypes = new Set(['sedan', 'suv', 'wall', 'barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree', 'tree-sm']);
       const obstacles = markers.filter(m => obstacleTypes.has(m.type));
       const spawn = markers.find(m => m.type === 'spawn');
       const exit = markers.find(m => m.type === 'exit');
@@ -1419,6 +2082,12 @@
     function updateAll() {
       // Run collision checks against current markers
       collisionState = runCollisionChecks();
+      // Re-run path test if waypoints exist (collision boxes may have changed)
+      if (pathWaypoints.length > 0) {
+        runAndDisplayPathTest();
+      } else {
+        updatePathTestDisplay();
+      }
       render();
       renderProperties();
       renderMarkerList();

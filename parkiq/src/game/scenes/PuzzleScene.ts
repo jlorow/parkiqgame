@@ -27,7 +27,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
-const DEBUG_FORCE_PUZZLE: number | null = 1;  // Force-load specific puzzle (null = use daily rotation)
+const DEBUG_FORCE_PUZZLE: number | null = 2;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
@@ -86,6 +86,7 @@ const PROP_VISUAL_SCALE: Record<string, number> = {
   'shrub-1':    103 / 200,  // 0.515
   'shrub-2':    118 / 200,  // 0.59
   'tree':        88 / 200,  // 0.44
+  'tree-sm':     41 / 200,  // 0.205
   // Wall: loaded at 33×191 native, scaled to match collision width (48px)
   // scale = 48 / loadWidth(200) = 0.24 → renders 48px wide
   'wall':       48 / 200,  // 0.24
@@ -164,6 +165,7 @@ const PROP_BOX: Record<string, { w: number; h: number }> = {
   'shrub-1':     { w: 103, h: 60 },
   'shrub-2':     { w: 118, h: 69 },
   'tree':        { w: 88, h: 89 },
+  'tree-sm':     { w: 41, h: 42 },
 };
 
 // ── Wall collision box — 1 grid cell (48×48), rotation-invariant (square) ─
@@ -357,12 +359,13 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('prop-shrub-1',     'assets/sprites/props/Prop-Shrub-1.svg',     { width: 200, height: 117 });
     this.load.svg('prop-shrub-2',     'assets/sprites/props/Prop-Shrub-2.svg',     { width: 200, height: 117 });
     this.load.svg('prop-tree',        'assets/sprites/props/Prop-Tree.svg',         { width: 200, height: 202 });
+    this.load.svg('prop-tree-sm',     'assets/sprites/props/Prop-Tree-sm.svg',     { width: 200, height: 205 });
 
     // ── Wall SVG ───────────────────────────────────────────────────
     this.load.svg('prop-wall', 'assets/sprites/props/Wall.svg', { width: 200 });
 
     // ── Background images (per-puzzle lot surfaces) ───────────────
-    this.load.svg('bg_1', 'assets/sprites/backgrounds/Road-Garage.svg', { width: 288, height: 288 });
+    this.load.svg('bg_1', 'assets/sprites/backgrounds/puzzle1-bg.svg', { width: 288, height: 288 });
 
     this.load.audio('train', 'assets/sounds/train.mp3');
 
@@ -1049,7 +1052,7 @@ export class PuzzleScene extends Phaser.Scene {
         container.add(img);
       } else if (obs.type === 'barricade-1' || obs.type === 'barricade' ||
                  obs.type === 'cone' || obs.type === 'shrub-1' ||
-                 obs.type === 'shrub-2' || obs.type === 'tree') {
+                 obs.type === 'shrub-2' || obs.type === 'tree' || obs.type === 'tree-sm') {
         // Prop: load correct SVG texture, scale to match collision box
         const scale = PROP_VISUAL_SCALE[obs.type] ?? 0.20;
         const img = this.add.image(ox, oy, `prop-${obs.type}`);
