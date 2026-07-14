@@ -479,6 +479,8 @@
           <span class="file-btn">Load Background</span>
         </div>
 
+        <button class="file-btn" id="clearDataBtn" style="margin-left:4px;border-color:var(--accent-red);color:var(--accent-red)">🗑 Clear Saved</button>
+
         <label style="margin-left:6px;">Type</label>
         <div class="type-selector" id="typeSelector">
           <button data-type="sedan">Sedan</button>
@@ -505,7 +507,7 @@
 
       <!-- Marker List -->
       <div class="marker-list-section">
-        <h3>Markers</h3>
+        <h3>Markers <span id="saveStatus" style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);margin-left:8px"></span></h3>
         <div id="markerListContainer">
           <table class="marker-table">
             <thead>
@@ -580,6 +582,7 @@
       'tree':         { w: 88, h: 89 },
     };
     const PLAYFIELD = 288;
+    const STORAGE_KEY = 'parkiq-level-editor-state';
 
     function makeRect(cx, cy, w, h) {
       return { left: cx - w / 2, right: cx + w / 2, top: cy - h / 2, bottom: cy + h / 2 };
@@ -767,6 +770,95 @@
     let bgImage = null;
     /** Latest collision-check results — updated every render cycle */
     let collisionState = { issues: [], problemMap: new Map() };          // HTMLImageElement | null
+    let lastSavedTime = null;
+
+    // ─────────────────────────────────────────────────────────────
+    //  localStorage — auto-save & restore
+    // ─────────────────────────────────────────────────────────────
+    function saveState() {
+      try {
+        const data = {
+          markers,
+          nextId,
+          bgImageDataUrl: null,
+          savedAt: new Date().toISOString(),
+        };
+        if (bgImage) {
+          data.bgImageDataUrl = bgImage.src || null;
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        lastSavedTime = new Date();
+        updateStatusIndicator();
+      } catch (e) {
+        console.warn('Failed to save editor state to localStorage:', e.message);
+      }
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!data.markers || !Array.isArray(data.markers)) return false;
+        markers = data.markers;
+        nextId = data.nextId || 0;
+        if (data.bgImageDataUrl && typeof data.bgImageDataUrl === 'string') {
+          const img = new Image();
+          img.onload = () => {
+            bgImage = img;
+            updateAll();
+          };
+          img.onerror = () => {
+            bgImage = null;
+            updateAll();
+          };
+          img.src = data.bgImageDataUrl;
+        }
+        if (data.savedAt) {
+          lastSavedTime = new Date(data.savedAt);
+        }
+        return true;
+      } catch (e) {
+        console.warn('Failed to load editor state from localStorage:', e.message);
+        return false;
+      }
+    }
+
+    function clearSavedState() {
+      if (!confirm('Clear all saved data? This will delete all markers — there is no undo.')) return;
+      localStorage.removeItem(STORAGE_KEY);
+      markers = [];
+      nextId = 0;
+      bgImage = null;
+      selectedId = null;
+      lastSavedTime = null;
+      updateAll();
+    }
+
+    function formatTimeAgo(date) {
+      const now = new Date();
+      const diffMs = now - date;
+      const diffSec = Math.floor(diffMs / 1000);
+      if (diffSec < 5) return 'just now';
+      if (diffSec < 60) return `${diffSec}s ago`;
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin === 1) return '1m ago';
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      return `${diffHr}h ago`;
+    }
+
+    function updateStatusIndicator() {
+      const el = document.getElementById('saveStatus');
+      if (!el) return;
+      if (lastSavedTime) {
+        el.textContent = `Auto-saved ${formatTimeAgo(lastSavedTime)}`;
+        el.style.color = 'var(--accent-green)';
+      } else {
+        el.textContent = 'Not yet saved';
+        el.style.color = 'var(--text-muted)';
+      }
+    }
 
     const canvas = document.getElementById('editorCanvas');
     const ctx = canvas.getContext('2d');
@@ -1096,7 +1188,7 @@
       // Angle input
       html += `<div class="prop-row">
         <label>Angle</label>
-        <input type="number" id="propAngle" min="0" max="359" step="1" value="${sel.angle}">
+        <input type="number" id="propAngle" min="-359" max="359" step="1" value="${sel.angle}">
         <span style="font-size:10px;color:var(--text-muted)">°</span>
       </div>`;
 
@@ -1126,7 +1218,8 @@
       if (angleInput) {
         angleInput.addEventListener('input', () => {
           let v = parseInt(angleInput.value, 10) || 0;
-          v = Math.max(0, Math.min(359, v));
+          v = ((v % 360) + 360) % 360;
+          angleInput.value = v;
           updateMarkerProp(selectedId, 'angle', v);
           // Update live without re-rendering properties (avoid losing focus)
           render();
@@ -1331,6 +1424,7 @@
       renderMarkerList();
       updateExport();
       updateValidation();
+      saveState();
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -1374,11 +1468,15 @@
         img.onload = () => {
           bgImage = img;
           render();
+          saveState();  // persist the image data URL
         };
         img.src = ev.target.result;
       };
       reader.readAsDataURL(file);
     });
+
+    // ── Clear saved data button ──
+    document.getElementById('clearDataBtn').addEventListener('click', clearSavedState);
 
     // ─────────────────────────────────────────────────────────────
     //  Keyboard shortcut: Delete/Backspace removes selected marker
@@ -1393,12 +1491,14 @@
     });
 
     // ─────────────────────────────────────────────────────────────
-    //  Initial render
+    //  Initial render (with localStorage restore)
     // ─────────────────────────────────────────────────────────────
+    const restored = loadState();
     updateAll();
 
     // Report ready
-    console.log('ParkIQ Level Editor v1 loaded — ready');
+    if (restored) console.log('ParkIQ Level Editor v2 loaded — restored from localStorage');
+    else console.log('ParkIQ Level Editor v2 loaded — started fresh');
   </script>
 </body>
 </html>
