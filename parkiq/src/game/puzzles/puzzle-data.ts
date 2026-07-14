@@ -20,9 +20,8 @@ export const puzzles: Puzzle[] = [
     question: 'Drive out without hitting another car.',
     environment: 'street',
    obstacles: [
-  { type: 'sedan', x: 214, y: 213, angle: 45 },
-  { type: 'sedan', x: 216, y: 139, angle: 45 },
-  { type: 'suv', x: 78, y: 214, angle: 45 },
+  { type: 'sedan', x: 232, y: 213, angle: 45 },
+  { type: 'sedan', x: 216, y: 139, angle: 45 },      { type: 'suv', x: 68, y: 214, angle: 45 },
   { type: 'suv', x: 71, y: 132, angle: 45 },
   { type: 'sedan', x: 70, y: 67, angle: 45 },
   { type: 'sedan', x: 218, y: 73, angle: 45 },
@@ -105,21 +104,22 @@ exitZone: { x: 119, y: 90, angle: 45, parkingType: 'angled' },
     difficulty: 4,
     question: 'Drive out without hitting another car.',
     environment: 'street',
-    playerCar: { col: 2, row: 5, angle: 0 },
+    playerCar: { x: 120, y: 264, angle: 0 },
     obstacles: [
-      { type: 'sedan', col: 0, row: 2, angle: 0 },
-      { type: 'sedan', col: 2, row: 2, angle: 0 },
-      { type: 'suv',   col: 3, row: 1, angle: 0 },
+      { type: 'sedan', x: 72,  y: 168, angle: 0 },   // col 1, row 3 — forces right drift from spawn
+      { type: 'sedan', x: 120, y: 120, angle: 0 },   // col 2, row 2 — blocks center corridor
+      { type: 'sedan', x: 144, y: 72,  angle: 0 },   // col 2.5, row 1 — left wall of final corridor
+      { type: 'suv',   x: 264, y: 72,  angle: 0 },   // col 5, row 1 — right wall, player stays below during drift
     ],
-    exitZone: { col: 0, row: 0, direction: 'top' },
-    parkingType: 'parallel',
+    exitZone: { x: 216, y: 48, angle: 0, parkingType: 'perpendicular' },
+    parkingType: 'perpendicular',
     parkingAngle: 0,
     escapeSteps: [
-      { step: 1, description: 'Pass between the two parked cars — stay centered in the gap.' },
-      { step: 2, description: 'Turn hard left toward the exit bay at the far left edge.' },
-      { step: 3, description: 'Straighten out and park in the bay.' },
+      { step: 1, description: 'Drive forward and steer right — the left and center corridors are blocked.' },
+      { step: 2, description: 'Aim for the gap between the two cars at the top-right.' },
+      { step: 3, description: 'Straighten out and park centered in the perpendicular bay.' },
     ],
-    expertTip: 'Pass between both cars, then steer sharply left — you have room to straighten out in the exit bay. The angle check is forgiving, but you must be pointed forward when you stop.',
+    expertTip: 'The corridor at the top is tight (6px margin). Steer progressively, not sharply, to avoid overshooting the bay.',
   },
 
   // ── TIER 2: INTERMEDIATE (6–10) ────────────────────────────────────────────
@@ -336,8 +336,7 @@ exitZone: { x: 119, y: 90, angle: 45, parkingType: 'angled' },
     environment: 'garage',
    obstacles: [
   { type: 'sedan', x: 214, y: 213, angle: 45 },
-  { type: 'sedan', x: 216, y: 139, angle: 45 },
-  { type: 'suv', x: 78, y: 214, angle: 45 },
+  { type: 'sedan', x: 216, y: 139, angle: 45 },      { type: 'suv', x: 68, y: 214, angle: 45 },
   { type: 'suv', x: 71, y: 132, angle: 45 },
   { type: 'sedan', x: 70, y: 67, angle: 45 },
   { type: 'sedan', x: 218, y: 73, angle: 45 },

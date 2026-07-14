@@ -27,7 +27,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
-const DEBUG_FORCE_PUZZLE: number | null = 5;  // Force-load specific puzzle (null = use daily rotation)
+const DEBUG_FORCE_PUZZLE: number | null = null;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
@@ -742,6 +742,27 @@ export class PuzzleScene extends Phaser.Scene {
     const exitPixelY = bayCenterY - halfBay;
     const exitZoneCenterX = exitPixelX + halfBay;
     const exitZoneCenterY = exitPixelY + halfBay;
+
+    // Compute dynamic bay size from the player's real rotated AABB at the exit angle.
+    // Used by parallel/perpendicular visual rendering only — angled has its own
+    // constants (ANGLE_EXIT_HALF_W/H), and the exit collision check uses
+    // center-proximity (±8px) which is dimension-independent.
+    // For non-parking-type (legacy) zones, falls back to 96×96.
+    let bayW: number;
+    let bayH: number;
+    if (ez.parkingType && ez.parkingType !== 'angled') {
+      const veh = this.puzzle.playerVehicle ?? 'sedan';
+      const tbl = this.getVehicleTable(veh);
+      const exitBox = this.getRotatedBox(tbl, ez.angle ?? 0);
+      bayW = exitBox.w;
+      bayH = exitBox.h;
+    } else if (ez.parkingType === 'angled') {
+      bayW = ANGLE_EXIT_HALF_W * 2;  // 40
+      bayH = ANGLE_EXIT_HALF_H * 2;  // 70
+    } else {
+      bayW = 96;
+      bayH = 96;
+    }
     const exitGfx = this.add.graphics();
 
     if (ez.parkingType) {
@@ -751,26 +772,26 @@ export class PuzzleScene extends Phaser.Scene {
 
       if (ez.parkingType === 'parallel') {
         // ── Rotated parallel marking ────────────────────────────────────────
-        // Rotate the entire 48×48 bay around (bayCenterX, bayCenterY) by
-        // exitZone.angle, using the same cosA/sinA corner-rotation pattern
-        // as the angled branch (and updateTruckTrailer()). At angle=0 this
-        // renders identically to the original axis-aligned version.
+        // Dimensions computed from player's real rotated AABB at exit angle
+        // (getRotatedBox) so the visual matches whatever car is driving.
         const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
         const cosA = Math.cos(rad);
         const sinA = Math.sin(rad);
 
-        // Rotate a point around bay center
         const rp = (bx: number, by: number) => ({
           x: bayCenterX + (bx - bayCenterX) * cosA - (by - bayCenterY) * sinA,
           y: bayCenterY + (bx - bayCenterX) * sinA + (by - bayCenterY) * cosA,
         });
 
-        // Green-tinted fill — rotated rectangle (same fill pattern as angled)
+        const localX = bayCenterX - bayW / 2;
+        const localY = bayCenterY - bayH / 2;
+
+        // Green-tinted fill — rotated rectangle sized to player's AABB
         const fillCorners = [
-          rp(exitPixelX, exitPixelY),
-          rp(exitPixelX + baySize, exitPixelY),
-          rp(exitPixelX + baySize, exitPixelY + baySize),
-          rp(exitPixelX, exitPixelY + baySize),
+          rp(localX, localY),
+          rp(localX + bayW, localY),
+          rp(localX + bayW, localY + bayH),
+          rp(localX, localY + bayH),
         ];
         exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
         exitGfx.beginPath();
@@ -782,10 +803,10 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.fillPath();
 
         // Two horizontal curb lines
-        const topLineStart = rp(exitPixelX + inset, exitPixelY + inset);
-        const topLineEnd   = rp(exitPixelX + baySize - inset, exitPixelY + inset);
-        const botLineStart = rp(exitPixelX + inset, exitPixelY + baySize - inset);
-        const botLineEnd   = rp(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        const topLineStart = rp(localX + inset, localY + inset);
+        const topLineEnd   = rp(localX + bayW - inset, localY + inset);
+        const botLineStart = rp(localX + inset, localY + bayH - inset);
+        const botLineEnd   = rp(localX + bayW - inset, localY + bayH - inset);
 
         exitGfx.lineStyle(2, lineColor, 0.90);
         exitGfx.beginPath();
@@ -799,10 +820,10 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.lineStyle(2, lineColor, 0.75);
         exitGfx.beginPath();
         for (const corner of [
-          {x: exitPixelX + inset, y: exitPixelY + inset},
-          {x: exitPixelX + baySize - inset, y: exitPixelY + inset},
-          {x: exitPixelX + inset, y: exitPixelY + baySize - inset},
-          {x: exitPixelX + baySize - inset, y: exitPixelY + baySize - inset},
+          { x: localX + inset, y: localY + inset },
+          { x: localX + bayW - inset, y: localY + inset },
+          { x: localX + inset, y: localY + bayH - inset },
+          { x: localX + bayW - inset, y: localY + bayH - inset },
         ]) {
           const base = rp(corner.x, corner.y);
           const tip  = rp(corner.x, corner.y + (corner.y < bayCenterY ? tickLen : -tickLen));
@@ -812,8 +833,7 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.strokePath();
       } else if (ez.parkingType === 'perpendicular') {
         // ── Rotated perpendicular marking ────────────────────────────────────
-        // Same rotation approach as parallel: rotate the entire 48×48 bay
-        // around (bayCenterX, bayCenterY) by exitZone.angle.
+        // Dimensions from player's real rotated AABB at exit angle.
         const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
         const cosA = Math.cos(rad);
         const sinA = Math.sin(rad);
@@ -823,12 +843,15 @@ export class PuzzleScene extends Phaser.Scene {
           y: bayCenterY + (bx - bayCenterX) * sinA + (by - bayCenterY) * cosA,
         });
 
-        // Green-tinted fill — rotated rectangle
+        const localX = bayCenterX - bayW / 2;
+        const localY = bayCenterY - bayH / 2;
+
+        // Green-tinted fill — rotated rectangle sized to player's AABB
         const fillCorners = [
-          rp(exitPixelX, exitPixelY),
-          rp(exitPixelX + baySize, exitPixelY),
-          rp(exitPixelX + baySize, exitPixelY + baySize),
-          rp(exitPixelX, exitPixelY + baySize),
+          rp(localX, localY),
+          rp(localX + bayW, localY),
+          rp(localX + bayW, localY + bayH),
+          rp(localX, localY + bayH),
         ];
         exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
         exitGfx.beginPath();
@@ -840,12 +863,12 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.fillPath();
 
         // Two vertical stall divider lines + back line (all rotated)
-        const leftLineStart  = rp(exitPixelX + inset, exitPixelY + inset);
-        const leftLineEnd    = rp(exitPixelX + inset, exitPixelY + baySize - inset);
-        const rightLineStart = rp(exitPixelX + baySize - inset, exitPixelY + inset);
-        const rightLineEnd   = rp(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
-        const backLineStart  = rp(exitPixelX + inset, exitPixelY + baySize - inset);
-        const backLineEnd    = rp(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        const leftLineStart  = rp(localX + inset, localY + inset);
+        const leftLineEnd    = rp(localX + inset, localY + bayH - inset);
+        const rightLineStart = rp(localX + bayW - inset, localY + inset);
+        const rightLineEnd   = rp(localX + bayW - inset, localY + bayH - inset);
+        const backLineStart  = rp(localX + inset, localY + bayH - inset);
+        const backLineEnd    = rp(localX + bayW - inset, localY + bayH - inset);
 
         exitGfx.lineStyle(2, lineColor, 0.90);
         exitGfx.beginPath();
@@ -857,11 +880,11 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.lineTo(backLineEnd.x, backLineEnd.y);
         exitGfx.strokePath();
 
-        // Top ticks (now rotated — going inward along bay's local X axis)
-        const tlBase = rp(exitPixelX + inset, exitPixelY + inset);
-        const tlTip  = rp(exitPixelX + inset + tickLen, exitPixelY + inset);
-        const trBase = rp(exitPixelX + baySize - inset, exitPixelY + inset);
-        const trTip  = rp(exitPixelX + baySize - inset - tickLen, exitPixelY + inset);
+        // Top ticks (going inward along bay's local X axis)
+        const tlBase = rp(localX + inset, localY + inset);
+        const tlTip  = rp(localX + inset + tickLen, localY + inset);
+        const trBase = rp(localX + bayW - inset, localY + inset);
+        const trTip  = rp(localX + bayW - inset - tickLen, localY + inset);
 
         exitGfx.lineStyle(2, lineColor, 0.75);
         exitGfx.beginPath();
@@ -1413,22 +1436,13 @@ export class PuzzleScene extends Phaser.Scene {
         if (Math.abs(cx - bayX) > POS_TOLERANCE) return false;
         if (Math.abs(cy - bayY) > POS_TOLERANCE) return false;
       } else {
-        // Parallel / perpendicular: rectangle overlap (unchanged).
-        const halfW = 24;
-        const halfH = 24;
-        const playerRect = new Phaser.Geom.Rectangle(
-          cx - playerBox.w / 2,
-          cy - playerBox.h / 2,
-          playerBox.w,
-          playerBox.h,
-        );
-        const bayRect = new Phaser.Geom.Rectangle(
-          bayX - halfW,
-          bayY - halfH,
-          halfW * 2,
-          halfH * 2,
-        );
-        if (!Phaser.Geom.Rectangle.Overlaps(playerRect, bayRect)) return false;
+        // Parallel / perpendicular: center-proximity check (same as angled).
+        // Replace loose rectangle-overlap with tight center-tolerance so the
+        // car visually centers itself inside the marking before winning, just
+        // like the angled branch already does.
+        const POS_TOLERANCE = 8; // px — car center within ±8px of bay center on each axis
+        if (Math.abs(cx - bayX) > POS_TOLERANCE) return false;
+        if (Math.abs(cy - bayY) > POS_TOLERANCE) return false;
       }
 
       // 2. Angle tolerance check
