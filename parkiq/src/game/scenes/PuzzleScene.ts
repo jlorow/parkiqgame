@@ -138,6 +138,21 @@ const LARGE_BOX: Record<number, { w: number; h: number }> = {
   90: { w: 100, h: 49 },
 };
 
+// ── Prop collision box lookup (raw SVG viewBox dimensions, no margin) ────
+// Non-angle-bucketed for symmetric props (cone, shrubs, tree).
+// Two-entry (0°/90°) simple swap for rectangular barricades.
+const PROP_BOX: Record<string, { w: number; h: number }> = {
+  'barricade-1': { w: 52, h: 16 },
+  'barricade':   { w: 48, h: 16 },
+  'cone':        { w: 18, h: 18 },
+  'shrub-1':     { w: 103, h: 60 },
+  'shrub-2':     { w: 118, h: 69 },
+  'tree':        { w: 88, h: 89 },
+};
+
+// ── Wall collision box — 1 grid cell (48×48), rotation-invariant (square) ─
+const WALL_BOX: { w: number; h: number } = { w: 48, h: 48 };
+
 // ── Truck (long vehicle) collision & visual constants ────────────────
 // Triggered by playerVehicle: 'truck' in puzzle data.
 // Collision box: same width (fits lane), 1.5× height.
@@ -1351,6 +1366,49 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   /**
+   * Returns the collision box for any obstacle type (car, wall, prop).
+   * Routes to the correct lookup table:
+   *   - sedan/suv → SEDAN_BOX via getVehicleTable+getRotatedBox
+   *   - truck/limo/semitruck → LARGE_BOX via getVehicleTable+getRotatedBox
+   *   - wall → WALL_BOX (48×48, rotation-invariant)
+   *   - props → PROP_BOX (barricades swap w/h at 90°; others are fixed)
+   */
+  private getObstacleBox(type: string, angleDeg: number): { w: number; h: number } {
+    // Car types — route through existing table system
+    if (type === 'sedan' || type === 'suv' || type === 'truck' || type === 'limo' || type === 'semitruck') {
+      const table = this.getVehicleTable(type);
+      return this.getRotatedBox(table, angleDeg);
+    }
+
+    // Wall — fixed 48×48 square (rotation doesn't matter)
+    if (type === 'wall') {
+      return WALL_BOX;
+    }
+
+    // Props — PROP_BOX lookup; barricades swap w/h at 90°
+    const base = PROP_BOX[type];
+    if (!base) {
+      // Unknown type fallback (shouldn't happen if type system is exhaustive)
+      console.warn(`[collision] unknown obstacle type "${type}" — falling back to sedan box`);
+      return this.getRotatedBox('sedan', angleDeg);
+    }
+
+    // Barricades: snap to 0° (original) or 90° (swapped)
+    if (type === 'barricade-1' || type === 'barricade') {
+      let r = angleDeg % 180;
+      if (r < 0) r += 180;
+      if (r > 90) r = 180 - r;
+      if (r >= 45) {
+        return { w: base.h, h: base.w };
+      }
+      return base;
+    }
+
+    // All other props: fixed box, no angle adjustment
+    return base;
+  }
+
+  /**
    * Returns the effective rotated AABB size for the given angle.
    * Snaps to nearest bucket: 15° steps for sedan table, {0,45,90} for large.
    *
@@ -1396,9 +1454,10 @@ export class PuzzleScene extends Phaser.Scene {
       const ox = obs.x ?? ((obs.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
       const oy = obs.y ?? ((obs.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
 
-      // Per-obstacle table selection — each obstacle's type determines its box
-      const obsTable = this.getVehicleTable(obs.type);
-      const obsBox = this.getRotatedBox(obsTable, obs.angle);
+      // Per-obstacle box — routes through getObstacleBox() which handles
+      // sedan/suv (SEDAN_BOX), truck/limo/semitruck (LARGE_BOX),
+      // wall (WALL_BOX), and all 6 prop types (PROP_BOX).
+      const obsBox = this.getObstacleBox(obs.type, obs.angle);
       const obsRect = new Phaser.Geom.Rectangle(
         ox - obsBox.w / 2,
         oy - obsBox.h / 2,
