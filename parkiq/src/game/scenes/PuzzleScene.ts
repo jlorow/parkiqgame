@@ -750,51 +750,125 @@ export class PuzzleScene extends Phaser.Scene {
       const lineColor = 0xffffff;
 
       if (ez.parkingType === 'parallel') {
-      // ── Parking-type exit zone: 48×48 bay with style-appropriate markings ───
-      // Subtle green-tinted fill signals the goal zone (NOT drawn for angled —
-      // angled handles its own fill via the rotated 40×70 rectangle below).
-      exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
-      exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
-        // Two horizontal curb lines + corner ticks
+        // ── Rotated parallel marking ────────────────────────────────────────
+        // Rotate the entire 48×48 bay around (bayCenterX, bayCenterY) by
+        // exitZone.angle, using the same cosA/sinA corner-rotation pattern
+        // as the angled branch (and updateTruckTrailer()). At angle=0 this
+        // renders identically to the original axis-aligned version.
+        const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
+        const cosA = Math.cos(rad);
+        const sinA = Math.sin(rad);
+
+        // Rotate a point around bay center
+        const rp = (bx: number, by: number) => ({
+          x: bayCenterX + (bx - bayCenterX) * cosA - (by - bayCenterY) * sinA,
+          y: bayCenterY + (bx - bayCenterX) * sinA + (by - bayCenterY) * cosA,
+        });
+
+        // Green-tinted fill — rotated rectangle (same fill pattern as angled)
+        const fillCorners = [
+          rp(exitPixelX, exitPixelY),
+          rp(exitPixelX + baySize, exitPixelY),
+          rp(exitPixelX + baySize, exitPixelY + baySize),
+          rp(exitPixelX, exitPixelY + baySize),
+        ];
+        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
+        exitGfx.beginPath();
+        exitGfx.moveTo(fillCorners[0]!.x, fillCorners[0]!.y);
+        for (let i = 1; i < fillCorners.length; i++) {
+          exitGfx.lineTo(fillCorners[i]!.x, fillCorners[i]!.y);
+        }
+        exitGfx.closePath();
+        exitGfx.fillPath();
+
+        // Two horizontal curb lines (now rotated by exitZone.angle)
+        const topLineStart = rp(exitPixelX + inset, exitPixelY + inset);
+        const topLineEnd   = rp(exitPixelX + baySize - inset, exitPixelY + inset);
+        const botLineStart = rp(exitPixelX + inset, exitPixelY + baySize - inset);
+        const botLineEnd   = rp(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+
         exitGfx.lineStyle(2, lineColor, 0.85);
         exitGfx.beginPath();
-        exitGfx.moveTo(exitPixelX + inset, exitPixelY + inset);
-        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + inset);
-        exitGfx.moveTo(exitPixelX + inset, exitPixelY + baySize - inset);
-        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        exitGfx.moveTo(topLineStart.x, topLineStart.y);
+        exitGfx.lineTo(topLineEnd.x, topLineEnd.y);
+        exitGfx.moveTo(botLineStart.x, botLineStart.y);
+        exitGfx.lineTo(botLineEnd.x, botLineEnd.y);
         exitGfx.strokePath();
 
+        // Corner ticks (now rotated — tick direction follows bay's local Y axis)
         exitGfx.lineStyle(1.5, lineColor, 0.6);
         exitGfx.beginPath();
-        for (const corner of [{x: exitPixelX + inset, y: exitPixelY + inset},
-                              {x: exitPixelX + baySize - inset, y: exitPixelY + inset},
-                              {x: exitPixelX + inset, y: exitPixelY + baySize - inset},
-                              {x: exitPixelX + baySize - inset, y: exitPixelY + baySize - inset}]) {
-          exitGfx.moveTo(corner.x, corner.y);
-          exitGfx.lineTo(corner.x, corner.y + (corner.y < exitPixelY + baySize / 2 ? tickLen : -tickLen));
+        for (const corner of [
+          {x: exitPixelX + inset, y: exitPixelY + inset},
+          {x: exitPixelX + baySize - inset, y: exitPixelY + inset},
+          {x: exitPixelX + inset, y: exitPixelY + baySize - inset},
+          {x: exitPixelX + baySize - inset, y: exitPixelY + baySize - inset},
+        ]) {
+          const base = rp(corner.x, corner.y);
+          const tip  = rp(corner.x, corner.y + (corner.y < bayCenterY ? tickLen : -tickLen));
+          exitGfx.moveTo(base.x, base.y);
+          exitGfx.lineTo(tip.x, tip.y);
         }
         exitGfx.strokePath();
       } else if (ez.parkingType === 'perpendicular') {
-        // Subtle green-tinted fill signals the goal zone
+        // ── Rotated perpendicular marking ────────────────────────────────────
+        // Same rotation approach as parallel: rotate the entire 48×48 bay
+        // around (bayCenterX, bayCenterY) by exitZone.angle.
+        const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
+        const cosA = Math.cos(rad);
+        const sinA = Math.sin(rad);
+
+        const rp = (bx: number, by: number) => ({
+          x: bayCenterX + (bx - bayCenterX) * cosA - (by - bayCenterY) * sinA,
+          y: bayCenterY + (bx - bayCenterX) * sinA + (by - bayCenterY) * cosA,
+        });
+
+        // Green-tinted fill — rotated rectangle
+        const fillCorners = [
+          rp(exitPixelX, exitPixelY),
+          rp(exitPixelX + baySize, exitPixelY),
+          rp(exitPixelX + baySize, exitPixelY + baySize),
+          rp(exitPixelX, exitPixelY + baySize),
+        ];
         exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
-        exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
-        // Two vertical stall divider lines + back line + top ticks
+        exitGfx.beginPath();
+        exitGfx.moveTo(fillCorners[0]!.x, fillCorners[0]!.y);
+        for (let i = 1; i < fillCorners.length; i++) {
+          exitGfx.lineTo(fillCorners[i]!.x, fillCorners[i]!.y);
+        }
+        exitGfx.closePath();
+        exitGfx.fillPath();
+
+        // Two vertical stall divider lines + back line (all rotated)
+        const leftLineStart  = rp(exitPixelX + inset, exitPixelY + inset);
+        const leftLineEnd    = rp(exitPixelX + inset, exitPixelY + baySize - inset);
+        const rightLineStart = rp(exitPixelX + baySize - inset, exitPixelY + inset);
+        const rightLineEnd   = rp(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        const backLineStart  = rp(exitPixelX + inset, exitPixelY + baySize - inset);
+        const backLineEnd    = rp(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+
         exitGfx.lineStyle(2, lineColor, 0.85);
         exitGfx.beginPath();
-        exitGfx.moveTo(exitPixelX + inset, exitPixelY + inset);
-        exitGfx.lineTo(exitPixelX + inset, exitPixelY + baySize - inset);
-        exitGfx.moveTo(exitPixelX + baySize - inset, exitPixelY + inset);
-        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
-        exitGfx.moveTo(exitPixelX + inset, exitPixelY + baySize - inset);
-        exitGfx.lineTo(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
+        exitGfx.moveTo(leftLineStart.x, leftLineStart.y);
+        exitGfx.lineTo(leftLineEnd.x, leftLineEnd.y);
+        exitGfx.moveTo(rightLineStart.x, rightLineStart.y);
+        exitGfx.lineTo(rightLineEnd.x, rightLineEnd.y);
+        exitGfx.moveTo(backLineStart.x, backLineStart.y);
+        exitGfx.lineTo(backLineEnd.x, backLineEnd.y);
         exitGfx.strokePath();
+
+        // Top ticks (now rotated — going inward along bay's local X axis)
+        const tlBase = rp(exitPixelX + inset, exitPixelY + inset);
+        const tlTip  = rp(exitPixelX + inset + tickLen, exitPixelY + inset);
+        const trBase = rp(exitPixelX + baySize - inset, exitPixelY + inset);
+        const trTip  = rp(exitPixelX + baySize - inset - tickLen, exitPixelY + inset);
 
         exitGfx.lineStyle(1.5, lineColor, 0.6);
         exitGfx.beginPath();
-        exitGfx.moveTo(exitPixelX + inset, exitPixelY + inset);
-        exitGfx.lineTo(exitPixelX + inset + tickLen, exitPixelY + inset);
-        exitGfx.moveTo(exitPixelX + baySize - inset, exitPixelY + inset);
-        exitGfx.lineTo(exitPixelX + baySize - inset - tickLen, exitPixelY + inset);
+        exitGfx.moveTo(tlBase.x, tlBase.y);
+        exitGfx.lineTo(tlTip.x, tlTip.y);
+        exitGfx.moveTo(trBase.x, trBase.y);
+        exitGfx.lineTo(trTip.x, trTip.y);
         exitGfx.strokePath();
       } else {
         // 'angled' — rotated car-shaped rectangle matching exitZone.angle
@@ -1323,34 +1397,39 @@ export class PuzzleScene extends Phaser.Scene {
     const playerBox = this.getRotatedBox(playerTable, this.carAngle);
 
     if (ez.parkingType) {
-      // ── Parking-type exit: rectangle overlap + angle check ─────────────
-      // Position check uses rectangle overlap (same as legacy) so the car's
-      // collision box can touch the bay edge — the Y boundary clamp prevents
-      // the car center from reaching the bay center at row 0.
+      // ── Parking-type exit: position + angle check ─────────────────────
       // Angle tolerance: ±10° for parallel/perpendicular, ±15° for angled.
-      // Angled zones use asymmetric dimensions (40×70) matching car proportions;
-      // parallel/perpendicular stay at 48×48.
-      const halfW = ez.parkingType === 'angled' ? ANGLE_EXIT_HALF_W : 24;
-      const halfH = ez.parkingType === 'angled' ? ANGLE_EXIT_HALF_H : 24;
-
       const bayX = ez.x ?? ((ez.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
       const bayY = ez.y ?? ((ez.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
       const bayAngle = ez.angle ?? 0;
 
-      // 1. Rectangle overlap check (player collision box vs bay)
-      const playerRect = new Phaser.Geom.Rectangle(
-        cx - playerBox.w / 2,
-        cy - playerBox.h / 2,
-        playerBox.w,
-        playerBox.h,
-      );
-      const bayRect = new Phaser.Geom.Rectangle(
-        bayX - halfW,
-        bayY - halfH,
-        halfW * 2,
-        halfH * 2,
-      );
-      if (!Phaser.Geom.Rectangle.Overlaps(playerRect, bayRect)) return false;
+      if (ez.parkingType === 'angled') {
+        // Angled zones: position proximity check — car center must be near bay center.
+        // At 45° the player AABB (73×73) is larger than the bay (40×70),
+        // so pure rectangle overlap triggers when any corner barely touches.
+        // Instead require the car center to land within a fixed tolerance
+        // of the bay center, ensuring the car looks visually parked inside.
+        const POS_TOLERANCE = 8; // px — car center within ±8px of bay center on each axis
+        if (Math.abs(cx - bayX) > POS_TOLERANCE) return false;
+        if (Math.abs(cy - bayY) > POS_TOLERANCE) return false;
+      } else {
+        // Parallel / perpendicular: rectangle overlap (unchanged).
+        const halfW = 24;
+        const halfH = 24;
+        const playerRect = new Phaser.Geom.Rectangle(
+          cx - playerBox.w / 2,
+          cy - playerBox.h / 2,
+          playerBox.w,
+          playerBox.h,
+        );
+        const bayRect = new Phaser.Geom.Rectangle(
+          bayX - halfW,
+          bayY - halfH,
+          halfW * 2,
+          halfH * 2,
+        );
+        if (!Phaser.Geom.Rectangle.Overlaps(playerRect, bayRect)) return false;
+      }
 
       // 2. Angle tolerance check
       const tolerance = ez.parkingType === 'angled' ? 15 : 10;
