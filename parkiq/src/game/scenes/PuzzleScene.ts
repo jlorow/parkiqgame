@@ -75,6 +75,19 @@ const COUNTER_SCALE_Y = SCALE_X / SCALE_Y;
 
 const CAR_VISUAL_SCALE = 0.20;
 
+// ── Prop visual scale factors (per-type, so rendered size matches collision box) ──
+// Each SVG is loaded at 200px width (matching car convention).
+// Scale = viewBox_w / 200 so the rendered visual matches the collision-box width.
+// Example: cone at 18×18 → 18/200 = 0.09 gives 18px visual width.
+const PROP_VISUAL_SCALE: Record<string, number> = {
+  'cone':        18 / 200,  // 0.09
+  'barricade':   48 / 200,  // 0.24
+  'barricade-1': 52 / 200,  // 0.26
+  'shrub-1':    103 / 200,  // 0.515
+  'shrub-2':    118 / 200,  // 0.59
+  'tree':        88 / 200,  // 0.44
+};
+
 // ──────────────────────────────────────────────────────────
 //  Train Segment Dimensions
 //  Derived: each segment fills ~92% of UNIT_PX (48px), leaving
@@ -333,6 +346,14 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('car-obstacle-5', 'assets/sprites/cars/Car-obstacle-05.svg', { width: 200, height: 400 });
     this.load.svg('car-limo', 'assets/sprites/cars/Limousine.svg', { width: 200, height: 605 });
     this.load.svg('car-trailer', 'assets/sprites/cars/Trailer.svg', { width: 200, height: 981 });
+
+    // ── Prop SVGs (6 new obstacle types) ────────────────────────────
+    this.load.svg('prop-cone',        'assets/sprites/props/Prop-cone.svg',        { width: 200, height: 200 });
+    this.load.svg('prop-barricade',   'assets/sprites/props/Prop-Barricade.svg',   { width: 200, height: 67 });
+    this.load.svg('prop-barricade-1', 'assets/sprites/props/Prop-Barricade-1.svg', { width: 200, height: 62 });
+    this.load.svg('prop-shrub-1',     'assets/sprites/props/Prop-Shrub-1.svg',     { width: 200, height: 117 });
+    this.load.svg('prop-shrub-2',     'assets/sprites/props/Prop-Shrub-2.svg',     { width: 200, height: 117 });
+    this.load.svg('prop-tree',        'assets/sprites/props/Prop-Tree.svg',         { width: 200, height: 202 });
 
     // ── Background images (per-puzzle lot surfaces) ───────────────
     this.load.svg('bg_1', 'assets/sprites/backgrounds/Road-Garage.svg', { width: 288, height: 288 });
@@ -1009,15 +1030,35 @@ export class PuzzleScene extends Phaser.Scene {
       // 'pillar' is visual-only — walls now render (collision changed in Step 3)
       if (obs.type === 'pillar') continue;
 
-      const obsImg = createObstacleCar(
-        this,
-        obs.x ?? ((obs.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX,
-        obs.y ?? ((obs.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX,
-        obs.angle,
-      );
-      obsImg.setDepth(6);
-      obsImg.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
-      container.add(obsImg);
+      const ox = obs.x ?? ((obs.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+      const oy = obs.y ?? ((obs.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
+
+      if (obs.type === 'wall') {
+        // Wall: Graphics-drawn 48×48 filled rectangle (no SVG asset)
+        const wallGfx = this.add.graphics();
+        wallGfx.fillStyle(0x6b7280, 0.9);
+        wallGfx.fillRect(ox - 24, oy - 24, 48, 48);
+        wallGfx.lineStyle(1, 0x4b5563, 1.0);
+        wallGfx.strokeRect(ox - 24, oy - 24, 48, 48);
+        wallGfx.setDepth(6);
+        container.add(wallGfx);
+      } else if (obs.type === 'barricade-1' || obs.type === 'barricade' ||
+                 obs.type === 'cone' || obs.type === 'shrub-1' ||
+                 obs.type === 'shrub-2' || obs.type === 'tree') {
+        // Prop: load correct SVG texture, scale to match collision box
+        const scale = PROP_VISUAL_SCALE[obs.type] ?? 0.20;
+        const img = this.add.image(ox, oy, `prop-${obs.type}`);
+        img.setAngle(obs.angle);
+        img.setDepth(6);
+        img.setScale(scale, scale * COUNTER_SCALE_Y);
+        container.add(img);
+      } else {
+        // Car obstacles (sedan/suv): existing random-roll car sprite
+        const obsImg = createObstacleCar(this, ox, oy, obs.angle);
+        obsImg.setDepth(6);
+        obsImg.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
+        container.add(obsImg);
+      }
     }
 
     const vehicle = this.puzzle.playerVehicle ?? 'sedan';
