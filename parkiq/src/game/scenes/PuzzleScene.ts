@@ -27,7 +27,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
-const DEBUG_FORCE_PUZZLE: number | null = 2;  // Force-load specific puzzle (null = use daily rotation)
+const DEBUG_FORCE_PUZZLE: number | null = 5;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
@@ -772,7 +772,7 @@ export class PuzzleScene extends Phaser.Scene {
           rp(exitPixelX + baySize, exitPixelY + baySize),
           rp(exitPixelX, exitPixelY + baySize),
         ];
-        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
+        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
         exitGfx.beginPath();
         exitGfx.moveTo(fillCorners[0]!.x, fillCorners[0]!.y);
         for (let i = 1; i < fillCorners.length; i++) {
@@ -781,13 +781,13 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.closePath();
         exitGfx.fillPath();
 
-        // Two horizontal curb lines (now rotated by exitZone.angle)
+        // Two horizontal curb lines
         const topLineStart = rp(exitPixelX + inset, exitPixelY + inset);
         const topLineEnd   = rp(exitPixelX + baySize - inset, exitPixelY + inset);
         const botLineStart = rp(exitPixelX + inset, exitPixelY + baySize - inset);
         const botLineEnd   = rp(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
 
-        exitGfx.lineStyle(2, lineColor, 0.85);
+        exitGfx.lineStyle(2, lineColor, 0.90);
         exitGfx.beginPath();
         exitGfx.moveTo(topLineStart.x, topLineStart.y);
         exitGfx.lineTo(topLineEnd.x, topLineEnd.y);
@@ -795,8 +795,8 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.lineTo(botLineEnd.x, botLineEnd.y);
         exitGfx.strokePath();
 
-        // Corner ticks (now rotated — tick direction follows bay's local Y axis)
-        exitGfx.lineStyle(1.5, lineColor, 0.6);
+        // Corner ticks
+        exitGfx.lineStyle(2, lineColor, 0.75);
         exitGfx.beginPath();
         for (const corner of [
           {x: exitPixelX + inset, y: exitPixelY + inset},
@@ -830,7 +830,7 @@ export class PuzzleScene extends Phaser.Scene {
           rp(exitPixelX + baySize, exitPixelY + baySize),
           rp(exitPixelX, exitPixelY + baySize),
         ];
-        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
+        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
         exitGfx.beginPath();
         exitGfx.moveTo(fillCorners[0]!.x, fillCorners[0]!.y);
         for (let i = 1; i < fillCorners.length; i++) {
@@ -847,7 +847,7 @@ export class PuzzleScene extends Phaser.Scene {
         const backLineStart  = rp(exitPixelX + inset, exitPixelY + baySize - inset);
         const backLineEnd    = rp(exitPixelX + baySize - inset, exitPixelY + baySize - inset);
 
-        exitGfx.lineStyle(2, lineColor, 0.85);
+        exitGfx.lineStyle(2, lineColor, 0.90);
         exitGfx.beginPath();
         exitGfx.moveTo(leftLineStart.x, leftLineStart.y);
         exitGfx.lineTo(leftLineEnd.x, leftLineEnd.y);
@@ -863,7 +863,7 @@ export class PuzzleScene extends Phaser.Scene {
         const trBase = rp(exitPixelX + baySize - inset, exitPixelY + inset);
         const trTip  = rp(exitPixelX + baySize - inset - tickLen, exitPixelY + inset);
 
-        exitGfx.lineStyle(1.5, lineColor, 0.6);
+        exitGfx.lineStyle(2, lineColor, 0.75);
         exitGfx.beginPath();
         exitGfx.moveTo(tlBase.x, tlBase.y);
         exitGfx.lineTo(tlTip.x, tlTip.y);
@@ -896,7 +896,7 @@ export class PuzzleScene extends Phaser.Scene {
         }));
 
         // Filled rotated rectangle — dark green fill (consistent with other parking-type markings)
-        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.25);
+        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
         exitGfx.beginPath();
         exitGfx.moveTo(worldCorners[0]!.x, worldCorners[0]!.y);
         for (let i = 1; i < worldCorners.length; i++) {
