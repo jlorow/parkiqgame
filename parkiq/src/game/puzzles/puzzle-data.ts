@@ -46,10 +46,10 @@ exitZone: { x: 143, y: 92, angle: 0, parkingType: 'parallel' },
     question: 'Drive out without hitting another car.',
     environment: 'street',
    obstacles: [
-  { type: 'sedan', x: 58,  y: 195, angle: 0 },   // lower-left (58→right edge=80.5 < player left at 45°=82.5)
-  { type: 'suv',   x: 195, y: 165, angle: 0 },   // mid-right, forces swing back left
-  { type: 'sedan', x: 38,  y: 90,  angle: 45 },  // left flank (38→AABB left=1.5≥0, right edge=74.5)
-  { type: 'suv',   x: 206, y: 90,  angle: 45 },  // right flank (206→AABB right=242.5≤288, left edge=169.5)
+  { type: 'sedan', x: 55,  y: 205, angle: 0 },   // lower-left (AABB [32.5,77.5] — clear of player x=144 at all angles)
+  { type: 'suv',   x: 205, y: 170, angle: 0 },   // mid-right (AABB left=182.5 — 9.5px margin at spawn rotation)
+  { type: 'sedan', x: 37,  y: 82,  angle: 45 },  // left flank (AABB [0.5,73.5])
+  { type: 'suv',   x: 225, y: 82,  angle: 45 },  // right flank (AABB [188.5,261.5] — gap=115px vs player 73px)
 ],
 playerCar: { x: 144, y: 244, angle: 0 },
 exitZone: { x: 119, y: 90, angle: 45, parkingType: 'angled' },

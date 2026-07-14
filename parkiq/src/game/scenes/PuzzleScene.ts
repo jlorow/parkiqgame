@@ -745,16 +745,16 @@ export class PuzzleScene extends Phaser.Scene {
     const exitGfx = this.add.graphics();
 
     if (ez.parkingType) {
-      // ── Parking-type exit zone: 48×48 bay with style-appropriate markings ───
-      // Subtle green-tinted fill signals the goal zone
-      exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
-      exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
-
       const inset = 3;
       const tickLen = 8;
       const lineColor = 0xffffff;
 
       if (ez.parkingType === 'parallel') {
+      // ── Parking-type exit zone: 48×48 bay with style-appropriate markings ───
+      // Subtle green-tinted fill signals the goal zone (NOT drawn for angled —
+      // angled handles its own fill via the rotated 40×70 rectangle below).
+      exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
+      exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
         // Two horizontal curb lines + corner ticks
         exitGfx.lineStyle(2, lineColor, 0.85);
         exitGfx.beginPath();
@@ -775,6 +775,9 @@ export class PuzzleScene extends Phaser.Scene {
         }
         exitGfx.strokePath();
       } else if (ez.parkingType === 'perpendicular') {
+        // Subtle green-tinted fill signals the goal zone
+        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.18);
+        exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
         // Two vertical stall divider lines + back line + top ticks
         exitGfx.lineStyle(2, lineColor, 0.85);
         exitGfx.beginPath();
@@ -799,6 +802,7 @@ export class PuzzleScene extends Phaser.Scene {
         // using the same cosA/sinA corner-rotation pattern as updateTruckTrailer().
         // Shared constants ANGLE_EXIT_HALF_W / ANGLE_EXIT_HALF_H keep the
         // visual and collision shapes in sync.
+        console.log(`[ANGLE_EXIT] angle=${ez.angle}° halfW=${ANGLE_EXIT_HALF_W} halfH=${ANGLE_EXIT_HALF_H} center=(${bayCenterX.toFixed(1)},${bayCenterY.toFixed(1)})`);
         const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
         const cosA = Math.cos(rad);
         const sinA = Math.sin(rad);

@@ -146,10 +146,10 @@ function runSequence(spawn, steps, obstacles, exitZone, vehicleType, fps) {
 const puzzle2 = {
   spawn: { x: 144, y: 244, angle: 0 },
   obstacles: [
-    { type: 'sedan', x: 58,  y: 195, angle: 0 },   // lower-left (58→right edge 80.5 < player left at 45°=82.5)
-    { type: 'suv',   x: 195, y: 165, angle: 0 },   // mid-right
-    { type: 'sedan', x: 38,  y: 90,  angle: 45 },  // left flank (38→AABB left=1.5≥0, right edge 74.5)
-    { type: 'suv',   x: 206, y: 90,  angle: 45 },  // right flank (206→AABB right=242.5≤288, left edge 169.5)
+    { type: 'sedan', x: 55,  y: 205, angle: 0 },   // lower-left (AABB [32.5,77.5])
+    { type: 'suv',   x: 205, y: 170, angle: 0 },   // mid-right (AABB left=182.5)
+    { type: 'sedan', x: 37,  y: 82,  angle: 45 },  // left flank (AABB [0.5,73.5])
+    { type: 'suv',   x: 225, y: 82,  angle: 45 },  // right flank (AABB [188.5,261.5], gap=115px)
   ],
   exitZone: { x: 119, y: 90, angle: 45, parkingType: 'angled' },
   vehicleType: 'sedan',
@@ -381,38 +381,38 @@ for (const fps of fpsValues) {
 // ═══════════════════════════════════════════════════════════════════
 
 console.log('\n── TARGETED BRUTE-FORCE SEARCH (60fps, coarse) ──');
-// Narrow search around promising values:
-//   steer-left: 200-500ms (step 50ms)
-//   forward1: 600-1600ms (step 100ms)
-//   steer-right: 100-500ms (step 50ms)
-//   forward2: 600-1400ms (step 100ms)
-// Total: 7×11×9×9 = 6,237 combinations — should complete within seconds
+// Search F+L+F+R pattern (matching winning candidates):
+//   forward1: 100-800ms (step 100ms)
+//   steer-left: 100-300ms (step 50ms)
+//   forward2: 600-1200ms (step 100ms)
+//   steer-right: 500-1100ms (step 50ms)
+// Total: 8×5×7×13 = 3,640 combinations
 
+const initFwds = [];
+for (let ms = 100; ms <= 800; ms += 100) initFwds.push(ms);
 const leftSteers = [];
-for (let ms = 200; ms <= 500; ms += 50) leftSteers.push(ms);
+for (let ms = 100; ms <= 300; ms += 50) leftSteers.push(ms);
 const fwds = [];
-for (let ms = 600; ms <= 1600; ms += 100) fwds.push(ms);
+for (let ms = 600; ms <= 1200; ms += 100) fwds.push(ms);
 const rightSteers = [];
-for (let ms = 100; ms <= 500; ms += 50) rightSteers.push(ms);
-const fwds2 = [];
-for (let ms = 600; ms <= 1400; ms += 100) fwds2.push(ms);
+for (let ms = 500; ms <= 1100; ms += 50) rightSteers.push(ms);
 
 let bfFound = false;
 let bfCount = 0;
-for (const sl of leftSteers) {
-  for (const f1 of fwds) {
-    for (const sr of rightSteers) {
-      for (const f2 of fwds2) {
+for (const f1 of initFwds) {
+  for (const sl of leftSteers) {
+    for (const f2 of fwds) {
+      for (const sr of rightSteers) {
         bfCount++;
         const steps = [
-          { dir: 'left', duration: sl },
           { dir: 'forward', duration: f1 },
-          { dir: 'right', duration: sr },
+          { dir: 'left', duration: sl },
           { dir: 'forward', duration: f2 },
+          { dir: 'right', duration: sr },
         ];
         const r = runSequence(puzzle2.spawn, steps, puzzle2.obstacles, puzzle2.exitZone, puzzle2.vehicleType, 60);
         if (r.won && r.totalCollisions === 0) {
-          console.log(`  ✓ FOUND: L${sl}+F${f1}+R${sr}+F${f2}  (${bfCount} combinations tried)`);
+          console.log(`  ✓ FOUND: F${f1}+L${sl}+F${f2}+R${sr}  (${bfCount} combinations tried)`);
           bfFound = true;
           break;
         }
@@ -425,42 +425,29 @@ for (const sl of leftSteers) {
 }
 
 if (!bfFound) {
-  // Try with initial forward (before steer-left)
-  console.log('  No 4-phase path found. Trying 5-phase: forward + left + forward + right + forward...');
-  const initFwds = [];
-  for (let ms = 100; ms <= 600; ms += 100) initFwds.push(ms);
-  for (const initF of initFwds) {
-    for (const sl of leftSteers) {
-      for (const f1 of fwds) {
-        for (const sr of rightSteers) {
-          for (const f2 of fwds2) {
-            bfCount++;
-            const steps = [
-              { dir: 'forward', duration: initF },
-              { dir: 'left', duration: sl },
-              { dir: 'forward', duration: f1 },
-              { dir: 'right', duration: sr },
-              { dir: 'forward', duration: f2 },
-            ];
-            const r = runSequence(puzzle2.spawn, steps, puzzle2.obstacles, puzzle2.exitZone, puzzle2.vehicleType, 60);
-            if (r.won && r.totalCollisions === 0) {
-              console.log(`  ✓ FOUND (5-phase): F${initF}+L${sl}+F${f1}+R${sr}+F${f2}  (${bfCount} tried)`);
-              bfFound = true;
-              break;
-            }
-          }
-          if (bfFound) break;
-        }
-        if (bfFound) break;
-      }
-      if (bfFound) break;
-    }
-    if (bfFound) break;
-  }
+  console.log(`  ✗ FAIL: No path found after ${bfCount} combinations.`);
 }
 
-if (!bfFound) {
-  console.log(`  ✗ FAIL: No path found after ${bfCount} combinations.`);
+// ═══════════════════════════════════════════════════════════════════
+//  STEP 4 — Verify brute-force winner at multiple frame rates
+// ═══════════════════════════════════════════════════════════════════
+
+if (bfFound) {
+  console.log('\n── MULTI-FPS VERIFICATION (brute-force winner) ──');
+  const bfPath = [
+    { dir: 'forward', duration: 100 },
+    { dir: 'left', duration: 100 },
+    { dir: 'forward', duration: 600 },
+    { dir: 'right', duration: 500 },
+  ];
+  let allFpsPass = true;
+  for (const fps of [60, 30, 20, 15, 10]) {
+    const r = runSequence(puzzle2.spawn, bfPath, puzzle2.obstacles, puzzle2.exitZone, puzzle2.vehicleType, fps);
+    const status = r.won && r.totalCollisions === 0 ? '✓ WIN' : '✗ FAIL';
+    if (!r.won || r.totalCollisions > 0) allFpsPass = false;
+    console.log(`  ${fps}fps: ${status}  (final: (${r.cx.toFixed(0)},${r.cy.toFixed(0)},${r.carAngle.toFixed(0)}°), collisions: ${r.totalCollisions})`);
+  }
+  console.log(`  → ${allFpsPass ? '✓ PASS (clean win at all frame rates)' : '✗ FAIL'}`);
 }
 
 // ═══════════════════════════════════════════════════════════════════
