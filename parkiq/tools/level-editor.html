@@ -25,6 +25,12 @@
       --sedan-color: #9CA3AF;
       --suv-color: #9CA3AF;
       --wall-color: #6B7280;
+      --barricade-color: #E8843B;
+      --barricade1-color: #E8843B;
+      --cone-color: #FF9900;
+      --shrub1-color: #68B345;
+      --shrub2-color: #4A8F2F;
+      --tree-color: #79AE28;
       --radius: 8px;
       --radius-sm: 4px;
     }
@@ -189,6 +195,12 @@
     .type-selector button.active-sedan { background: var(--sedan-color); color: #111; }
     .type-selector button.active-suv   { background: var(--suv-color); color: #111; }
     .type-selector button.active-wall  { background: var(--wall-color); color: #eee; }
+    .type-selector button.active-barricade { background: var(--barricade-color); color: #111; }
+    .type-selector button.active-barricade-1 { background: var(--barricade1-color); color: #111; }
+    .type-selector button.active-cone { background: var(--cone-color); color: #111; }
+    .type-selector button.active-shrub-1 { background: var(--shrub1-color); color: #111; }
+    .type-selector button.active-shrub-2 { background: var(--shrub2-color); color: #111; }
+    .type-selector button.active-tree { background: var(--tree-color); color: #111; }
     .type-selector button.active-spawn { background: var(--spawn-color); color: #111; }
     .type-selector button.active-exit  { background: var(--exit-color); color: #111; }
 
@@ -469,9 +481,15 @@
 
         <label style="margin-left:6px;">Type</label>
         <div class="type-selector" id="typeSelector">
-          <button data-type="sedan" class="active-sedan">Sedan</button>
+          <button data-type="sedan">Sedan</button>
           <button data-type="suv">SUV</button>
           <button data-type="wall">Wall</button>
+          <button data-type="barricade">Barricade</button>
+          <button data-type="barricade-1">Barricade-1</button>
+          <button data-type="cone">Cone</button>
+          <button data-type="shrub-1">Shrub-1</button>
+          <button data-type="shrub-2">Shrub-2</button>
+          <button data-type="tree">Tree</button>
           <button data-type="spawn">Spawn</button>
           <button data-type="exit">Exit</button>
         </div>
@@ -529,6 +547,12 @@
       sedan: '#9CA3AF',
       suv:   '#9CA3AF',
       wall:  '#6B7280',
+      'barricade':   '#E8843B',
+      'barricade-1': '#E8843B',
+      'cone':        '#FF9900',
+      'shrub-1':     '#68B345',
+      'shrub-2':     '#4A8F2F',
+      'tree':        '#79AE28',
       spawn: '#5B9BFF',
       exit:  '#4ADE80',
     };
@@ -543,8 +567,20 @@
     //  Collision Math — mirrors PuzzleScene.ts EXACTLY
     // ═════════════════════════════════════════════════════════════
 
-    const CAR_W = 36;    // All vehicle collision width  (sedan, suv, player)
-    const CAR_H = 64;    // All vehicle collision height (sedan, suv, player)
+    const WALL_BOX = { w: 48, h: 48 };
+
+    // ── Per-type collision box lookup (mirrors PuzzleScene.ts PROP_BOX + WALL_BOX) ──
+    const OBSTACLE_BOX = {
+      'sedan':        { w: 36, h: 64 },
+      'suv':          { w: 36, h: 64 },
+      'wall':         { w: 48, h: 48 },
+      'barricade':    { w: 48, h: 16 },
+      'barricade-1':  { w: 52, h: 16 },
+      'cone':         { w: 18, h: 18 },
+      'shrub-1':      { w: 103, h: 60 },
+      'shrub-2':      { w: 118, h: 69 },
+      'tree':         { w: 88, h: 89 },
+    };
     const PLAYFIELD = 288;
 
     function makeRect(cx, cy, w, h) {
@@ -589,9 +625,9 @@
      * Returns { issues: CollisionIssue[], markerProblems: Map<markerId, string[]> }
      *
      * Mirrors the real engine's AABB collision logic from PuzzleScene.ts:
-     *   - Cars (sedan/suv): 36×64 AABB centered on position, no rotation
-     *   - Walls: NO collision — excluded from overlap checks entirely
-     *   - Spawn (player): treated as 36×64 car rect for overlap checks
+     *   - Props: per-type box from OBSTACLE_BOX
+     *   - Walls: 48×48
+     *   - Spawn (player): 36×64 car rect for overlap checks
      *   - Exit zone: 48×48 AABB centered on marker position
      *   - Playfield: 288×288, origin top-left
      */
@@ -600,22 +636,30 @@
       const problemMap = new Map();  // markerId -> string[]
 
       const cars = markers.filter(m => m.type === 'sedan' || m.type === 'suv');
-      const walls = markers.filter(m => m.type === 'wall');
+      const obstacles = markers.filter(m => OBSTACLE_BOX[m.type] !== undefined);
       const spawn = markers.find(m => m.type === 'spawn');
       const exit  = markers.find(m => m.type === 'exit');
+
+      function getBox(type) {
+        const b = OBSTACLE_BOX[type];
+        if (!b) return { w: 36, h: 64 };
+        return b;
+      }
 
       function addProblem(marker, msg) {
         if (!problemMap.has(marker.id)) problemMap.set(marker.id, []);
         problemMap.get(marker.id).push(msg);
       }
 
-      // ── 1a. Car-vs-car overlap ─────────────────────────────────
+      // ── 1a. Car-vs-car overlap (sedan/suv only — props/walls are static blockers) ─
       for (let i = 0; i < cars.length; i++) {
         for (let j = i + 1; j < cars.length; j++) {
           const a = cars[i];
           const b = cars[j];
-          const rectA = makeRect(a.x, a.y, CAR_W, CAR_H);
-          const rectB = makeRect(b.x, b.y, CAR_W, CAR_H);
+          const ba = getBox(a.type);
+          const bb = getBox(b.type);
+          const rectA = makeRect(a.x, a.y, ba.w, ba.h);
+          const rectB = makeRect(b.x, b.y, bb.w, bb.h);
           if (rectsOverlap(rectA, rectB)) {
             const msg = `Overlaps ${a.type} #${a.id} at (${a.x}, ${a.y})`;
             const msgRev = `Overlaps ${b.type} #${b.id} at (${b.x}, ${b.y})`;
@@ -627,36 +671,40 @@
         }
       }
 
-      // ── 1b. Car vs spawn overlap ───────────────────────────────
+      // ── 1b. All obstacles vs spawn overlap ────────────────────────
       if (spawn) {
-        const spawnRect = makeRect(spawn.x, spawn.y, CAR_W, CAR_H);
-        for (const car of cars) {
-          const carRect = makeRect(car.x, car.y, CAR_W, CAR_H);
-          if (rectsOverlap(carRect, spawnRect)) {
+        const spawnBox = getBox(spawn.type);
+        const spawnRect = makeRect(spawn.x, spawn.y, spawnBox.w, spawnBox.h);
+        for (const obs of obstacles) {
+          const ob = getBox(obs.type);
+          const obsRect = makeRect(obs.x, obs.y, ob.w, ob.h);
+          if (rectsOverlap(obsRect, spawnRect)) {
             const msg = `Overlaps spawn at (${spawn.x}, ${spawn.y})`;
-            const spawnMsg = `Overlaps ${car.type} #${car.id} at (${car.x}, ${car.y})`;
-            issues.push(new CollisionIssue(car, 'overlap', msg));
+            const spawnMsg = `Overlaps ${obs.type} #${obs.id} at (${obs.x}, ${obs.y})`;
+            issues.push(new CollisionIssue(obs, 'overlap', msg));
             issues.push(new CollisionIssue(spawn, 'overlap', spawnMsg));
-            addProblem(car, msg);
+            addProblem(obs, msg);
             addProblem(spawn, spawnMsg);
           }
         }
       }
 
-      // ── 1c. Car vs exit zone overlap ───────────────────────────
+      // ── 1c. Obstacle vs exit zone overlap (all obstacle types) ────
       if (exit) {
         const exitRect = makeRect(exit.x, exit.y, 48, 48);
-        for (const car of cars) {
-          const carRect = makeRect(car.x, car.y, CAR_W, CAR_H);
-          if (rectsOverlap(carRect, exitRect)) {
+        for (const obs of obstacles) {
+          const ob = getBox(obs.type);
+          const obsRect = makeRect(obs.x, obs.y, ob.w, ob.h);
+          if (rectsOverlap(obsRect, exitRect)) {
             const msg = `Overlaps exit zone at (${exit.x}, ${exit.y})`;
-            issues.push(new CollisionIssue(car, 'overlap', msg));
-            addProblem(car, msg);
+            issues.push(new CollisionIssue(obs, 'overlap', msg));
+            addProblem(obs, msg);
           }
         }
         // Also check spawn vs exit
         if (spawn) {
-          const spawnRect = makeRect(spawn.x, spawn.y, CAR_W, CAR_H);
+          const spawnBox = getBox(spawn.type);
+          const spawnRect = makeRect(spawn.x, spawn.y, spawnBox.w, spawnBox.h);
           if (rectsOverlap(spawnRect, exitRect)) {
             const msg = `Overlaps exit zone at (${exit.x}, ${exit.y})`;
             issues.push(new CollisionIssue(spawn, 'overlap', msg));
@@ -665,11 +713,12 @@
         }
       }
 
-      // ── 2a. Edge clearance — collision-relevant (cars + spawn) ─
-      const collisionMarkers = [...cars];
+      // ── 2a. Edge clearance — all obstacles + spawn ────────────
+      const collisionMarkers = [...obstacles];
       if (spawn) collisionMarkers.push(spawn);
       for (const m of collisionMarkers) {
-        const ext = getAABBExtents(m.x, m.y, CAR_W, CAR_H);
+        const mb = getBox(m.type);
+        const ext = getAABBExtents(m.x, m.y, mb.w, mb.h);
         if (!ext.fullyInside) {
           const over = [];
           if (ext.overflowLeft > 0) over.push(`${ext.overflowLeft.toFixed(0)}px past left edge`);
@@ -682,21 +731,7 @@
         }
       }
 
-      // ── 2b. Edge clearance — visual only (walls) ───────────────
-      for (const m of walls) {
-        // Use same 36×64 as proxy for visual extent (wall dimensions undefined in engine)
-        const ext = getAABBExtents(m.x, m.y, 36, 64);
-        if (!ext.fullyInside) {
-          const over = [];
-          if (ext.overflowLeft > 0) over.push(`${ext.overflowLeft.toFixed(0)}px past left edge`);
-          if (ext.overflowRight > 0) over.push(`${ext.overflowRight.toFixed(0)}px past right edge`);
-          if (ext.overflowTop > 0) over.push(`${ext.overflowTop.toFixed(0)}px past top edge`);
-          if (ext.overflowBottom > 0) over.push(`${ext.overflowBottom.toFixed(0)}px past bottom edge`);
-          const detail = `(visual) wall extends ${over.join(', ')}`;
-          issues.push(new CollisionIssue(m, 'visual-edge', detail));
-          addProblem(m, detail);
-        }
-      }
+      // ── 2b. Edge clearance — visual only (walls) — REMOVED: walls now use real box ──
 
       // ── 2c. Edge clearance — exit zone ─────────────────────────
       if (exit) {
@@ -862,7 +897,8 @@
 
     function drawMarker(m) {
       const color = COLORS[m.type] || '#888';
-      const size = m.type === 'wall' ? 5 : 4;
+      const props = new Set(['barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree']);
+      const size = props.has(m.type) ? 5 : (m.type === 'wall' ? 5 : 4);
       const problems = getMarkerProblems(m);
       const hasProblems = problems.length > 0;
       const hasCollision = problems.some(p => p.startsWith('Overlaps'));
@@ -1170,7 +1206,8 @@
     //  Export
     // ─────────────────────────────────────────────────────────────
     function generateExport() {
-      const obstacles = markers.filter(m => m.type === 'sedan' || m.type === 'suv' || m.type === 'wall');
+      const obstacleTypes = new Set(['sedan', 'suv', 'wall', 'barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree']);
+      const obstacles = markers.filter(m => obstacleTypes.has(m.type));
       const spawn = markers.find(m => m.type === 'spawn');
       const exit = markers.find(m => m.type === 'exit');
 
