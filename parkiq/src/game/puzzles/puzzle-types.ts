@@ -28,7 +28,7 @@ export type TrainConfig = {
 };
 
 /** Types of obstacles that can appear in a puzzle */
-export type ObstacleType = 'sedan' | 'suv' | 'pillar' | 'wall';
+export type ObstacleType = 'sedan' | 'suv' | 'pillar' | 'wall' | 'barricade-1' | 'barricade' | 'cone' | 'shrub-1' | 'shrub-2' | 'tree';
 
 /**
  * A static obstacle in the parking scene.
