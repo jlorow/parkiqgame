@@ -37,12 +37,16 @@ export function convertGridToPixel(puzzle: Puzzle): Puzzle {
   }));
 
   // --- Exit zone (field consolidation: puzzle-level → exit-zone-level) ---
+  // Resolve angle/parkingType first so we can conditionally spread only when defined
+  const resolvedAngle = puzzle.exitZone.angle ?? puzzle.parkingAngle;
+  const resolvedParkingType = puzzle.exitZone.parkingType ?? puzzle.parkingType;
+
   const exitZone = {
     ...puzzle.exitZone,
     x: puzzle.exitZone.x ?? ((puzzle.exitZone.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX,
     y: puzzle.exitZone.y ?? ((puzzle.exitZone.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX,
-    angle: puzzle.exitZone.angle ?? puzzle.parkingAngle,
-    parkingType: puzzle.exitZone.parkingType ?? puzzle.parkingType,
+    ...(resolvedAngle !== undefined ? { angle: resolvedAngle } : {}),
+    ...(resolvedParkingType !== undefined ? { parkingType: resolvedParkingType } : {}),
   };
 
   return { ...puzzle, playerCar, obstacles, exitZone };
