@@ -1185,10 +1185,10 @@ export class PuzzleScene extends Phaser.Scene {
     // Create text first so we can measure its rendered height
     const text = this.add
       .text(CONTROLS_CENTER_X, OBJECTIVE_Y, this.puzzle.question, {
-        fontSize: '14px',
+        fontSize: '16px',
         color: '#FFFFFF',
         stroke: '#000000',
-        strokeThickness: 4,
+        strokeThickness: 2,
         fontStyle: 'bold',
         align: 'center',
         wordWrap: { width: INSTRUCTION_WRAP_WIDTH },
@@ -1208,11 +1208,11 @@ export class PuzzleScene extends Phaser.Scene {
     panel.setDepth(8);
 
     // Soft dark fill with subtle contrast against the control surface (0x141414)
-    panel.fillStyle(0x1a1a1a, 0.9);
+    panel.fillStyle(0x1a1a1a, 0.95);
     panel.fillRoundedRect(panelX, panelY, panelW, panelH, INSTRUCTION_PANEL_RADIUS);
 
     // Thin border for definition
-    panel.lineStyle(1, 0x2a2a2a, 0.4);
+    panel.lineStyle(1, 0x3a3a3a, 0.6);
     panel.strokeRoundedRect(panelX, panelY, panelW, panelH, INSTRUCTION_PANEL_RADIUS);
   }
 
