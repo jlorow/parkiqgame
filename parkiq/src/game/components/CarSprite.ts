@@ -1,15 +1,12 @@
 import Phaser from 'phaser';
 
-/** Grid-unit constants from knowledge.md */
-const UNIT_PX = 48;
-
 /** Baked texture keys — player and 5 obstacle variants */
 const TEX_PLAYER = 'car-player';
 
 export interface CarConfig {
-  /** Grid X position (multiplied by UNIT_PX to get pixel position) */
+  /** Pixel X position (0–288, container-local) */
   x: number;
-  /** Grid Y position (multiplied by UNIT_PX to get pixel position) */
+  /** Pixel Y position (0–288, container-local) */
   y: number;
   /** Rotation angle in degrees */
   angle: number;
@@ -18,7 +15,7 @@ export interface CarConfig {
   /** Optional specific obstacle variant (1-5); random if omitted */
   obstacleVariant?: number;
   /** Override the default player texture (e.g. 'car-limo' for the limousine) */
-  textureKey?: string;
+  textureKey?: string | undefined;
 }
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -31,7 +28,7 @@ export interface CarConfig {
  *           (or uses obstacleVariant if specified).
  *
  * No tint is applied — colors are baked into the SVG assets.
- * Position and rotation use grid coordinates and degrees.
+ * Position uses pixel coordinates (container-local), rotation in degrees.
  */
 export function createCarSprite(
   scene: Phaser.Scene,
@@ -46,11 +43,8 @@ export function createCarSprite(
     key = `car-obstacle-${v}`;
   }
 
-  const image = scene.add.image(
-    config.x * UNIT_PX,
-    config.y * UNIT_PX,
-    key,
-  );
+  // x,y are pixel coordinates — no UNIT_PX multiplication
+  const image = scene.add.image(config.x, config.y, key);
   image.setAngle(config.angle);
 
   return image;

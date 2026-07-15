@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bounding Box Audit — ParkIQ</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0f0f0f; color: #e0e0e0; font: 13px/1.5 'Courier New', monospace; padding: 24px; }
+  h1 { font-size: 18px; margin-bottom: 4px; color: #fff; }
+  .subtitle { color: #888; margin-bottom: 20px; font-size: 12px; }
+  .section { margin-bottom: 28px; }
+  .section h2 { font-size: 14px; color: #fbbf24; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+  table { border-collapse: collapse; margin-bottom: 12px; }
+  th, td { border: 1px solid #333; padding: 4px 10px; text-align: center; font-size: 12px; }
+  th { background: #1a1a1a; color: #fbbf24; }
+  td { background: #141414; }
+  .val { color: #4ade80; font-weight: bold; }
+  .note { color: #888; font-size: 11px; }
+  canvas { border: 1px solid #333; background: #111; display: block; margin: 8px 0; }
+  .legend { display: flex; gap: 16px; margin: 8px 0 16px 0; font-size: 11px; }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .legend .swatch { width: 14px; height: 14px; border: 1px solid #555; display: inline-block; }
+</style>
+</head>
+<body>
+
+<h1>ParkIQ — Bounding Box Audit</h1>
+<p class="subtitle">Visual comparison of collision boxes vs sprite sizes. All measurements in pixels at the container scale (UNIT_PX = 48).</p>
+
+<!-- ─── TABLE: All Collision Box Sizes ──────────────────────────── -->
+<div class="section">
+  <h2>1. Complete Collision Box Reference</h2>
+  <table>
+    <tr><th>Object</th><th>W</th><th>H</th><th>Area</th><th>Aspect</th><th>Notes</th></tr>
+    <tr><td>Sedan/SUV @ 0°</td><td class="val">45</td><td class="val">69</td><td>3105</td><td>0.65</td><td>SEDAN_BOX[0]</td></tr>
+    <tr><td>Sedan/SUV @ 15°</td><td class="val">58</td><td class="val">73</td><td>4234</td><td>0.79</td><td>SEDAN_BOX[15]</td></tr>
+    <tr><td>Sedan/SUV @ 30°</td><td class="val">68</td><td class="val">74</td><td>5032</td><td>0.92</td><td>SEDAN_BOX[30]</td></tr>
+    <tr><td>Sedan/SUV @ 45°</td><td class="val">73</td><td class="val">73</td><td>5329</td><td>1.00</td><td>SEDAN_BOX[45] — square peak</td></tr>
+    <tr><td>Sedan/SUV @ 60°</td><td class="val">74</td><td class="val">68</td><td>5032</td><td>1.09</td><td>SEDAN_BOX[60]</td></tr>
+    <tr><td>Sedan/SUV @ 75°</td><td class="val">73</td><td class="val">58</td><td>4234</td><td>1.26</td><td>SEDAN_BOX[75]</td></tr>
+    <tr><td>Sedan/SUV @ 90°</td><td class="val">69</td><td class="val">45</td><td>3105</td><td>1.53</td><td>SEDAN_BOX[90] — mirrors 0°</td></tr>
+    <tr><td colspan="6" style="background:#1a1a1a;color:#888">── Large vehicles ──</td></tr>
+    <tr><td>Truck/Limo @ 0°</td><td class="val">49</td><td class="val">100</td><td>4900</td><td>0.49</td><td>LARGE_BOX[0]</td></tr>
+    <tr><td>Truck/Limo @ 45°</td><td class="val">99</td><td class="val">99</td><td>9801</td><td>1.00</td><td>LARGE_BOX[45] — nearly square</td></tr>
+    <tr><td>Truck/Limo @ 90°</td><td class="val">100</td><td class="val">49</td><td>4900</td><td>2.04</td><td>LARGE_BOX[90]</td></tr>
+    <tr><td colspan="6" style="background:#1a1a1a;color:#888">── Props ──</td></tr>
+    <tr><td>Wall</td><td class="val">48</td><td class="val">48</td><td>2304</td><td>1.00</td><td>Rotation-invariant (square)</td></tr>
+    <tr><td>Barricade</td><td class="val">48</td><td class="val">16</td><td>768</td><td>3.00</td><td>Swaps to 16×48 at ≥45°</td></tr>
+    <tr><td>Barricade-1</td><td class="val">52</td><td class="val">16</td><td>832</td><td>3.25</td><td>Swaps to 16×52 at ≥45°</td></tr>
+    <tr><td>Cone</td><td class="val">18</td><td class="val">18</td><td>324</td><td>1.00</td><td>Fixed</td></tr>
+    <tr><td>Shrub-1</td><td class="val">103</td><td class="val">60</td><td>6180</td><td>1.72</td><td>Fixed</td></tr>
+    <tr><td>Shrub-2</td><td class="val">118</td><td class="val">69</td><td>8142</td><td>1.71</td><td>Fixed</td></tr>
+    <tr><td>Tree</td><td class="val">88</td><td class="val">89</td><td>7832</td><td>0.99</td><td>Fixed (nearly square)</td></tr>
+    <tr><td colspan="6" style="background:#1a1a1a;color:#888">── Other ──</td></tr>
+    <tr><td>Train segment</td><td class="val">44</td><td class="val">32</td><td>1408</td><td>1.38</td><td>Collision only (visual is 44×44)</td></tr>
+    <tr><td>Exit zone (angled)</td><td class="val">40</td><td class="val">70</td><td>2800</td><td>0.57</td><td>Fixed size, ±8px center check</td></tr>
+    <tr><td>Exit zone (legacy)</td><td class="val">96</td><td class="val">96</td><td>9216</td><td>1.00</td><td>Touch-only fallback</td></tr>
+    <tr><td>Pillar</td><td class="val">—</td><td class="val">—</td><td>—</td><td>—</td><td>Visual only, no collision</td></tr>
+  </table>
+</div>
+
+<!-- ─── CANVAS 1: Player sedan vs obstacle sedan at all angles ──── -->
+<div class="section">
+  <h2>2. Visual: Sedan/SUV Collision Box at Every Angle (against 48px grid cell)</h2>
+  <div class="legend">
+    <span><span class="swatch" style="background:rgba(251,191,36,0.25);border-color:#fbbf24"></span> Collision box</span>
+    <span><span class="swatch" style="background:rgba(74,222,128,0.3);border-color:#4ade80"></span> Visual sprite (40×70.6)</span>
+    <span><span class="swatch" style="background:rgba(100,100,100,0.3)"></span> 48px grid cell</span>
+  </div>
+  <canvas id="c1" width="720" height="160"></canvas>
+</div>
+
+<!-- ─── CANVAS 2: Player vs obstacle vs props side-by-side ──────── -->
+<div class="section">
+  <h2>3. Visual: All Object Types at 0° — Size Comparison</h2>
+  <div class="legend">
+    <span><span class="swatch" style="background:rgba(251,191,36,0.25);border-color:#fbbf24"></span> Collision box</span>
+    <span><span class="swatch" style="background:rgba(74,222,128,0.3);border-color:#4ade80"></span> Visual</span>
+    <span><span class="swatch" style="background:rgba(100,100,100,0.3)"></span> 48px cell</span>
+  </div>
+  <canvas id="c2" width="720" height="200"></canvas>
+</div>
+
+<!-- ─── CANVAS 3: Collision box growth chart ────────────────────── -->
+<div class="section">
+  <h2>4. Collision Box Area Growth: Sedan vs Large Vehicle vs Props</h2>
+  <canvas id="c3" width="720" height="260"></canvas>
+</div>
+
+<!-- ─── CANVAS 4: Visual vs collision overlay ───────────────────── -->
+<div class="section">
+  <h2>5. Visual vs Collision Overlay: Player Sedan at 0° and 45°</h2>
+  <canvas id="c4" width="300" height="300"></canvas>
+</div>
+
+<!-- ─── KEY FINDINGS ────────────────────────────────────────────── -->
+<div class="section">
+  <h2>6. Key Findings</h2>
+  <table>
+    <tr><th>Finding</th><th>Detail</th></tr>
+    <tr><td>Collision box vs visual</td><td>Sedan collision (36×64) is <span class="val">10-12%</span> smaller than visual (40×70.6). Forgiving — player feels they dodged when they actually did.</td></tr>
+    <tr><td>Peak area at 45°</td><td>Sedan AABB at 45° (<span class="val">73×73 = 5329</span>) is <span class="val">72%</span> larger than at 0° (45×69 = 3105). Rotation makes the car much harder to squeeze through gaps.</td></tr>
+    <tr><td>Large vehicle peak</td><td>Truck at 45° is <span class="val">99×99 = 9801</span> — <span class="val">2x</span> the 0° box. Almost fills a full 2-cell × 2-cell area.</td></tr>
+    <tr><td>Barricade swap</td><td>Barricades swap w/h at ≥45°. At 0°: 48×16 (wide). At 90°: 16×48 (tall). Simple binary — no intermediate sizes.</td></tr>
+    <tr><td>Shrub/Tree fixed</td><td>Shrub-1 (<span class="val">103×60</span>) is the widest prop. Tree (<span class="val">88×89</span>) is the tallest. Neither adjusts for rotation — potential mismatch if rotated.</td></tr>
+    <tr><td>Train leniency</td><td>Train collision H (32px) is <span class="val">27%</span> shorter than visual (44px). Designed for fairness — trains are fast-moving.</td></tr>
+    <tr><td>Pillar = no collision</td><td>Pillars are visual-only. Player can drive through them. Intentional or oversight?</td></tr>
+  </table>
+</div>
+
+<script>
+// ─── Data ──────────────────────────────────────────────────────────
+const SEDAN_BOX = { 0:{w:45,h:69}, 15:{w:58,h:73}, 30:{w:68,h:74}, 45:{w:73,h:73}, 60:{w:74,h:68}, 75:{w:73,h:58}, 90:{w:69,h:45} };
+const LARGE_BOX = { 0:{w:49,h:100}, 45:{w:99,h:99}, 90:{w:100,h:49} };
+const PROP_BOX = { 'barricade':{w:48,h:16}, 'barricade-1':{w:52,h:16}, 'cone':{w:18,h:18}, 'shrub-1':{w:103,h:60}, 'shrub-2':{w:118,h:69}, 'tree':{w:88,h:89}, 'tree-sm':{w:41,h:42}, 'wall':{w:48,h:48} };
+const VIS_W = 40, VIS_H = 70.6, CELL = 48;
+
+function getRotatedBox(table, angleDeg) {
+  let r = angleDeg % 180; if (r < 0) r += 180;
+  if (r > 90) r = 180 - r;
+  if (table === 'sedan') {
+    const bucket = Math.round(r / 15) * 15;
+    return SEDAN_BOX[bucket] || SEDAN_BOX[0];
+  } else {
+    const bucket = r < 22.5 ? 0 : r < 67.5 ? 45 : 90;
+    return LARGE_BOX[bucket] || LARGE_BOX[0];
+  }
+}
+
+// ─── Canvas 1: Sedan at every 15° step ─────────────────────────────
+{
+  const c = document.getElementById('c1');
+  const ctx = c.getContext('2d');
+  const angles = [0, 15, 30, 45, 60, 75, 90];
+  const colW = 100;
+
+  angles.forEach((a, i) => {
+    const box = getRotatedBox('sedan', a);
+    const cx = i * colW + colW / 2;
+    const cy = 80;
+
+    // Grid cell
+    ctx.fillStyle = 'rgba(100,100,100,0.15)';
+    ctx.fillRect(cx - CELL/2, cy - CELL/2, CELL, CELL);
+    ctx.strokeStyle = '#555';
+    ctx.strokeRect(cx - CELL/2, cy - CELL/2, CELL, CELL);
+
+    // Collision box
+    ctx.fillStyle = 'rgba(251,191,36,0.2)';
+    ctx.fillRect(cx - box.w/2, cy - box.h/2, box.w, box.h);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(cx - box.w/2, cy - box.h/2, box.w, box.h);
+
+    // Visual sprite (rotated)
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(a * Math.PI / 180);
+    ctx.fillStyle = 'rgba(74,222,128,0.15)';
+    ctx.fillRect(-VIS_W/2, -VIS_H/2, VIS_W, VIS_H);
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-VIS_W/2, -VIS_H/2, VIS_W, VIS_H);
+    ctx.restore();
+
+    // Label
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '11px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(a + '°', cx, 145);
+    ctx.fillStyle = '#888';
+    ctx.font = '10px Courier New';
+    ctx.fillText(box.w + '×' + box.h, cx, 157);
+  });
+}
+
+// ─── Canvas 2: All object types at 0° ──────────────────────────────
+{
+  const c = document.getElementById('c2');
+  const ctx = c.getContext('2d');
+  const objects = [
+    { name: 'Player\n(sedan 0°)', box: {w:45,h:69}, vis: {w:40,h:70.6} },
+    { name: 'Obstacle\n(sedan 0°)', box: {w:45,h:69}, vis: {w:40,h:70.6} },
+    { name: 'Truck\n(0°)', box: {w:49,h:100}, vis: {w:40,h:106} },
+    { name: 'Wall', box: {w:48,h:48}, vis: {w:48,h:48} },
+    { name: 'Barricade', box: {w:48,h:16}, vis: {w:48,h:16} },
+    { name: 'Cone', box: {w:18,h:18}, vis: {w:18,h:18} },
+    { name: 'Shrub-1', box: {w:103,h:60}, vis: {w:103,h:60} },
+    { name: 'Tree', box: {w:88,h:89}, vis: {w:88,h:89} },
+  ];
+  const colW = 90;
+  const baseY = 130;
+
+  objects.forEach((obj, i) => {
+    const cx = i * colW + colW / 2;
+
+    // Grid cell
+    ctx.fillStyle = 'rgba(100,100,100,0.12)';
+    ctx.fillRect(cx - CELL/2, baseY - CELL/2, CELL, CELL);
+    ctx.strokeStyle = '#444';
+    ctx.strokeRect(cx - CELL/2, baseY - CELL/2, CELL, CELL);
+
+    // Collision box
+    ctx.fillStyle = 'rgba(251,191,36,0.2)';
+    ctx.fillRect(cx - obj.box.w/2, baseY - obj.box.h/2, obj.box.w, obj.box.h);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(cx - obj.box.w/2, baseY - obj.box.h/2, obj.box.w, obj.box.h);
+
+    // Visual
+    ctx.fillStyle = 'rgba(74,222,128,0.15)';
+    ctx.fillRect(cx - obj.vis.w/2, baseY - obj.vis.h/2, obj.vis.w, obj.vis.h);
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx - obj.vis.w/2, baseY - obj.vis.h/2, obj.vis.w, obj.vis.h);
+
+    // Label
+    ctx.fillStyle = '#ccc';
+    ctx.font = '10px Courier New';
+    ctx.textAlign = 'center';
+    const lines = obj.name.split('\n');
+    lines.forEach((line, li) => {
+      ctx.fillText(line, cx, 180 + li * 13);
+    });
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillText(obj.box.w + '×' + obj.box.h, cx, 180 + lines.length * 13);
+  });
+}
+
+// ─── Canvas 3: Area growth chart ───────────────────────────────────
+{
+  const c = document.getElementById('c3');
+  const ctx = c.getContext('2d');
+  const pad = { l:60, r:20, t:20, b:40 };
+  const w = c.width - pad.l - pad.r;
+  const h = c.height - pad.t - pad.b;
+
+  // Data series
+  const sedanAngles = [0, 15, 30, 45, 60, 75, 90];
+  const sedanAreas = sedanAngles.map(a => { const b = getRotatedBox('sedan', a); return b.w * b.h; });
+  const largeAngles = [0, 45, 90];
+  const largeAreas = largeAngles.map(a => { const b = getRotatedBox('large', a); return b.w * b.h; });
+  const propAreas = [
+    { name: 'Cone', area: 18*18 },
+    { name: 'Barricade', area: 48*16 },
+    { name: 'Wall', area: 48*48 },
+    { name: 'Shrub-1', area: 103*60 },
+    { name: 'Tree', area: 88*89 },
+    { name: 'Tree-SM', area: 41*42 },
+  ];
+
+  const maxArea = 10000;
+  const minArea = 0;
+
+  // Axes
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t);
+  ctx.lineTo(pad.l, pad.t + h);
+  ctx.lineTo(pad.l + w, pad.t + h);
+  ctx.stroke();
+
+  // Y-axis labels
+  ctx.fillStyle = '#888';
+  ctx.font = '10px Courier New';
+  ctx.textAlign = 'right';
+  for (let v = 0; v <= maxArea; v += 2000) {
+    const y = pad.t + h - (v / maxArea) * h;
+    ctx.fillText(v.toLocaleString(), pad.l - 6, y + 3);
+    ctx.strokeStyle = '#222';
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(pad.l + w, y);
+    ctx.stroke();
+  }
+
+  // Sedan line
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  sedanAngles.forEach((a, i) => {
+    const x = pad.l + (a / 90) * w;
+    const y = pad.t + h - (sedanAreas[i] / maxArea) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  // Dots
+  sedanAngles.forEach((a, i) => {
+    const x = pad.l + (a / 90) * w;
+    const y = pad.t + h - (sedanAreas[i] / maxArea) * h;
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '9px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(sedanAreas[i].toLocaleString(), x, y - 8);
+  });
+
+  // Large line
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  largeAngles.forEach((a, i) => {
+    const x = pad.l + (a / 90) * w;
+    const y = pad.t + h - (largeAreas[i] / maxArea) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  largeAngles.forEach((a, i) => {
+    const x = pad.l + (a / 90) * w;
+    const y = pad.t + h - (largeAreas[i] / maxArea) * h;
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ef4444';
+    ctx.font = '9px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(largeAreas[i].toLocaleString(), x, y - 8);
+  });
+
+  // Prop reference lines (horizontal dashes)
+  propAreas.forEach(p => {
+    const y = pad.t + h - (p.area / maxArea) * h;
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(pad.l + w, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#4ade80';
+    ctx.font = '9px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillText(p.name + ' ' + p.area, pad.l + w - 80, y - 3);
+  });
+
+  // X-axis labels
+  ctx.fillStyle = '#888';
+  ctx.font = '10px Courier New';
+  ctx.textAlign = 'center';
+  [0, 15, 30, 45, 60, 75, 90].forEach(a => {
+    ctx.fillText(a + '°', pad.l + (a / 90) * w, pad.t + h + 16);
+  });
+
+  // Legend
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(pad.l + 10, pad.t + 6, 10, 10);
+  ctx.fillStyle = '#ccc';
+  ctx.font = '10px Courier New';
+  ctx.textAlign = 'left';
+  ctx.fillText('Sedan/SUV', pad.l + 24, pad.t + 15);
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(pad.l + 110, pad.t + 6, 10, 10);
+  ctx.fillStyle = '#ccc';
+  ctx.fillText('Truck/Limo', pad.l + 124, pad.t + 15);
+}
+
+// ─── Canvas 4: Detailed overlay at 0° and 45° ─────────────────────
+{
+  const c = document.getElementById('c4');
+  const ctx = c.getContext('2d');
+
+  [
+    { angle: 0, cx: 75, label: '0°' },
+    { angle: 45, cx: 225, label: '45°' },
+  ].forEach(({ angle, cx, label }) => {
+    const cy = 130;
+    const box = getRotatedBox('sedan', angle);
+
+    // Grid cells (3×4 around center)
+    for (let gx = -2; gx <= 2; gx++) {
+      for (let gy = -3; gy <= 3; gy++) {
+        const sx = cx + gx * CELL - CELL/2;
+        const sy = cy + gy * CELL - CELL/2;
+        if (sx > -CELL && sx < c.width && sy > -CELL && sy < c.height) {
+          ctx.fillStyle = 'rgba(100,100,100,0.08)';
+          ctx.fillRect(sx, sy, CELL, CELL);
+          ctx.strokeStyle = '#333';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(sx, sy, CELL, CELL);
+        }
+      }
+    }
+
+    // Collision box
+    ctx.fillStyle = 'rgba(251,191,36,0.25)';
+    ctx.fillRect(cx - box.w/2, cy - box.h/2, box.w, box.h);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx - box.w/2, cy - box.h/2, box.w, box.h);
+
+    // Visual sprite (rotated)
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle * Math.PI / 180);
+    ctx.fillStyle = 'rgba(74,222,128,0.2)';
+    ctx.fillRect(-VIS_W/2, -VIS_H/2, VIS_W, VIS_H);
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-VIS_W/2, -VIS_H/2, VIS_W, VIS_H);
+    // Windshield hint
+    ctx.fillStyle = 'rgba(74,222,128,0.3)';
+    ctx.fillRect(-VIS_W/2 + 4, -VIS_H/2 + 6, VIS_W - 8, 14);
+    ctx.restore();
+
+    // Dimension labels
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '11px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(label + '  (' + box.w + '×' + box.h + ')', cx, 260);
+
+    // Width dimension line
+    ctx.strokeStyle = '#fbbf2488';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - box.w/2, cy - box.h/2 - 12);
+    ctx.lineTo(cx + box.w/2, cy - box.h/2 - 12);
+    ctx.stroke();
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '9px Courier New';
+    ctx.fillText(box.w + 'px', cx, cy - box.h/2 - 16);
+
+    // Height dimension line
+    ctx.beginPath();
+    ctx.moveTo(cx + box.w/2 + 12, cy - box.h/2);
+    ctx.lineTo(cx + box.w/2 + 12, cy + box.h/2);
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(cx + box.w/2 + 20, cy);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '9px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(box.h + 'px', 0, 0);
+    ctx.restore();
+  });
+}
+</script>
+</body>
+</html>

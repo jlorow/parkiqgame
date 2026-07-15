@@ -1,0 +1,9 @@
+{
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "deno.enable": false,
+  "deno.lint": false,
+  "json.schemaDownload.enable": true,
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

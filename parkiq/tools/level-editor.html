@@ -1,0 +1,2173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ParkIQ — Level Editor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-primary: #0F0F0F;
+      --bg-secondary: #1C1C1E;
+      --bg-tertiary: #252528;
+      --border: #333338;
+      --text-primary: #E8E8ED;
+      --text-secondary: #8E8E98;
+      --text-muted: #63636E;
+      --accent-blue: #5B9BFF;
+      --accent-green: #4ADE80;
+      --accent-red: #FF6B6B;
+      --accent-gray: #9CA3AF;
+      --accent-wall: #6B7280;
+      --spawn-color: #5B9BFF;
+      --exit-color: #4ADE80;
+      --sedan-color: #9CA3AF;
+      --suv-color: #9CA3AF;
+      --wall-color: #6B7280;
+      --barricade-color: #E8843B;
+      --barricade1-color: #E8843B;
+      --cone-color: #FF9900;
+      --shrub1-color: #68B345;
+      --shrub2-color: #4A8F2F;
+      --tree-color: #79AE28;
+      --tree-sm-color: #79AE28;
+      --radius: 8px;
+      --radius-sm: 4px;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      max-width: 1100px;
+      padding: 20px 24px 12px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    header .badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      padding: 3px 10px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+    }
+    header .subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-left: auto;
+    }
+
+    /* ── Main layout ── */
+    .main {
+      width: 100%;
+      max-width: 1100px;
+      padding: 0 24px 40px;
+      display: grid;
+        grid-template-columns: 300px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ── Canvas column ── */
+    .canvas-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .canvas-wrapper {
+      position: relative;
+      width: 300px;
+      height: 649px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: crosshair;
+      background: #111113;
+    }
+    .canvas-wrapper canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: auto;
+    }
+    .canvas-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    /* ── Right panel ── */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Toolbar row ── */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+    }
+    .toolbar label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .file-input-wrap {
+      position: relative;
+    }
+    .file-input-wrap input[type="file"] {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+    }
+    .file-btn {
+      font-size: 12px;
+      padding: 6px 14px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .file-btn:hover {
+      background: #333;
+    }
+
+    /* ── Type selector (pill buttons) ── */
+    .type-selector {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+    }
+    .type-selector button {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .type-selector button:hover {
+      color: var(--text-primary);
+      background: rgba(255,255,255,0.05);
+    }
+    .type-selector button.active-sedan { background: var(--sedan-color); color: #111; }
+    .type-selector button.active-suv   { background: var(--suv-color); color: #111; }
+    .type-selector button.active-wall  { background: var(--wall-color); color: #eee; }
+    .type-selector button.active-barricade { background: var(--barricade-color); color: #111; }
+    .type-selector button.active-barricade-1 { background: var(--barricade1-color); color: #111; }
+    .type-selector button.active-cone { background: var(--cone-color); color: #111; }
+    .type-selector button.active-shrub-1 { background: var(--shrub1-color); color: #111; }
+    .type-selector button.active-shrub-2 { background: var(--shrub2-color); color: #111; }
+    .type-selector button.active-tree { background: var(--tree-color); color: #111; }
+    .type-selector button.active-spawn { background: var(--spawn-color); color: #111; }
+    .type-selector button.active-exit  { background: var(--exit-color); color: #111; }
+
+    /* ── Properties panel ── */
+    .properties {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .properties h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .prop-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .prop-row label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 48px;
+      font-weight: 500;
+    }
+    .prop-row .prop-value {
+      font-size: 13px;
+      font-family: monospace;
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      min-width: 60px;
+    }
+    .prop-row input[type="number"] {
+      font-size: 13px;
+      font-family: monospace;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      color: var(--text-primary);
+      width: 80px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .prop-row input[type="number"]:focus {
+      border-color: var(--accent-blue);
+    }
+    .prop-row select {
+      font-size: 13px;
+      font-family: inherit;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      color: var(--text-primary);
+      outline: none;
+      cursor: pointer;
+    }
+    .prop-row select:focus {
+      border-color: var(--accent-blue);
+    }
+    .delete-btn {
+      font-size: 12px;
+      padding: 5px 14px;
+      background: transparent;
+      border: 1px solid var(--accent-red);
+      border-radius: var(--radius-sm);
+      color: var(--accent-red);
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-top: 4px;
+      font-family: inherit;
+      font-weight: 600;
+    }
+    .delete-btn:hover {
+      background: var(--accent-red);
+      color: #111;
+    }
+    .fine-btn {
+      font-size: 11px;
+      padding: 2px 6px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+      font-weight: 600;
+    }
+    .fine-btn:hover {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: #111;
+    }
+    .tolerance-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 6px;
+      padding: 6px 10px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+    }
+    .no-selection {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    /* ── Marker list ── */
+    .marker-list-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .marker-list-section h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .marker-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    .marker-table th {
+      text-align: left;
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .marker-table td {
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .marker-table tr:hover td {
+      background: var(--bg-tertiary);
+    }
+    .marker-table tr.selected td {
+      background: rgba(91, 155, 255, 0.1);
+      color: var(--text-primary);
+    }
+    .dot-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    /* ── Path test section ── */
+    .path-test-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .path-test-section h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .path-test-section .path-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .path-instruction {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 6px 10px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-sm);
+      line-height: 1.5;
+    }
+
+    /* ── Export section ── */
+    .export-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .export-section h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .export-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .copy-btn {
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 20px;
+      background: var(--accent-blue);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #111;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .copy-btn:hover {
+      filter: brightness(1.15);
+    }
+    .copy-btn:active {
+      transform: scale(0.97);
+    }
+    .copy-btn.copied {
+      background: var(--accent-green);
+    }
+    .export-textarea {
+      width: 100%;
+      min-height: 160px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: monospace;
+      font-size: 12px;
+      padding: 12px;
+      resize: vertical;
+      outline: none;
+      tab-size: 2;
+      line-height: 1.6;
+    }
+    .export-textarea:focus {
+      border-color: var(--accent-blue);
+    }
+
+    /* ── Validation messages ── */
+    .validation {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .validation .warn {
+      font-size: 11px;
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.25);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+    }
+    .validation .ok {
+      font-size: 11px;
+      color: var(--accent-green);
+      background: rgba(74, 222, 128, 0.1);
+      border: 1px solid rgba(74, 222, 128, 0.25);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* ── Responsive tweaks ── */
+    @media (max-width: 720px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+      .canvas-column {
+        align-items: center;
+      }
+      .canvas-wrapper {
+        width: 300px;
+        height: 649px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🅿️ ParkIQ</h1>
+    <span class="badge">Level Editor · Phase 1</span>
+    <span class="subtitle">Pixel-coordinate freeform puzzle designer</span>
+  </header>
+
+  <div class="main">
+    <!-- ── Canvas Column ── -->
+    <div class="canvas-column">
+      <div class="canvas-wrapper">
+        <canvas id="editorCanvas" width="390" height="844"></canvas>
+      </div>
+      <span class="canvas-label">288 × 288 logical · click to place</span>
+    </div>
+
+    <!-- ── Right Panel ── -->
+    <div class="panel">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <label>Image</label>
+        <div class="file-input-wrap">
+          <input type="file" id="bgInput" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+          <span class="file-btn">Load Background</span>
+        </div>
+
+        <button class="file-btn" id="clearDataBtn" style="margin-left:4px;border-color:var(--accent-red);color:var(--accent-red)">🗑 Clear Saved</button>
+
+        <label style="margin-left:6px;">Type</label>
+        <div class="type-selector" id="typeSelector">
+          <button data-type="sedan">Sedan</button>
+          <button data-type="suv">SUV</button>
+          <button data-type="wall">Wall</button>
+          <button data-type="barricade">Barricade</button>
+          <button data-type="barricade-1">Barricade-1</button>
+          <button data-type="cone">Cone</button>
+          <button data-type="shrub-1">Shrub-1</button>
+          <button data-type="shrub-2">Shrub-2</button>
+          <button data-type="tree">Tree</button>
+          <button data-type="tree-sm">Tree-SM</button>
+          <button data-type="spawn">Spawn</button>
+          <button data-type="exit">Exit</button>
+        </div>
+
+        <div style="width:1px;height:24px;background:var(--border);margin:0 6px;"></div>
+
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;" id="hitboxToggleLabel">
+          <input type="checkbox" id="showHitboxesCheck" style="cursor:pointer;">
+          <span style="font-size:12px;font-weight:600;color:var(--text-secondary)">Show Hitboxes</span>
+        </label>
+
+        <button class="file-btn" id="testPathBtn" style="border-color:var(--accent-green);color:var(--accent-green);font-weight:600;">🧪 Test Path</button>
+        <button class="file-btn" id="clearPathBtn" style="border-color:var(--accent-red);color:var(--accent-red);display:none;" hidden>✕ Clear Path</button>
+      </div>
+
+      <!-- Properties Panel -->
+      <div class="properties" id="propertiesPanel">
+        <h3>Properties</h3>
+        <div id="propertiesContent">
+          <div class="no-selection">Click a marker on the canvas to edit</div>
+        </div>
+      </div>
+
+      <!-- Marker List -->
+      <div class="marker-list-section">
+        <h3>Markers <span id="saveStatus" style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);margin-left:8px"></span></h3>
+        <div id="markerListContainer">
+          <table class="marker-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Type</th>
+                <th>X</th>
+                <th>Y</th>
+                <th>Angle</th>
+                <th>Parking</th>
+                <th style="text-align:center">Status</th>
+              </tr>
+            </thead>
+            <tbody id="markerTableBody"></tbody>
+          </table>
+          <div id="emptyListMsg" style="font-size:13px;color:var(--text-muted);text-align:center;padding:16px 0;">
+            No markers placed yet. Click the canvas to begin.
+          </div>
+        </div>
+      </div>
+
+      <!-- Path Test -->
+      <div class="path-test-section" id="pathTestSection" style="display:none;">
+        <h3>🧪 Path Test</h3>
+        <div class="path-toolbar">
+          <button class="copy-btn" id="clearPathBtn2" style="background:var(--accent-red);font-size:12px;padding:5px 14px;font-family:inherit;">✕ Clear Waypoints</button>
+        </div>
+        <div class="path-instruction" id="pathInstruction">Click on the canvas to add waypoints. Path starts from the spawn marker.</div>
+        <div id="pathResultsDisplay" style="font-size:12px;font-family:monospace;line-height:1.6;min-height:30px;padding:6px 0;"></div>
+        <div id="pathWaypointList" style="font-size:11px;font-family:monospace;color:var(--text-secondary);max-height:80px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- Export -->
+      <div class="export-section">
+        <h3>Export</h3>
+        <div class="export-actions">
+          <button class="copy-btn" id="copyBtn">📋 Copy as Puzzle Data</button>
+        </div>
+        <textarea class="export-textarea" id="exportTextarea" readonly placeholder="Click 'Copy as Puzzle Data' or place markers to generate export data…"></textarea>
+        <div class="validation" id="validationMessages"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────
+    //  State
+    // ─────────────────────────────────────────────────────────────
+    const COLORS = {
+      sedan: '#9CA3AF',
+      suv:   '#9CA3AF',
+      wall:  '#6B7280',
+      'barricade':   '#E8843B',
+      'barricade-1': '#E8843B',
+      'cone':        '#FF9900',
+      'shrub-1':     '#68B345',
+      'shrub-2':     '#4A8F2F',
+      'tree':        '#79AE28',
+      'tree-sm':     '#79AE28',
+      spawn: '#5B9BFF',
+      exit:  '#4ADE80',
+    };
+
+    const TOLERANCE = {
+      parallel:      '±10°',
+      perpendicular: '±10°',
+      angled:        '±15°',
+    };
+
+    // ═════════════════════════════════════════════════════════════
+    //  Collision Math — mirrors PuzzleScene.ts EXACTLY
+    // ═════════════════════════════════════════════════════════════
+
+    // ── Per-type collision box lookup (mirrors PuzzleScene.ts PROP_BOX + WALL_BOX) ──
+    const OBSTACLE_BOX = {
+      'sedan':        { w: 36, h: 64 },
+      'suv':          { w: 36, h: 64 },
+      'wall':         { w: 48, h: 48 },
+      'barricade':    { w: 48, h: 16 },
+      'barricade-1':  { w: 52, h: 16 },
+      'cone':         { w: 18, h: 18 },
+      'shrub-1':      { w: 103, h: 60 },
+      'shrub-2':      { w: 118, h: 69 },
+      'tree':         { w: 88, h: 89 },
+      'tree-sm':      { w: 41, h: 42 },
+    };
+    const PLAYFIELD = 288;
+    const STORAGE_KEY = 'parkiq-level-editor-state';
+
+    /**
+     * Returns collision box with barricade angle swap, mirroring engine's getObstacleBox().
+     * Hoisted to top level so both runCollisionChecks() and runPathTest() share the SAME function.
+     */
+    function getBox(type, angle) {
+      angle = angle || 0;
+      const b = OBSTACLE_BOX[type];
+      if (!b) return { w: 36, h: 64 };
+      // Barricades: swap w/h if angle ≥45° (mirrors engine's getObstacleBox)
+      if (type === 'barricade' || type === 'barricade-1') {
+        let r = angle % 180;
+        if (r < 0) r += 180;
+        if (r > 90) r = 180 - r;
+        if (r >= 45) {
+          return { w: b.h, h: b.w };
+        }
+      }
+      return b;
+    }
+
+    function makeRect(cx, cy, w, h) {
+      return { left: cx - w / 2, right: cx + w / 2, top: cy - h / 2, bottom: cy + h / 2 };
+    }
+
+    function rectsOverlap(a, b) {
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+
+    /**
+     * Edge-clearance test: returns overflow info for a rect at (x,y) with given w/h.
+     * fullInside: true if rect is completely within 0..PLAYFIELD on both axes.
+     */
+    function getAABBExtents(x, y, w, h) {
+      const r = makeRect(x, y, w, h);
+      return {
+        left: r.left, right: r.right, top: r.top, bottom: r.bottom,
+        insideX: r.left >= 0 && r.right <= PLAYFIELD,
+        insideY: r.top >= 0 && r.bottom <= PLAYFIELD,
+        fullyInside: r.left >= 0 && r.right <= PLAYFIELD && r.top >= 0 && r.bottom <= PLAYFIELD,
+        overflowLeft: Math.max(0, -r.left),
+        overflowRight: Math.max(0, r.right - PLAYFIELD),
+        overflowTop: Math.max(0, -r.top),
+        overflowBottom: Math.max(0, r.bottom - PLAYFIELD),
+      };
+    }
+
+    /**
+     * Result of a single collision check.
+     */
+    class CollisionIssue {
+      constructor(marker, type, detail) {
+        this.marker = marker;  // reference to the marker object
+        this.type = type;      // 'overlap', 'edge', 'visual-edge'
+        this.detail = detail;  // human-readable description
+      }
+    }
+
+    /**
+     * Draw a rotated rectangle outline on the canvas context.
+     * Uses the same OBSTACLE_BOX/getBox() dimensions that runCollisionChecks() uses.
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {number} cx - center x
+     * @param {number} cy - center y
+     * @param {number} w - box width
+     * @param {number} h - box height
+     * @param {number} angleDeg - rotation angle in degrees (0=up, clockwise)
+     * @param {string} strokeStyle - CSS color string
+     * @param {number} lineWidth
+     */
+    function drawRotatedBox(ctx, cx, cy, w, h, angleDeg, strokeStyle, lineWidth) {
+      const rad = angleDeg * Math.PI / 180;  // game angle 0°=up, same as movement code
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const hw = w / 2;
+      const hh = h / 2;
+
+      // 4 corners of unrotated rectangle centered at origin
+      const corners = [
+        { x: -hw, y: -hh },
+        { x:  hw, y: -hh },
+        { x:  hw, y:  hh },
+        { x: -hw, y:  hh },
+      ];
+
+      // Rotate and translate each corner
+      const pts = corners.map(c => ({
+        x: cx + c.x * cos - c.y * sin,
+        y: cy + c.x * sin + c.y * cos,
+      }));
+
+      ctx.save();
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    /**
+     * Runs ALL live checks against all markers.
+     * Returns { issues: CollisionIssue[], markerProblems: Map<markerId, string[]> }
+     *
+     * Mirrors the real engine's AABB collision logic from PuzzleScene.ts:
+     *   - Props: per-type box from OBSTACLE_BOX
+     *   - Walls: 48×48
+     *   - Spawn (player): 36×64 car rect for overlap checks
+     *   - Exit zone: 48×48 AABB centered on marker position
+     *   - Playfield: 288×288, origin top-left
+     */
+    function runCollisionChecks() {
+      const issues = [];
+      const problemMap = new Map();  // markerId -> string[]
+
+      const cars = markers.filter(m => m.type === 'sedan' || m.type === 'suv');
+      const obstacles = markers.filter(m => OBSTACLE_BOX[m.type] !== undefined);
+      const spawn = markers.find(m => m.type === 'spawn');
+      const exit  = markers.find(m => m.type === 'exit');
+
+      function addProblem(marker, msg) {
+        if (!problemMap.has(marker.id)) problemMap.set(marker.id, []);
+        problemMap.get(marker.id).push(msg);
+      }
+
+      // ── 1a. Car-vs-car overlap (sedan/suv only — props/walls are static blockers) ─
+      for (let i = 0; i < cars.length; i++) {
+        for (let j = i + 1; j < cars.length; j++) {
+          const a = cars[i];
+          const b = cars[j];
+          const ba = getBox(a.type, a.angle);
+          const bb = getBox(b.type, b.angle);
+          const rectA = makeRect(a.x, a.y, ba.w, ba.h);
+          const rectB = makeRect(b.x, b.y, bb.w, bb.h);
+          if (rectsOverlap(rectA, rectB)) {
+            const msg = `Overlaps ${a.type} #${a.id} at (${a.x}, ${a.y})`;
+            const msgRev = `Overlaps ${b.type} #${b.id} at (${b.x}, ${b.y})`;
+            issues.push(new CollisionIssue(a, 'overlap', msg));
+            issues.push(new CollisionIssue(b, 'overlap', msgRev));
+            addProblem(a, msg);
+            addProblem(b, msgRev);
+          }
+        }
+      }
+
+      // ── 1b. All obstacles vs spawn overlap ────────────────────────
+      if (spawn) {
+        const spawnBox = getBox(spawn.type, spawn.angle);
+        const spawnRect = makeRect(spawn.x, spawn.y, spawnBox.w, spawnBox.h);
+        for (const obs of obstacles) {
+          const ob = getBox(obs.type, obs.angle);
+          const obsRect = makeRect(obs.x, obs.y, ob.w, ob.h);
+          if (rectsOverlap(obsRect, spawnRect)) {
+            const msg = `Overlaps spawn at (${spawn.x}, ${spawn.y})`;
+            const spawnMsg = `Overlaps ${obs.type} #${obs.id} at (${obs.x}, ${obs.y})`;
+            issues.push(new CollisionIssue(obs, 'overlap', msg));
+            issues.push(new CollisionIssue(spawn, 'overlap', spawnMsg));
+            addProblem(obs, msg);
+            addProblem(spawn, spawnMsg);
+          }
+        }
+      }
+
+      // ── 1c. Obstacle vs exit zone overlap (all obstacle types) ────
+      if (exit) {
+        const exitRect = makeRect(exit.x, exit.y, 48, 48);
+        for (const obs of obstacles) {
+          const ob = getBox(obs.type, obs.angle);
+          const obsRect = makeRect(obs.x, obs.y, ob.w, ob.h);
+          if (rectsOverlap(obsRect, exitRect)) {
+            const msg = `Overlaps exit zone at (${exit.x}, ${exit.y})`;
+            issues.push(new CollisionIssue(obs, 'overlap', msg));
+            addProblem(obs, msg);
+          }
+        }
+        // Also check spawn vs exit
+        if (spawn) {
+          const spawnBox = getBox(spawn.type, spawn.angle);
+          const spawnRect = makeRect(spawn.x, spawn.y, spawnBox.w, spawnBox.h);
+          if (rectsOverlap(spawnRect, exitRect)) {
+            const msg = `Overlaps exit zone at (${exit.x}, ${exit.y})`;
+            issues.push(new CollisionIssue(spawn, 'overlap', msg));
+            addProblem(spawn, msg);
+          }
+        }
+      }
+
+      // ── 2a. Edge clearance — all obstacles + spawn ────────────
+      const collisionMarkers = [...obstacles];
+      if (spawn) collisionMarkers.push(spawn);
+      for (const m of collisionMarkers) {
+        const mb = getBox(m.type, m.angle);
+        const ext = getAABBExtents(m.x, m.y, mb.w, mb.h);
+        if (!ext.fullyInside) {
+          const over = [];
+          if (ext.overflowLeft > 0) over.push(`${ext.overflowLeft.toFixed(0)}px past left edge`);
+          if (ext.overflowRight > 0) over.push(`${ext.overflowRight.toFixed(0)}px past right edge`);
+          if (ext.overflowTop > 0) over.push(`${ext.overflowTop.toFixed(0)}px past top edge`);
+          if (ext.overflowBottom > 0) over.push(`${ext.overflowBottom.toFixed(0)}px past bottom edge`);
+          const detail = `${m.type} extends ${over.join(', ')}`;
+          issues.push(new CollisionIssue(m, 'edge', detail));
+          addProblem(m, detail);
+        }
+      }
+
+      // ── 2b. Edge clearance — visual only (walls) — REMOVED: walls now use real box ──
+
+      // ── 2c. Edge clearance — exit zone ─────────────────────────
+      if (exit) {
+        const ext = getAABBExtents(exit.x, exit.y, 48, 48);
+        if (!ext.fullyInside) {
+          const over = [];
+          if (ext.overflowLeft > 0) over.push(`${ext.overflowLeft.toFixed(0)}px past left edge`);
+          if (ext.overflowRight > 0) over.push(`${ext.overflowRight.toFixed(0)}px past right edge`);
+          if (ext.overflowTop > 0) over.push(`${ext.overflowTop.toFixed(0)}px past top edge`);
+          if (ext.overflowBottom > 0) over.push(`${ext.overflowBottom.toFixed(0)}px past bottom edge`);
+          const detail = `exit zone extends ${over.join(', ')}`;
+          issues.push(new CollisionIssue(exit, 'edge', detail));
+          addProblem(exit, detail);
+        }
+      }
+
+      return { issues, problemMap };
+    }
+
+    /**
+     * Test a sequence of waypoints as a rough player path.
+     * Samples points every PATH_SAMPLE_STEP pixels along each segment,
+     * checks the player's collision box (36×64, rotated to segment direction)
+     * against every obstacle's real collision box.
+     *
+     * Returns { collisionFree, collisionAt, exitReached, exitDist, exitAngleDiff, totalSamples, segments, exitCheck }
+     * where segments is an array of { from, to, angle, collisionAt, samples }.
+     *
+     * Uses the SAME getBox() and rectsOverlap() as runCollisionChecks().
+     */
+    function runPathTest(waypoints, spawnMarker, exitMarker) {
+      if (waypoints.length === 0) return null;
+
+      const obstacles = markers.filter(m => OBSTACLE_BOX[m.type] !== undefined);
+      const totalSamples = [];
+      const segments = [];
+
+      let prevPoint = { x: spawnMarker ? spawnMarker.x : waypoints[0].x, y: spawnMarker ? spawnMarker.y : waypoints[0].y };
+
+      for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        const dx = wp.x - prevPoint.x;
+        const dy = wp.y - prevPoint.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 0.5) continue;  // skip degenerate segments
+
+        // Inferred angle from segment direction (game convention: 0°=up, clockwise)
+        const angleRad = Math.atan2(dx, -dy);
+        const segmentAngle = ((angleRad * 180 / Math.PI) % 360 + 360) % 360;
+
+        // Sample along segment
+        const numSamples = Math.max(2, Math.floor(dist / PATH_SAMPLE_STEP));
+        let collisionAt = null;
+        const samplePoints = [];
+
+        for (let s = 0; s <= numSamples; s++) {
+          const t = s / numSamples;
+          const sx = prevPoint.x + dx * t;
+          const sy = prevPoint.y + dy * t;
+          samplePoints.push({ x: sx, y: sy });
+          totalSamples.push({ x: sx, y: sy });
+
+          // Player box at this point (sedan base, rotated to segment angle)
+          const playerBox = getBox('sedan', segmentAngle);  // { w: 36, h: 64 }
+          const playerRect = makeRect(sx, sy, playerBox.w, playerBox.h);
+
+          // Check against every obstacle
+          for (const obs of obstacles) {
+            const obsBox = getBox(obs.type, obs.angle);
+            const obsRect = makeRect(obs.x, obs.y, obsBox.w, obsBox.h);
+            if (rectsOverlap(playerRect, obsRect)) {
+              collisionAt = { x: sx, y: sy, obstacle: obs, obstacleType: obs.type };
+              break;
+            }
+          }
+          if (collisionAt) break;
+        }
+
+        segments.push({
+          from: { x: prevPoint.x, y: prevPoint.y },
+          to: { x: wp.x, y: wp.y },
+          angle: segmentAngle,
+          collisionAt,
+          samples: samplePoints,
+        });
+
+        if (collisionAt) {
+          // Stop on first collision — no point checking later segments
+          break;
+        }
+
+        prevPoint = { x: wp.x, y: wp.y };
+      }
+
+      // ── Exit zone check (final waypoint + last segment's angle) ──
+      let exitCheck = { passed: false, reason: '' };
+      if (exitMarker && segments.length > 0 && !segments[segments.length - 1].collisionAt) {
+        const lastWp = waypoints[waypoints.length - 1];
+        const lastSeg = segments[segments.length - 1];
+        const exitX = exitMarker.x;
+        const exitY = exitMarker.y;
+        const exitAngle = exitMarker.angle || 0;
+        const pt = exitMarker.parkingType || 'parallel';
+        const angleTol = pt === 'angled' ? 15 : 10;
+
+        const dx = Math.abs(lastWp.x - exitX);
+        const dy = Math.abs(lastWp.y - exitY);
+        const posTol = 8;
+        const posOk = dx <= posTol && dy <= posTol;
+
+        let angleDiff = Math.abs(lastSeg.angle - exitAngle);
+        if (angleDiff > 180) angleDiff = 360 - angleDiff;
+        const angleOk = angleDiff <= angleTol;
+
+        // Also check: does the player's car at the final position, rotated to exit angle,
+        // overlap any obstacle? (The segment collision check used the segment's inferred
+        // angle, but the exit tolerance check cares about the exit angle)
+        let exitPositionCollides = null;
+        if (posOk) {
+          const playerBox = getBox('sedan', exitAngle);
+          const playerRect = makeRect(lastWp.x, lastWp.y, playerBox.w, playerBox.h);
+          const obsAtExit = obstacles.filter(o => OBSTACLE_BOX[o.type] !== undefined);
+          for (const obs of obsAtExit) {
+            const obsBox = getBox(obs.type, obs.angle);
+            const obsRect = makeRect(obs.x, obs.y, obsBox.w, obsBox.h);
+            if (rectsOverlap(playerRect, obsRect)) {
+              exitPositionCollides = { obstacle: obs, obstacleType: obs.type };
+              break;
+            }
+          }
+        }
+
+        const exitCollisionReason = exitPositionCollides
+          ? `⚠ Final position collides with ${exitPositionCollides.obstacleType} #${exitPositionCollides.obstacle.id} at exit angle`
+          : '';
+
+        exitCheck = {
+          passed: posOk && angleOk && !exitPositionCollides,
+          reason: [
+            posOk ? `✓ dx=${dx.toFixed(1)}/8px dy=${dy.toFixed(1)}/8px` : `✗ dx=${dx.toFixed(1)}/8px dy=${dy.toFixed(1)}/8px`,
+            angleOk ? `✓ angle diff=${angleDiff.toFixed(1)}°/${angleTol}°` : `✗ angle diff=${angleDiff.toFixed(1)}°/${angleTol}°`,
+            exitPositionCollides ? `✗ collides with ${exitPositionCollides.obstacleType} at exit angle` : '✓ exit position collision-free',
+          ].join(' · '),
+          dx,
+          dy,
+          posTol,
+          angleDiff,
+          angleTol,
+          exitPositionCollides,
+        };
+      } else if (!exitMarker) {
+        exitCheck = { passed: false, reason: 'No exit marker placed', dx: 0, dy: 0, posTol: 8, angleDiff: 0, angleTol: 10 };
+      }
+
+      const collisionFree = segments.every(s => !s.collisionAt);
+      const collisionAt = segments.find(s => s.collisionAt);
+
+      return {
+        collisionFree,
+        collisionAt: collisionAt ? collisionAt.collisionAt : null,
+        exitReached: exitCheck.passed,
+        exitCheck,
+        totalSamples: totalSamples.length,
+        segments,
+        waypoints,
+      };
+    }
+
+    let markers = [];            // { id, type, x, y, angle, parkingType? }
+    let nextId = 0;
+    let selectedId = null;
+    let activeType = 'sedan';
+    let bgImage = null;
+    /** Latest collision-check results — updated every render cycle */
+    let collisionState = { issues: [], problemMap: new Map() };          // HTMLImageElement | null
+    let lastSavedTime = null;
+
+    // ── Feature A: Show Hitboxes ──
+    let showHitboxes = false;
+
+    // ── Feature B: Path Test ──
+    let testPathMode = false;
+    /** @type Array<{x:number, y:number}> */
+    let pathWaypoints = [];
+    /** @type {pathResult|null} */
+    let pathResult = null;
+    const PATH_SAMPLE_STEP = 6;  // px between collision samples along each segment
+
+    // ─────────────────────────────────────────────────────────────
+    //  localStorage — auto-save & restore
+    // ─────────────────────────────────────────────────────────────
+    function saveState() {
+      try {
+        const data = {
+          markers,
+          nextId,
+          bgImageDataUrl: null,
+          savedAt: new Date().toISOString(),
+          showHitboxes,
+          pathWaypoints,
+        };
+        if (bgImage) {
+          data.bgImageDataUrl = bgImage.src || null;
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        lastSavedTime = new Date();
+        updateStatusIndicator();
+      } catch (e) {
+        console.warn('Failed to save editor state to localStorage:', e.message);
+      }
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!data.markers || !Array.isArray(data.markers)) return false;
+        markers = data.markers;
+        nextId = data.nextId || 0;
+        if (data.showHitboxes !== undefined) {
+          showHitboxes = data.showHitboxes;
+          document.getElementById('showHitboxesCheck').checked = showHitboxes;
+        }
+        if (data.pathWaypoints && Array.isArray(data.pathWaypoints)) {
+          pathWaypoints = data.pathWaypoints;
+        }
+        if (data.bgImageDataUrl && typeof data.bgImageDataUrl === 'string') {
+          const img = new Image();
+          img.onload = () => {
+            bgImage = img;
+            updateAll();
+          };
+          img.onerror = () => {
+            bgImage = null;
+            updateAll();
+          };
+          img.src = data.bgImageDataUrl;
+        }
+        if (data.savedAt) {
+          lastSavedTime = new Date(data.savedAt);
+        }
+        // Re-run path test if waypoints exist
+        if (pathWaypoints.length > 0) {
+          runAndDisplayPathTest();
+        }
+        return true;
+      } catch (e) {
+        console.warn('Failed to load editor state from localStorage:', e.message);
+        return false;
+      }
+    }
+
+    function clearSavedState() {
+      if (!confirm('Clear all saved data? This will delete all markers — there is no undo.')) return;
+      localStorage.removeItem(STORAGE_KEY);
+      markers = [];
+      nextId = 0;
+      bgImage = null;
+      selectedId = null;
+      lastSavedTime = null;
+      showHitboxes = false;
+      document.getElementById('showHitboxesCheck').checked = false;
+      pathWaypoints = [];
+      pathResult = null;
+      document.getElementById('pathResultsDisplay').textContent = '';
+      document.getElementById('pathWaypointList').textContent = '';
+      updateAll();
+    }
+
+    function formatTimeAgo(date) {
+      const now = new Date();
+      const diffMs = now - date;
+      const diffSec = Math.floor(diffMs / 1000);
+      if (diffSec < 5) return 'just now';
+      if (diffSec < 60) return `${diffSec}s ago`;
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin === 1) return '1m ago';
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      return `${diffHr}h ago`;
+    }
+
+    function updateStatusIndicator() {
+      const el = document.getElementById('saveStatus');
+      if (!el) return;
+      if (lastSavedTime) {
+        el.textContent = `Auto-saved ${formatTimeAgo(lastSavedTime)}`;
+        el.style.color = 'var(--accent-green)';
+      } else {
+        el.textContent = 'Not yet saved';
+        el.style.color = 'var(--text-muted)';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Feature A & B — Toolbar event handlers
+    // ─────────────────────────────────────────────────────────────
+
+    function runAndDisplayPathTest() {
+      const spawnM = markers.find(m => m.type === 'spawn');
+      const exitM = markers.find(m => m.type === 'exit');
+
+      if (pathWaypoints.length === 0) {
+        pathResult = null;
+        document.getElementById('pathResultsDisplay').textContent = 'No waypoints yet.';
+        return;
+      }
+
+      pathResult = runPathTest(pathWaypoints, spawnM, exitM);
+      updatePathTestDisplay();
+    }
+
+    function updatePathTestDisplay() {
+      const display = document.getElementById('pathResultsDisplay');
+      const list = document.getElementById('pathWaypointList');
+
+      if (!pathResult) {
+        display.textContent = 'Click canvas to add waypoints.';
+        list.textContent = '';
+        return;
+      }
+
+      // Collision check
+      let collisionLine = '';
+      if (pathResult.collisionFree) {
+        collisionLine = `✅ Collision-free  (${pathResult.totalSamples} samples checked, 0 collisions)`;
+      } else if (pathResult.collisionAt) {
+        const cAt = pathResult.collisionAt;
+        collisionLine = `❌ Collision at (${cAt.x}, ${cAt.y}) with ${cAt.obstacleType} #${cAt.obstacle.id}`;
+      }
+
+      // Exit zone check
+      let exitLine = '';
+      const exitM = markers.find(m => m.type === 'exit');
+      if (exitM && pathResult.collisionFree) {
+        const ec = pathResult.exitCheck;
+        exitLine = ec.passed
+          ? `✅ Exit zone reached  ${ec.reason}`
+          : `❌ Exit zone MISS  ${ec.reason}`;
+      } else if (!exitM) {
+        exitLine = '⚠ No exit marker — exit check skipped';
+      }
+
+      // Waypoint list
+      let waypointHtml = '';
+      for (let i = 0; i < pathWaypoints.length; i++) {
+        const wp = pathWaypoints[i];
+        const seg = pathResult.segments && pathResult.segments[i];
+        const segAngle = seg ? seg.angle.toFixed(1) : '?';
+        const status = pathResult.collisionFree ? '✓' :
+          (seg && seg.collisionAt ? '✗' : '…');
+        waypointHtml += `<span style="display:inline-block;margin-right:8px;color:${status === '✗' ? '#FF3333' : status === '✓' ? 'var(--accent-green)' : 'var(--text-muted)'}">${status} WP${i+1} (${wp.x}, ${wp.y}) ∠${segAngle}°</span>`;
+      }
+      list.innerHTML = waypointHtml;
+
+      display.innerHTML = `
+        <div style="color:${pathResult.collisionFree ? 'var(--accent-green)' : '#FF3333'}">${collisionLine}</div>
+        ${exitLine ? `<div style="color:${pathResult.exitCheck && pathResult.exitCheck.passed ? 'var(--accent-green)' : '#FF8800'};margin-top:4px">${exitLine}</div>` : ''}
+      `;
+    }
+
+    // ── Show Hitboxes checkbox ──
+    document.getElementById('showHitboxesCheck').addEventListener('change', (e) => {
+      showHitboxes = e.target.checked;
+      render();
+      saveState();
+    });
+
+    // ── Test Path button ──
+    document.getElementById('testPathBtn').addEventListener('click', () => {
+      const spawnM = markers.find(m => m.type === 'spawn');
+      if (!spawnM) {
+        alert('Place a Spawn marker first — path testing starts from the spawn position.');
+        return;
+      }
+      testPathMode = !testPathMode;
+      const btn = document.getElementById('testPathBtn');
+      const section = document.getElementById('pathTestSection');
+      const clearBtn = document.getElementById('clearPathBtn');
+      if (testPathMode) {
+        btn.style.borderColor = '#4ADE80';
+        btn.style.background = 'rgba(74,222,128,0.15)';
+        btn.textContent = '🧪 Exit Test Path';
+        section.style.display = 'block';
+        clearBtn.style.display = '';
+        clearBtn.hidden = false;
+        // Re-run existing path test
+        if (pathWaypoints.length > 0) runAndDisplayPathTest();
+        render();
+      } else {
+        btn.style.borderColor = 'var(--accent-green)';
+        btn.style.background = 'transparent';
+        btn.textContent = '🧪 Test Path';
+        section.style.display = 'none';
+        clearBtn.style.display = 'none';
+        clearBtn.hidden = true;
+        render();
+      }
+    });
+
+    // ── Clear Path buttons ──
+    function clearPathTest() {
+      pathWaypoints = [];
+      pathResult = null;
+      document.getElementById('pathResultsDisplay').textContent = 'Waypoints cleared.';
+      document.getElementById('pathWaypointList').textContent = '';
+      render();
+      saveState();
+    }
+    document.getElementById('clearPathBtn').addEventListener('click', clearPathTest);
+    document.getElementById('clearPathBtn2').addEventListener('click', () => {
+      clearPathTest();
+      // Refresh display
+      document.getElementById('pathResultsDisplay').textContent = 'Waypoints cleared. Click canvas to add new waypoints.';
+    });
+
+    const canvas = document.getElementById('editorCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = 288;
+    const H = 288;
+
+    // ── Phone screen layout constants (mirror PuzzleScene.ts) ──
+    const PW = 390;
+    const PH = 844;
+    const SCALE_X = 1.35;
+    const SCALE_Y = 1.53;
+    const CONTAINER_X = 1;
+    const CONTAINER_Y = -30;
+    const TITLE_BAR_H = 28;
+
+    // ─────────────────────────────────────────────────────────────
+    //  Rendering
+    // ─────────────────────────────────────────────────────────────
+    function render() {
+      ctx.clearRect(0, 0, PW, PH);
+
+      // ── Phone screen background ──
+      ctx.fillStyle = '#111113';
+      ctx.fillRect(0, 0, PW, PH);
+
+      // ── Grid area (drawn with real non-uniform scale transform) ──
+      ctx.save();
+      ctx.translate(CONTAINER_X, CONTAINER_Y);
+      ctx.scale(SCALE_X, SCALE_Y);
+
+      // Grid content (288×288 logical space)
+      if (bgImage) {
+        ctx.drawImage(bgImage, 0, 0, W, H);
+      } else {
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= W; x += 48) {
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, 0);
+          ctx.lineTo(x + 0.5, H);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= H; y += 48) {
+          ctx.beginPath();
+          ctx.moveTo(0, y + 0.5);
+          ctx.lineTo(W, y + 0.5);
+          ctx.stroke();
+        }
+      }
+
+      // Markers (in 288×288 logical space, scaled by transform)
+      for (const m of markers) {
+        drawMarker(m);
+      }
+
+      // ── Feature A: Hitboxes overlay (drawn AFTER markers so outline is on top) ──
+      if (showHitboxes) {
+        const obstacleTypes = new Set(['sedan', 'suv', 'wall', 'barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree', 'tree-sm', 'spawn', 'exit']);
+        for (const m of markers) {
+          if (!obstacleTypes.has(m.type)) continue;
+          const box = m.type === 'exit' ? { w: 48, h: 48 } : getBox(m.type, m.angle || 0);
+          let color = 'rgba(255,255,255,0.35)';
+          const problems = getMarkerProblems(m);
+          if (problems.some(p => p.startsWith('Overlaps'))) {
+            color = 'rgba(255,50,50,0.5)';
+          } else if (problems.some(p => p.includes('extends'))) {
+            color = 'rgba(255,136,0,0.5)';
+          }
+          if (m.type === 'spawn') color = 'rgba(91,155,255,0.4)';
+          if (m.type === 'exit') color = 'rgba(74,222,128,0.4)';
+          drawRotatedBox(ctx, m.x, m.y, box.w, box.h, m.type === 'exit' ? 0 : (m.angle || 0), color, 1.5);
+        }
+      }
+
+      // ── Feature B: Path waypoints + results (drawn in logical 288×288 space) ──
+      if (testPathMode && pathWaypoints.length > 0) {
+        // Find spawn and exit for reference
+        const spawnM = markers.find(m => m.type === 'spawn');
+        const exitM = markers.find(m => m.type === 'exit');
+        const startX = spawnM ? spawnM.x : pathWaypoints[0].x;
+        const startY = spawnM ? spawnM.y : pathWaypoints[0].y;
+
+        // Draw start point (spawn position)
+        ctx.save();
+        ctx.fillStyle = 'rgba(91, 155, 255, 0.6)';
+        ctx.beginPath();
+        ctx.arc(startX, startY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        const result = pathResult;
+
+        for (let i = 0; i < pathWaypoints.length; i++) {
+          const wp = pathWaypoints[i];
+          const prevX = i === 0 ? startX : pathWaypoints[i - 1].x;
+          const prevY = i === 0 ? startY : pathWaypoints[i - 1].y;
+
+          // Check if this segment has a collision
+          const hasCollision = result && result.segments && result.segments[i] && result.segments[i].collisionAt;
+          const segColor = hasCollision ? 'rgba(255,50,50,0.8)' : 'rgba(74,222,128,0.6)';
+
+          // Draw segment line
+          ctx.save();
+          ctx.strokeStyle = segColor;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(prevX, prevY);
+          ctx.lineTo(wp.x, wp.y);
+          ctx.stroke();
+          ctx.restore();
+
+          // Draw waypoint dot
+          ctx.save();
+          ctx.fillStyle = segColor;
+          ctx.beginPath();
+          ctx.arc(wp.x, wp.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+
+          // Label waypoint number
+          ctx.save();
+          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+          ctx.font = '9px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${i + 1}`, wp.x, wp.y - 10);
+          ctx.restore();
+
+          // If collision occurred on this segment, draw collision marker
+          if (hasCollision && result.segments[i].collisionAt) {
+            const cAt = result.segments[i].collisionAt;
+            ctx.save();
+            ctx.fillStyle = 'rgba(255,50,50,0.3)';
+            ctx.beginPath();
+            ctx.arc(cAt.x, cAt.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#FF3333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cAt.x - 6, cAt.y - 6);
+            ctx.lineTo(cAt.x + 6, cAt.y + 6);
+            ctx.moveTo(cAt.x + 6, cAt.y - 6);
+            ctx.lineTo(cAt.x - 6, cAt.y + 6);
+            ctx.stroke();
+            ctx.restore();
+            // Stop drawing further segments
+            break;
+          }
+        }
+      }
+
+      ctx.restore();
+
+      // ── Selection highlight (drawn in phone space for clean circle) ──
+      if (selectedId !== null) {
+        const sel = markers.find(m => m.id === selectedId);
+        if (sel) {
+          const sx = CONTAINER_X + sel.x * SCALE_X;
+          const sy = CONTAINER_Y + sel.y * SCALE_Y;
+          ctx.strokeStyle = '#FFD700';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      // ── Title bar (drawn over grid, matching real game header) ──
+      ctx.fillStyle = '#1C1C1E';
+      ctx.fillRect(0, 0, PW, TITLE_BAR_H);
+      ctx.strokeStyle = '#333338';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, TITLE_BAR_H + 0.5);
+      ctx.lineTo(PW, TITLE_BAR_H + 0.5);
+      ctx.stroke();
+      ctx.fillStyle = '#8E8E98';
+      ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('PARKIQ', PW / 2, TITLE_BAR_H / 2);
+
+      // ── Hint / question text area (centered at OBJECTIVE_Y=500) ──
+      const hintH = 70;
+      const hintTop = 500 - hintH / 2;
+      ctx.fillStyle = '#1C1C1E';
+      ctx.strokeStyle = '#333338';
+      ctx.lineWidth = 1;
+      ctx.fillRect(16, hintTop, PW - 32, hintH);
+      ctx.strokeRect(16, hintTop, PW - 32, hintH);
+      ctx.fillStyle = '#63636E';
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Hint / Question Text', PW / 2, 500);
+
+      // ── D-pad control area (centered at CONTROLS_CENTER_Y=690) ──
+      const dpadH = 268;
+      const dpadTop = 690 - dpadH / 2;
+      ctx.fillStyle = '#1C1C1E';
+      ctx.strokeStyle = '#333338';
+      ctx.lineWidth = 1;
+      ctx.fillRect(16, dpadTop, PW - 32, dpadH);
+      ctx.strokeRect(16, dpadTop, PW - 32, dpadH);
+      // D-pad visual: cross + circle
+      const dcx = PW / 2;
+      const dcy = 690;
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(dcx - 40, dcy);
+      ctx.lineTo(dcx + 40, dcy);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(dcx, dcy - 40);
+      ctx.lineTo(dcx, dcy + 40);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(dcx, dcy, 45, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#63636E';
+      ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('D-Pad Controls', dcx, dcy + 60);
+    }
+
+    function getMarkerProblems(m) {
+      return collisionState.problemMap.get(m.id) || [];
+    }
+
+    function drawMarker(m) {
+      const color = COLORS[m.type] || '#888';
+      const props = new Set(['barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree', 'tree-sm']);
+      const size = props.has(m.type) ? 5 : (m.type === 'wall' ? 5 : 4);
+      const problems = getMarkerProblems(m);
+      const hasProblems = problems.length > 0;
+      const hasCollision = problems.some(p => p.startsWith('Overlaps'));
+      const hasEdgeIssue = problems.some(p => p.includes('extends'));
+
+      // Direction line (clock hand) — 0° = up, positive = clockwise
+      const rad = (m.angle - 90) * Math.PI / 180; // offset so 0° draws upward
+      const lineLen = 14;
+
+      ctx.save();
+
+      // ── Problem indicator: red ring behind marker ───────────────
+      if (hasProblems) {
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, 12, 0, Math.PI * 2);
+        if (hasCollision) {
+          ctx.fillStyle = 'rgba(255, 50, 50, 0.2)';
+          ctx.fill();
+          ctx.strokeStyle = '#FF3333';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        } else if (hasEdgeIssue) {
+          ctx.strokeStyle = '#FF8800';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
+      // Glow
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+
+      // Dot
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, size, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+
+      // Direction line
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(m.x, m.y);
+      ctx.lineTo(m.x + Math.cos(rad) * lineLen, m.y + Math.sin(rad) * lineLen);
+      ctx.stroke();
+
+      // Type label for special markers
+      if (m.type === 'spawn' || m.type === 'exit') {
+        ctx.fillStyle = color;
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(m.type.toUpperCase(), m.x, m.y + 20);
+      }
+
+      ctx.restore();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Marker management
+    // ─────────────────────────────────────────────────────────────
+    function addMarker(type, x, y) {
+      // Clamp to canvas bounds
+      x = Math.round(Math.max(0, Math.min(W - 1, x)));
+      y = Math.round(Math.max(0, Math.min(H - 1, y)));
+
+      // Spawn/exit: replace old
+      if (type === 'spawn') {
+        const existing = markers.filter(m => m.type === 'spawn');
+        for (const m of existing) removeMarkerById(m.id);
+      }
+      if (type === 'exit') {
+        const existing = markers.filter(m => m.type === 'exit');
+        for (const m of existing) removeMarkerById(m.id);
+      }
+
+      const marker = {
+        id: nextId++,
+        type,
+        x,
+        y,
+        angle: 0,
+      };
+      if (type === 'exit') {
+        marker.parkingType = 'parallel';
+      }
+      markers.push(marker);
+      selectedId = marker.id;
+      updateAll();
+    }
+
+    function removeMarkerById(id) {
+      markers = markers.filter(m => m.id !== id);
+      if (selectedId === id) selectedId = null;
+      updateAll();
+    }
+
+    function updateMarkerProp(id, key, value) {
+      const m = markers.find(m => m.id === id);
+      if (!m) return;
+      m[key] = value;
+      updateAll();
+    }
+
+    function findMarkerAt(x, y, radius = 10) {
+      // Iterate in reverse so topmost (last-placed) is selected first
+      for (let i = markers.length - 1; i >= 0; i--) {
+        const m = markers[i];
+        const dx = m.x - x;
+        const dy = m.y - y;
+        if (dx * dx + dy * dy <= radius * radius) return m;
+      }
+      return null;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Canvas interaction
+    // ─────────────────────────────────────────────────────────────
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      // CSS pixels → phone screen coords (390×844)
+      const phoneX = (e.clientX - rect.left) / rect.width * PW;
+      const phoneY = (e.clientY - rect.top) / rect.height * PH;
+      // Phone screen → grid logical coords (288×288)
+      const canvasX = (phoneX - CONTAINER_X) / SCALE_X;
+      const canvasY = (phoneY - CONTAINER_Y) / SCALE_Y;
+
+      // In path test mode: add waypoint instead of placing/selecting markers
+      if (testPathMode) {
+        if (canvasX < 0 || canvasX >= W || canvasY < 0 || canvasY >= H) return;
+        pathWaypoints.push({ x: Math.round(canvasX), y: Math.round(canvasY) });
+        runAndDisplayPathTest();
+        updateAll();
+        return;
+      }
+
+      // First, check if we're clicking an existing marker
+      const hit = findMarkerAt(canvasX, canvasY);
+      if (hit) {
+        selectedId = hit.id;
+        updateAll();
+        return;
+      }
+
+      // Only place new markers within grid bounds
+      if (canvasX < 0 || canvasX >= W || canvasY < 0 || canvasY >= H) return;
+      addMarker(activeType, canvasX, canvasY);
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    //  Type selector
+    // ─────────────────────────────────────────────────────────────
+    const typeButtons = document.querySelectorAll('#typeSelector button');
+    function setActiveType(type) {
+      activeType = type;
+      for (const btn of typeButtons) {
+        const t = btn.dataset.type;
+        btn.className = '';
+        if (t === type) {
+          btn.classList.add('active-' + t);
+        }
+      }
+      // Auto-exit Test Path mode when user selects a marker type (they want to place markers, not waypoints)
+      if (testPathMode) {
+        exitTestPathMode();
+      }
+    }
+    function exitTestPathMode() {
+      testPathMode = false;
+      const btn = document.getElementById('testPathBtn');
+      const section = document.getElementById('pathTestSection');
+      const clearBtn = document.getElementById('clearPathBtn');
+      if (btn) {
+        btn.style.borderColor = 'var(--accent-green)';
+        btn.style.background = 'transparent';
+        btn.textContent = '🧪 Test Path';
+      }
+      if (section) section.style.display = 'none';
+      if (clearBtn) {
+        clearBtn.style.display = 'none';
+        clearBtn.hidden = true;
+      }
+      render();
+    }
+    for (const btn of typeButtons) {
+      btn.addEventListener('click', () => {
+        setActiveType(btn.dataset.type);
+      });
+    }
+    setActiveType('sedan');
+
+    // ─────────────────────────────────────────────────────────────
+    //  Properties panel
+    // ─────────────────────────────────────────────────────────────
+    function renderProperties() {
+      const container = document.getElementById('propertiesContent');
+      const sel = markers.find(m => m.id === selectedId);
+
+      if (!sel) {
+        container.innerHTML = `<div class="no-selection">Click a marker on the canvas to edit</div>`;
+        return;
+      }
+
+      let html = '';
+      // Editable X with input field and up/down buttons
+      html += `<div class="prop-row">
+        <label>X</label>
+        <div style="display:flex;align-items:center;gap:2px;">
+          <button class="fine-btn" id="xMinus1" style="padding:1px 5px;font-size:10px;">▼</button>
+          <input type="number" id="propX" min="0" max="288" step="1" value="${Math.round(sel.x)}" style="width:44px;text-align:center;font-size:12px;padding:1px 2px;">
+          <button class="fine-btn" id="xPlus1" style="padding:1px 5px;font-size:10px;">▲</button>
+        </div>
+        <label>Y</label>
+        <div style="display:flex;align-items:center;gap:2px;">
+          <button class="fine-btn" id="yMinus1" style="padding:1px 5px;font-size:10px;">▼</button>
+          <input type="number" id="propY" min="0" max="288" step="1" value="${Math.round(sel.y)}" style="width:44px;text-align:center;font-size:12px;padding:1px 2px;">
+          <button class="fine-btn" id="yPlus1" style="padding:1px 5px;font-size:10px;">▲</button>
+        </div>
+      </div>`;
+
+      // Angle: dropdown for quick picks + fine-tune buttons
+      const anglePresets = [0, 30, 45, 60, 90, 120, 135, 150, 180, 210, 225, 240, 270, 300, 315, 330];
+      const normalizedAngle = ((sel.angle % 360) + 360) % 360;
+      const angleOptions = anglePresets.map(a =>
+        `<option value="${a}" ${a === normalizedAngle ? 'selected' : ''}>${a}°</option>`
+      ).join('');
+      html += `<div class="prop-row">
+        <label>Angle</label>
+        <select id="propAnglePreset">${angleOptions}</select>
+        <span style="font-size:10px;color:var(--text-muted)">°</span>
+      </div>`;
+      html += `<div class="prop-row" style="justify-content:center;gap:4px;">
+        <button class="fine-btn" id="angleMinus10" style="padding:2px 6px;font-size:11px;">-10</button>
+        <button class="fine-btn" id="angleMinus1" style="padding:2px 6px;font-size:11px;">-1</button>
+        <span id="angleValue" style="font-size:13px;font-weight:600;min-width:36px;text-align:center;">${sel.angle}°</span>
+        <button class="fine-btn" id="anglePlus1" style="padding:2px 6px;font-size:11px;">+1</button>
+        <button class="fine-btn" id="anglePlus10" style="padding:2px 6px;font-size:11px;">+10</button>
+      </div>`;
+
+      // Exit-specific: parkingType dropdown
+      if (sel.type === 'exit') {
+        const pt = sel.parkingType || 'parallel';
+        html += `<div class="prop-row">
+          <label>Parking</label>
+          <select id="propParkingType">
+            <option value="parallel"      ${pt === 'parallel'      ? 'selected' : ''}>Parallel</option>
+            <option value="perpendicular" ${pt === 'perpendicular' ? 'selected' : ''}>Perpendicular</option>
+            <option value="angled"        ${pt === 'angled'        ? 'selected' : ''}>Angled</option>
+          </select>
+        </div>`;
+        html += `<div class="tolerance-note">Angle tolerance: ${TOLERANCE[pt] || '±10°'}</div>`;
+      }
+
+      // Delete button
+      html += `<div class="prop-row" style="margin-top:6px;">
+        <button class="delete-btn" id="propDelete">🗑 Delete</button>
+      </div>`;
+
+      container.innerHTML = html;
+
+      // Wire up events
+      function applyAngle(v) {
+        v = ((v % 360) + 360) % 360;
+        updateMarkerProp(selectedId, 'angle', v);
+        render();
+        updateMarkerList();
+        updateExport();
+        updateValidation();
+        const angleValue = document.getElementById('angleValue');
+        if (angleValue) angleValue.textContent = v + '°';
+      }
+
+      const anglePreset = document.getElementById('propAnglePreset');
+      if (anglePreset) {
+        anglePreset.addEventListener('change', () => {
+          applyAngle(parseInt(anglePreset.value, 10) || 0);
+        });
+      }
+
+      const angleMinus10 = document.getElementById('angleMinus10');
+      if (angleMinus10) {
+        angleMinus10.addEventListener('click', () => {
+          applyAngle(sel.angle - 10);
+          renderProperties();
+        });
+      }
+
+      const angleMinus1 = document.getElementById('angleMinus1');
+      if (angleMinus1) {
+        angleMinus1.addEventListener('click', () => {
+          applyAngle(sel.angle - 1);
+          renderProperties();
+        });
+      }
+
+      const anglePlus1 = document.getElementById('anglePlus1');
+      if (anglePlus1) {
+        anglePlus1.addEventListener('click', () => {
+          applyAngle(sel.angle + 1);
+          renderProperties();
+        });
+      }
+
+      const anglePlus10 = document.getElementById('anglePlus10');
+      if (anglePlus10) {
+        anglePlus10.addEventListener('click', () => {
+          applyAngle(sel.angle + 10);
+          renderProperties();
+        });
+      }
+
+      // X/Y position controls
+      function applyXY(dx, dy) {
+        const marker = markers.find(m => m.id === selectedId);
+        if (!marker) return;
+        marker.x = Math.max(0, Math.min(288, marker.x + dx));
+        marker.y = Math.max(0, Math.min(288, marker.y + dy));
+        render();
+        updateMarkerList();
+        updateExport();
+        updateValidation();
+        const propX = document.getElementById('propX');
+        const propY = document.getElementById('propY');
+        if (propX) propX.value = Math.round(marker.x);
+        if (propY) propY.value = Math.round(marker.y);
+      }
+
+      function setXYFromInput() {
+        const marker = markers.find(m => m.id === selectedId);
+        if (!marker) return;
+        const propX = document.getElementById('propX');
+        const propY = document.getElementById('propY');
+        if (propX) marker.x = Math.max(0, Math.min(288, parseInt(propX.value, 10) || 0));
+        if (propY) marker.y = Math.max(0, Math.min(288, parseInt(propY.value, 10) || 0));
+        render();
+        updateMarkerList();
+        updateExport();
+        updateValidation();
+      }
+
+      const propXInput = document.getElementById('propX');
+      if (propXInput) {
+        propXInput.addEventListener('input', setXYFromInput);
+      }
+      const propYInput = document.getElementById('propY');
+      if (propYInput) {
+        propYInput.addEventListener('input', setXYFromInput);
+      }
+
+      const xMinus1 = document.getElementById('xMinus1');
+      if (xMinus1) {
+        xMinus1.addEventListener('click', () => applyXY(-1, 0));
+      }
+      const xPlus1 = document.getElementById('xPlus1');
+      if (xPlus1) {
+        xPlus1.addEventListener('click', () => applyXY(1, 0));
+      }
+      const yMinus1 = document.getElementById('yMinus1');
+      if (yMinus1) {
+        yMinus1.addEventListener('click', () => applyXY(0, 1));
+      }
+      const yPlus1 = document.getElementById('yPlus1');
+      if (yPlus1) {
+        yPlus1.addEventListener('click', () => applyXY(0, -1));
+      }
+
+      const parkingSelect = document.getElementById('propParkingType');
+      if (parkingSelect) {
+        parkingSelect.addEventListener('change', () => {
+          const v = parkingSelect.value;
+          updateMarkerProp(selectedId, 'parkingType', v);
+          // Re-render properties to show updated tolerance note
+          renderProperties();
+          render();
+          updateMarkerList();
+          updateExport();
+          updateValidation();
+        });
+      }
+
+      const delBtn = document.getElementById('propDelete');
+      if (delBtn) {
+        delBtn.addEventListener('click', () => {
+          removeMarkerById(selectedId);
+        });
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Marker list
+    // ─────────────────────────────────────────────────────────────
+    function getStatusHtml(m) {
+      const problems = getMarkerProblems(m);
+      if (problems.length === 0) {
+        return '<span style="color:var(--accent-green)">✓</span>';
+      }
+      const hasCollision = problems.some(p => p.startsWith('Overlaps'));
+      const hasEdge = problems.some(p => p.includes('extends'));
+      if (hasCollision) return '<span style="color:#FF3333;font-weight:700">✗</span>';
+      if (hasEdge) return '<span style="color:#FF8800">⚠</span>';
+      return '<span style="color:var(--text-muted)">?</span>';
+    }
+
+    function renderMarkerList() {
+      const tbody = document.getElementById('markerTableBody');
+      const emptyMsg = document.getElementById('emptyListMsg');
+
+      if (markers.length === 0) {
+        tbody.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        return;
+      }
+      emptyMsg.style.display = 'none';
+
+      let html = '';
+      for (const m of markers) {
+        const color = COLORS[m.type] || '#888';
+        const parkingDisplay = m.type === 'exit' ? (m.parkingType || '—') : '—';
+        const statusHtml = getStatusHtml(m);
+        html += `<tr class="${m.id === selectedId ? 'selected' : ''}" data-id="${m.id}">
+          <td>${m.id}</td>
+          <td><span class="dot-indicator" style="background:${color}"></span>${m.type}</td>
+          <td>${m.x}</td>
+          <td>${m.y}</td>
+          <td>${m.angle}°</td>
+          <td style="font-size:10px">${parkingDisplay}</td>
+          <td style="text-align:center">${statusHtml}</td>
+        </tr>`;
+      }
+      tbody.innerHTML = html;
+
+      // Click row to select
+      for (const row of tbody.querySelectorAll('tr')) {
+        row.addEventListener('click', () => {
+          const id = parseInt(row.dataset.id, 10);
+          selectedId = id;
+          updateAll();
+        });
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Export
+    // ─────────────────────────────────────────────────────────────
+    function generateExport() {
+      const obstacleTypes = new Set(['sedan', 'suv', 'wall', 'barricade-1', 'barricade', 'cone', 'shrub-1', 'shrub-2', 'tree', 'tree-sm']);
+      const obstacles = markers.filter(m => obstacleTypes.has(m.type));
+      const spawn = markers.find(m => m.type === 'spawn');
+      const exit = markers.find(m => m.type === 'exit');
+
+      let lines = [];
+      lines.push('obstacles: [');
+      for (const o of obstacles) {
+        lines.push(`  { type: '${o.type}', x: ${o.x}, y: ${o.y}, angle: ${o.angle} },`);
+      }
+      lines.push('],');
+
+      if (spawn) {
+        lines.push(`playerCar: { x: ${spawn.x}, y: ${spawn.y}, angle: ${spawn.angle} },`);
+      } else {
+        lines.push('// playerCar: — no spawn marker placed');
+      }
+
+      if (exit) {
+        const pt = exit.parkingType || 'parallel';
+        lines.push(`exitZone: { x: ${exit.x}, y: ${exit.y}, angle: ${exit.angle}, parkingType: '${pt}' },`);
+      } else {
+        lines.push('// exitZone: — no exit marker placed');
+      }
+
+      return lines.join('\n');
+    }
+
+    function updateExport() {
+      const textarea = document.getElementById('exportTextarea');
+      textarea.value = generateExport();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Validation
+    // ─────────────────────────────────────────────────────────────
+    function updateValidation() {
+      const container = document.getElementById('validationMessages');
+      const msgs = [];
+
+      const spawn = markers.find(m => m.type === 'spawn');
+      const exit = markers.find(m => m.type === 'exit');
+
+      if (!spawn) msgs.push({ level: 'warn', text: '⚠ No spawn marker placed — playerCar will be missing' });
+      if (!exit) msgs.push({ level: 'warn', text: '⚠ No exit marker placed — exitZone will be missing' });
+
+      // Duplicate position check
+      const seen = new Map();
+      for (const m of markers) {
+        const key = `${m.x},${m.y}`;
+        if (seen.has(key)) {
+          msgs.push({ level: 'warn', text: `⚠ Duplicate position (${m.x}, ${m.y}): marker #${seen.get(key)} and #${m.id}` });
+        }
+        seen.set(key, m.id);
+      }
+
+      // ── Collision issues summary ───────────────────────────────
+      const { issues } = collisionState;
+
+      // Group issues by type for a concise summary
+      const overlapIssues = issues.filter(i => i.type === 'overlap');
+      const edgeIssues = issues.filter(i => i.type === 'edge');
+      const visualEdgeIssues = issues.filter(i => i.type === 'visual-edge');
+
+      // De-duplicate: for pair overlaps, show one summary per marker involved
+      if (overlapIssues.length > 0) {
+        const involvedIds = new Set(overlapIssues.map(i => i.marker.id));
+        for (const id of involvedIds) {
+          const m = markers.find(x => x.id === id);
+          if (!m) continue;
+          const specificMsgs = overlapIssues
+            .filter(i => i.marker.id === id)
+            .map(i => i.detail);
+          msgs.push({ level: 'warn', text: `⚠ ${m.type} #${id} @ (${m.x}, ${m.y}): ${specificMsgs.join('; ')}` });
+        }
+      }
+
+      // Edge issues (collision-relevant)
+      for (const issue of edgeIssues) {
+        const m = issue.marker;
+        msgs.push({ level: 'warn', text: `⚠ ${m.type} #${m.id} @ (${m.x}, ${m.y}): ${issue.detail}` });
+      }
+
+      // Visual-only edge issues (lower severity)
+      for (const issue of visualEdgeIssues) {
+        const m = issue.marker;
+        msgs.push({ level: 'warn', text: `ℹ ${m.type} #${m.id} @ (${m.x}, ${m.y}): ${issue.detail}` });
+      }
+
+      // ── Positive confirmation if clean ─────────────────────────
+      const hasSpawnExitIssue = issues.some(i => i.marker?.type === 'spawn' || i.marker?.type === 'exit');
+      const collisionOrEdge = overlapIssues.length > 0 || edgeIssues.length > 0;
+
+      if (!collisionOrEdge && spawn && exit) {
+        msgs.push({ level: 'ok', text: '✓ No overlaps or edge issues detected — layout is geometrically clean' });
+      } else if (!collisionOrEdge && (!spawn || !exit)) {
+        // Still show positive note about geometries, separate from spawn/exit warnings
+        msgs.push({ level: 'ok', text: '✓ No overlaps or edge issues among placed markers' });
+      }
+
+      container.innerHTML = msgs.map(m =>
+        `<span class="${m.level}">${m.text}</span>`
+      ).join('');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Update everything
+    // ─────────────────────────────────────────────────────────────
+    function updateAll() {
+      // Run collision checks against current markers
+      collisionState = runCollisionChecks();
+      // Re-run path test if waypoints exist (collision boxes may have changed)
+      if (pathWaypoints.length > 0) {
+        runAndDisplayPathTest();
+      } else {
+        updatePathTestDisplay();
+      }
+      render();
+      renderProperties();
+      renderMarkerList();
+      updateExport();
+      updateValidation();
+      saveState();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Copy button
+    // ─────────────────────────────────────────────────────────────
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      const textarea = document.getElementById('exportTextarea');
+      const btn = document.getElementById('copyBtn');
+
+      // Make sure export is fresh
+      updateExport();
+
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+        btn.textContent = '✅ Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = '📋 Copy as Puzzle Data';
+          btn.classList.remove('copied');
+        }, 2000);
+      } catch {
+        // Fallback: select text for manual copy
+        textarea.select();
+        btn.textContent = '📋 Select text & copy (Ctrl+C)';
+        setTimeout(() => {
+          btn.textContent = '📋 Copy as Puzzle Data';
+        }, 3000);
+      }
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    //  Background image loading
+    // ─────────────────────────────────────────────────────────────
+    document.getElementById('bgInput').addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          bgImage = img;
+          render();
+          saveState();  // persist the image data URL
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // ── Clear saved data button ──
+    document.getElementById('clearDataBtn').addEventListener('click', clearSavedState);
+
+    // ─────────────────────────────────────────────────────────────
+    //  Keyboard shortcut: Delete/Backspace removes selected marker
+    // ─────────────────────────────────────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId !== null) {
+        // Don't delete when editing an input
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        removeMarkerById(selectedId);
+      }
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    //  Initial render (with localStorage restore)
+    // ─────────────────────────────────────────────────────────────
+    const restored = loadState();
+    updateAll();
+
+    // Report ready
+    if (restored) console.log('ParkIQ Level Editor v2 loaded — restored from localStorage');
+    else console.log('ParkIQ Level Editor v2 loaded — started fresh');
+  </script>
+</body>
+</html>

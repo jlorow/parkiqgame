@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
-import type { Puzzle, PuzzleTheme, TrainConfig } from '../puzzles/puzzle-types';
+import type { Puzzle, TrainConfig } from '../puzzles/puzzle-types';
 import { createCarSprite } from '../components/CarSprite';
-import { createParkingGrid } from '../components/ParkingGrid';
 import { createObstacleCar } from '../components/ObstacleCar';
 import { DrivingControls } from '../components/DrivingControls';
 import type { DrivingInputState } from '../components/DrivingControls';
@@ -25,15 +24,15 @@ const CONTAINER_OFFSET_Y = 0.5;
 //  Developer Testing Flags  —  set true to bypass mechanics
 // ════════════════════════════════════════════════════════════
 
-const DEBUG_SKIP_PUZZLE_5 = true;    // Skip puzzle 5 → load puzzle 6
+const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
-const DEBUG_LOAD_BONUS = true;          // Force-load bonus Dual-Train level on start
+const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
+const DEBUG_FORCE_PUZZLE: number | null = null;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
 const HUD_Y = 8;
 const PARKIQ_FONT = '20px';
-const HUD_MUTED_FONT = '13px';
 
 const OBJECTIVE_Y = 500;
 
@@ -75,6 +74,23 @@ const COUNTER_SCALE_Y = SCALE_X / SCALE_Y;
 
 const CAR_VISUAL_SCALE = 0.20;
 
+// ── Prop visual scale factors (per-type, so rendered size matches collision box) ──
+// Each SVG is loaded at 200px width (matching car convention).
+// Scale = viewBox_w / 200 so the rendered visual matches the collision-box width.
+// Example: cone at 18×18 → 18/200 = 0.09 gives 18px visual width.
+const PROP_VISUAL_SCALE: Record<string, number> = {
+  'cone':        18 / 200,  // 0.09
+  'barricade':   48 / 200,  // 0.24
+  'barricade-1': 52 / 200,  // 0.26
+  'shrub-1':    103 / 200,  // 0.515
+  'shrub-2':    118 / 200,  // 0.59
+  'tree':        88 / 200,  // 0.44
+  'tree-sm':     41 / 200,  // 0.205
+  // Wall: loaded at 33×191 native, scaled to match collision width (48px)
+  // scale = 48 / loadWidth(200) = 0.24 → renders 48px wide
+  'wall':       48 / 200,  // 0.24
+};
+
 // ──────────────────────────────────────────────────────────
 //  Train Segment Dimensions
 //  Derived: each segment fills ~92% of UNIT_PX (48px), leaving
@@ -115,6 +131,45 @@ const ROTATION_SPEED = 90;
 const CAR_W = 36;
 const CAR_H = 64;
 
+// ── Rotated AABB lookup tables (derived from corrected formula) ───────
+// Keyed by angle bucket. Values are effective AABB {w, h} in pixels.
+// Sedan/suv base 36×64:
+//   0°: 45×69   15°: 58×73   30°: 68×74   45°: 73×73
+//  60°: 74×68   75°: 73×58   90°: 69×45
+const SEDAN_BOX: Record<number, { w: number; h: number }> = {
+  0:  { w: 45, h: 69 },
+  15: { w: 58, h: 73 },
+  30: { w: 68, h: 74 },
+  45: { w: 73, h: 73 },
+  60: { w: 74, h: 68 },
+  75: { w: 73, h: 58 },
+  90: { w: 69, h: 45 },
+};
+
+// Large vehicle (truck/limo/semitruck) base 36×96:
+//   0°: 49×100  45°: 99×99  90°: 100×49
+const LARGE_BOX: Record<number, { w: number; h: number }> = {
+  0:  { w: 49, h: 100 },
+  45: { w: 99, h: 99 },
+  90: { w: 100, h: 49 },
+};
+
+// ── Prop collision box lookup (raw SVG viewBox dimensions, no margin) ────
+// Non-angle-bucketed for symmetric props (cone, shrubs, tree).
+// Two-entry (0°/90°) simple swap for rectangular barricades.
+const PROP_BOX: Record<string, { w: number; h: number }> = {
+  'barricade-1': { w: 52, h: 16 },
+  'barricade':   { w: 48, h: 16 },
+  'cone':        { w: 18, h: 18 },
+  'shrub-1':     { w: 103, h: 60 },
+  'shrub-2':     { w: 118, h: 69 },
+  'tree':        { w: 88, h: 89 },
+  'tree-sm':     { w: 41, h: 42 },
+};
+
+// ── Wall collision box — 1 grid cell (48×48), rotation-invariant (square) ─
+const WALL_BOX: { w: number; h: number } = { w: 48, h: 48 };
+
 // ── Truck (long vehicle) collision & visual constants ────────────────
 // Triggered by playerVehicle: 'truck' in puzzle data.
 // Collision box: same width (fits lane), 1.5× height.
@@ -135,7 +190,14 @@ const VISUAL_H = 400 * CAR_VISUAL_SCALE * COUNTER_SCALE_Y;
 // Cell centers for each grid edge (container-local coordinates)
 const COL0_CENTER = (0 + CONTAINER_OFFSET_X) * UNIT_PX;
 const COL5_CENTER = (5 + CONTAINER_OFFSET_X) * UNIT_PX;
-const ROW5_CENTER = (5 + CONTAINER_OFFSET_Y) * UNIT_PX;
+
+// ── Angled exit zone dimensions (asymmetric to match car proportions) ──
+// These are the VISUAL rendering AND collision-check dimensions for
+// parkingType='angled' exit zones. 40px wide × 70px long, roughly
+// matching a sedan's rotated AABB (36×64 base) plus margin.
+// Defined once at module level to prevent visual/collision drift.
+const ANGLE_EXIT_HALF_W = 20;  // 40px total width
+const ANGLE_EXIT_HALF_H = 35;  // 70px total length
 
 // Both X and Y clamps are computed dynamically per frame in update()
 // using the car's current rotation angle. X keeps the visual ~6px inside
@@ -211,6 +273,8 @@ export class PuzzleScene extends Phaser.Scene {
   private gapIndicatorTween: Phaser.Tweens.Tween | null = null;
   /** True while the gap indicator rect is being drawn (tracks open/close transitions) */
   private gapIndicatorActive = false;
+  /** Tracks whether the first load progress event has fired (for loading screen handoff) */
+  private tloadLogged = false;
 
 
   private get webAudio(): Phaser.Sound.WebAudioSoundManager {
@@ -262,8 +326,8 @@ export class PuzzleScene extends Phaser.Scene {
     this.loadingGroup.add(fill);
 
     this.load.on('progress', (value: number) => {
-      if (!(this as any)._tloadLogged) {
-        (this as any)._tloadLogged = true;
+      if (!this.tloadLogged) {
+        this.tloadLogged = true;
         // Remove CSS loading screen on first progress event — Phaser is now actively
         // rendering the loading elements, so the handoff is seamless.
         document.getElementById('loading')?.remove();
@@ -287,19 +351,22 @@ export class PuzzleScene extends Phaser.Scene {
     this.load.svg('car-limo', 'assets/sprites/cars/Limousine.svg', { width: 200, height: 605 });
     this.load.svg('car-trailer', 'assets/sprites/cars/Trailer.svg', { width: 200, height: 981 });
 
-    // ── Road tile SVGs (full 288×288 grid surface per theme) ──────
-    this.load.svg('road-street',       'assets/sprites/roads/Road-Street.svg',       { width: 780, height: 780 });
-    this.load.svg('road-garage',       'assets/sprites/roads/Road-Garage.svg',       { width: 780, height: 780 });
-    this.load.svg('road-underground',  'assets/sprites/roads/Road-Underground.svg',  { width: 780, height: 780 });
-    this.load.svg('road-rooftop',      'assets/sprites/roads/Road-Rooftop.svg',      { width: 780, height: 780 });
+    // ── Prop SVGs (6 new obstacle types) ────────────────────────────
+    this.load.svg('prop-cone',        'assets/sprites/props/Prop-cone.svg',        { width: 200, height: 200 });
+    this.load.svg('prop-barricade',   'assets/sprites/props/Prop-Barricade.svg',   { width: 200, height: 67 });
+    this.load.svg('prop-barricade-1', 'assets/sprites/props/Prop-Barricade-1.svg', { width: 200, height: 62 });
+    this.load.svg('prop-shrub-1',     'assets/sprites/props/Prop-Shrub-1.svg',     { width: 200, height: 117 });
+    this.load.svg('prop-shrub-2',     'assets/sprites/props/Prop-Shrub-2.svg',     { width: 200, height: 117 });
+    this.load.svg('prop-tree',        'assets/sprites/props/Prop-Tree.svg',         { width: 200, height: 202 });
+    this.load.svg('prop-tree-sm',     'assets/sprites/props/Prop-Tree-sm.svg',     { width: 200, height: 205 });
+
+    // ── Wall SVG ───────────────────────────────────────────────────
+    this.load.svg('prop-wall', 'assets/sprites/props/Wall.svg', { width: 200 });
+
+    // ── Background images loaded on-demand per puzzle (see loadBackground) ──
 
     this.load.audio('train', 'assets/sounds/train.mp3');
 
-    // ── Prop SVGs ─────────────────────────────────────────────────
-    this.load.svg('prop-tree',       'assets/sprites/props/Prop-Tree.svg',       { width: 64, height: 64 });
-    this.load.svg('prop-shrub-1',    'assets/sprites/props/Prop-Shrub-1.svg',    { width: 48, height: 48 });
-    this.load.svg('prop-shrub-2',    'assets/sprites/props/Prop-Shrub-1.svg',    { width: 48, height: 48 });
-    this.load.svg('prop-lamppost',   'assets/sprites/props/Prop-Tree.svg',       { width: 32, height: 128 });
   }
 
   create(): void {
@@ -330,6 +397,10 @@ export class PuzzleScene extends Phaser.Scene {
   private async loadAndRender(): Promise<void> {
     let { puzzleIndex } = await getProgress();
 
+    if (DEBUG_FORCE_PUZZLE !== null) {
+      puzzleIndex = DEBUG_FORCE_PUZZLE;
+    }
+
     if (DEBUG_SKIP_PUZZLE_5 && puzzleIndex === 5) {
       puzzleIndex = 6;
     }
@@ -341,11 +412,19 @@ export class PuzzleScene extends Phaser.Scene {
 
     this.puzzle = getPuzzleByIndex(puzzleIndex);
 
+    // Load this puzzle's background before rendering the parking scene
+    await this.loadBackground(puzzleIndex);
+
     this.renderEnvironment();
     this.renderHUD();
     this.renderObjective();
     this.renderControls();
     this.renderParkingScene();
+
+    // Prefetch next puzzle's background in the background
+    if (puzzleIndex + 1 <= 15) {
+      this.prefetchBackground(puzzleIndex + 1);
+    }
 
     this.startElapsedTimer();
     this.ready = true;
@@ -353,6 +432,46 @@ export class PuzzleScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.playerCarImage.destroy();
     });
+  }
+
+  // ──────────────────────────────────────────────────────────
+  //  On-demand background loading
+  // ──────────────────────────────────────────────────────────
+
+  /**
+   * Ensure the background texture for `puzzleId` is loaded.
+   * Resolves immediately from cache; otherwise fetches the SVG,
+   * rasterises it into the Phaser texture manager, then resolves.
+   */
+  private loadBackground(puzzleId: number): Promise<void> {
+    const key = `bg_${puzzleId}`;
+    if (this.textures.exists(key)) return Promise.resolve();
+
+    return new Promise<void>((resolve) => {
+      const puzzle = getPuzzleByIndex(puzzleId);
+      if (!puzzle.backgroundImage) { resolve(); return; }
+
+      this.load.once('filecomplete', (loadedKey: string) => {
+        if (loadedKey === key) resolve();
+      });
+      this.load.image(key, `assets/sprites/backgrounds/puzzle${puzzleId}-bg.webp`);
+      if (!this.load.isLoading()) this.load.start();
+    });
+  }
+
+  /**
+   * Kick off a non-blocking prefetch of the next puzzle's background
+   * so it's cached before the player reaches it.
+   */
+  private prefetchBackground(puzzleId: number): void {
+    const key = `bg_${puzzleId}`;
+    if (this.textures.exists(key)) return;
+
+    const puzzle = getPuzzleByIndex(puzzleId);
+    if (!puzzle.backgroundImage) return;
+
+    this.load.image(key, `assets/sprites/backgrounds/puzzle${puzzleId}-bg.webp`);
+    if (!this.load.isLoading()) this.load.start();
   }
 
   // ──────────────────────────────────────────────────────────
@@ -637,120 +756,7 @@ export class PuzzleScene extends Phaser.Scene {
     gfx.strokePath();
   }
 
-  // ── Theme foreground props (inside parking container) ───────────
 
-  private addThemeForeground(container: Phaser.GameObjects.Container, theme: PuzzleTheme): void {
-    const foreGfx = this.add.graphics();
-    foreGfx.setDepth(4.5);
-    container.add(foreGfx);
-    // Helper to add an SVG image prop to the container
-    const addProp = (key: string, x: number, y: number, scale = 1) => {
-      const img = this.add.image(x, y, key);
-      img.setScale(scale);
-      img.setDepth(4.5);
-      container.add(img);
-    };
-
-    if (theme === 'street') {
-      // Trees at bottom corners
-      addProp('prop-tree', 24, 258);
-      addProp('prop-tree', 264, 258);
-      // Shrubs along bottom edge (replacing grass tufts)
-      addProp('prop-shrub-1', 74, 282);
-      addProp('prop-shrub-2', 130, 282);
-      addProp('prop-shrub-1', 186, 282);
-      addProp('prop-shrub-2', 242, 282);
-      // Two more trees at top corners
-      addProp('prop-tree', 24, 0);
-      addProp('prop-tree', 264, 0);
-      // Crosswalk stripes near exit zone (white painted bars)
-      foreGfx.fillStyle(0xffffff, 1);
-      for (let cx = 0; cx < 288; cx += 14) {
-        foreGfx.fillRect(cx, 38, 12, 6);
-      }
-      // Lamppost on left side
-      addProp('prop-lamppost', 11, 105);
-      // Sidewalk paving grid at bottom edge
-      foreGfx.lineStyle(1, 0x6b7280, 1);
-      foreGfx.beginPath();
-      for (let px = 0; px < 288; px += 16) {
-        foreGfx.moveTo(px, 280);
-        foreGfx.lineTo(px, 288);
-      }
-      foreGfx.strokePath();
-    } else if (theme === 'garage') {
-      // Concrete beam at top edge
-      foreGfx.fillStyle(0x374151, 1);
-      foreGfx.fillRect(0, 0, 288, 8);
-      foreGfx.lineStyle(2, 0x4b5563, 1);
-      foreGfx.beginPath();
-      foreGfx.moveTo(0, 5);
-      foreGfx.lineTo(288, 5);
-      foreGfx.strokePath();
-      // Shopping cart at bottom-left
-      foreGfx.lineStyle(3, 0x9ca3af, 1);
-      foreGfx.strokeRect(20, 253, 27, 21);
-      foreGfx.fillStyle(0x9ca3af, 1);
-      foreGfx.fillCircle(25, 274, 5);
-      foreGfx.fillCircle(43, 274, 5);
-      // Barrier blocks at edge
-      foreGfx.fillStyle(0xfbbf24, 1);
-      foreGfx.fillRect(241, 265, 21, 15);
-      foreGfx.fillRect(265, 265, 21, 15);
-    } else if (theme === 'underground') {
-      // Overhead pipe segments at top edge
-      foreGfx.fillStyle(0x4a5568, 1);
-      foreGfx.fillRect(0, 0, 288, 6);
-      foreGfx.fillRect(54, -3, 9, 15);
-      foreGfx.fillRect(134, -3, 9, 15);
-      foreGfx.fillRect(214, -3, 9, 15);
-      // Large overhead rectangular duct running across
-      foreGfx.fillStyle(0x6b7280, 1);
-      foreGfx.fillRect(50, -9, 180, 12);
-      foreGfx.fillStyle(0x4a5568, 1);
-      foreGfx.fillRect(50, -9, 180, 3);
-      // Drainage grate at bottom-right corner
-      foreGfx.lineStyle(2, 0x4a5568, 1);
-      foreGfx.beginPath();
-      for (let gx = 230; gx < 260; gx += 4) {
-        foreGfx.moveTo(gx, 278);
-        foreGfx.lineTo(gx, 288);
-      }
-      foreGfx.strokePath();
-    } else if (theme === 'rooftop') {
-      // Safety railing at bottom edge
-      foreGfx.lineStyle(3, 0x6b7280, 1);
-      foreGfx.beginPath();
-      foreGfx.moveTo(0, 282);
-      foreGfx.lineTo(288, 282);
-      for (let px = 0; px < 288; px += 24) {
-        foreGfx.moveTo(px, 279);
-        foreGfx.lineTo(px, 285);
-      }
-      foreGfx.strokePath();
-      // AC unit / ventilator box at top-right
-      foreGfx.fillStyle(0x6b7280, 1);
-      foreGfx.fillRect(223, 243, 33, 21);
-      foreGfx.lineStyle(2, 0x9ca3af, 1);
-      foreGfx.strokeRect(223, 243, 33, 21);
-      foreGfx.fillStyle(0x4a5568, 1);
-      foreGfx.fillRect(229, 248, 9, 6);
-      foreGfx.fillRect(241, 248, 9, 6);
-      // Potted plants along the railing
-      this.drawPottedPlant(foreGfx, 20, 280);
-      this.drawPottedPlant(foreGfx, 268, 280);
-    }
-  }
-
-  /** Small potted plant: brown pot + green leaves */
-  private drawPottedPlant(gfx: Phaser.GameObjects.Graphics, x: number, y: number): void {
-    gfx.fillStyle(0x8b5e3c, 1);
-    gfx.fillRect(x - 5, y - 6, 10, 6);
-    gfx.fillStyle(0x4ade80, 1);
-    gfx.fillCircle(x, y - 12, 6);
-    gfx.fillCircle(x - 5, y - 9, 5);
-    gfx.fillCircle(x + 5, y - 9, 5);
-  }
 
   // ──────────────────────────────────────────────────────────
   //  Parking Scene — Container with grid + obstacles + player car
@@ -759,8 +765,8 @@ export class PuzzleScene extends Phaser.Scene {
   private renderParkingScene(): void {
     const pc = this.puzzle.playerCar;
 
-    this.spawnX = (pc.col + CONTAINER_OFFSET_X) * UNIT_PX;
-    this.spawnY = (pc.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+    this.spawnX = pc.x ?? ((pc.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+    this.spawnY = pc.y ?? ((pc.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
     this.spawnAngle = pc.angle;
     this.carX = this.spawnX;
     this.carY = this.spawnY;
@@ -794,93 +800,349 @@ export class PuzzleScene extends Phaser.Scene {
     container.setDepth(5);
     this.parkingContainer = container;
 
-    // ── Road tile image (under grid lines) ──────────────────────────
-    const roadKey = `road-${this.puzzle.theme}`;
-    const roadImage = this.add.image(0, 0, roadKey);
-    roadImage.setOrigin(0, 0);
-    roadImage.setDisplaySize(GRID_SIZE, GRID_SIZE);
-    container.add(roadImage);
+    // ── Background surface (lot surface) ──────────────────────────
+    // Static per-puzzle image (PNG/SVG loaded per-key) or solid-gray fallback.
+    if (this.puzzle.backgroundImage) {
+      const bgKey = `bg_${this.puzzle.id}`;
+      if (this.textures.exists(bgKey)) {
+        const bgImg = this.add.image(0, 0, bgKey);
+        bgImg.setOrigin(0, 0);
+        bgImg.setDisplaySize(GRID_SIZE, GRID_SIZE);
+        container.add(bgImg);
+      } else {
+        console.warn(`[bg] backgroundImage set for puzzle ${this.puzzle.id} but texture "${bgKey}" not found — using gray fallback`);
+        const bgGfx = this.add.graphics();
+        bgGfx.fillStyle(0x2a2a2a, 1);
+        bgGfx.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
+        container.add(bgGfx);
+      }
+    } else {
+      const bgGfx = this.add.graphics();
+      bgGfx.fillStyle(0x2a2a2a, 1);
+      bgGfx.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
+      container.add(bgGfx);
+    }
 
-    const grid = createParkingGrid(this, {
-      x: 0,
-      y: 0,
-      width: GRID_SIZE,
-      height: GRID_SIZE,
-      environment: this.puzzle.environment,
-      theme: this.puzzle.theme,
-    });
-    container.add(grid);
-
-    // ── Step 3: Exit zone visual — gate/chevron redesign ────────────
+    // ── Step 3: Exit zone visual ────────────────────────────────────
     const ez = this.puzzle.exitZone;
-    const exitPixelX = (ez.col + CONTAINER_OFFSET_X) * UNIT_PX - 48;
-    const exitPixelY = (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX - 48;
-    const exitZoneCenterX = exitPixelX + 48;
-    const exitZoneCenterY = exitPixelY + 48;
+    const baySize = ez.parkingType ? 48 : 96;
+    const halfBay = baySize / 2;
+    const bayCenterX = ez.x ?? ((ez.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+    const bayCenterY = ez.y ?? ((ez.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
+    const exitPixelX = bayCenterX - halfBay;
+    const exitPixelY = bayCenterY - halfBay;
+    const exitZoneCenterX = exitPixelX + halfBay;
+    const exitZoneCenterY = exitPixelY + halfBay;
+
+    // Compute dynamic bay size from the player's real rotated AABB at the exit angle.
+    // Used by parallel/perpendicular visual rendering only — angled has its own
+    // constants (ANGLE_EXIT_HALF_W/H), and the exit collision check uses
+    // center-proximity (±8px) which is dimension-independent.
+    // For non-parking-type (legacy) zones, falls back to 96×96.
+    let bayW: number;
+    let bayH: number;
+    if (ez.parkingType && ez.parkingType !== 'angled') {
+      const veh = this.puzzle.playerVehicle ?? 'sedan';
+      const tbl = this.getVehicleTable(veh);
+      const exitBox = this.getRotatedBox(tbl, ez.angle ?? 0);
+      bayW = exitBox.w;
+      bayH = exitBox.h;
+    } else if (ez.parkingType === 'angled') {
+      bayW = ANGLE_EXIT_HALF_W * 2;  // 40
+      bayH = ANGLE_EXIT_HALF_H * 2;  // 70
+    } else {
+      bayW = 96;
+      bayH = 96;
+    }
     const exitGfx = this.add.graphics();
 
-    // Exit zone fill / border / chevron — sourced from ThemeRegistry
-    exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
-    exitGfx.fillRect(exitPixelX, exitPixelY, 96, 96);
+    if (ez.parkingType) {
+      const inset = 3;
+      const tickLen = 8;
+      const lineColor = 0xffffff;
 
-    // Bright border — reads as a gate frame
-    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.85);
-    exitGfx.strokeRect(exitPixelX, exitPixelY, 96, 96);
+      if (ez.parkingType === 'parallel') {
+        // ── Rotated parallel marking ────────────────────────────────────────
+        // Dimensions computed from player's real rotated AABB at exit angle
+        // (getRotatedBox) so the visual matches whatever car is driving.
+        const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
+        const cosA = Math.cos(rad);
+        const sinA = Math.sin(rad);
 
-    // Chevron arrows pointing in the exit direction
-    exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.75);
-    exitGfx.beginPath();
-    if (ez.direction === 'top') {
-      // Upward-pointing chevron (^)
-      exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY + 8);
-      exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY - 8);
-      exitGfx.lineTo(exitZoneCenterX + 18, exitZoneCenterY + 8);
-    } else if (ez.direction === 'bottom') {
-      exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY - 8);
-      exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY + 8);
-      exitGfx.lineTo(exitZoneCenterX + 18, exitZoneCenterY - 8);
-    } else if (ez.direction === 'left') {
-      exitGfx.moveTo(exitZoneCenterX + 8, exitZoneCenterY - 18);
-      exitGfx.lineTo(exitZoneCenterX - 8, exitZoneCenterY);
-      exitGfx.lineTo(exitZoneCenterX + 8, exitZoneCenterY + 18);
-    } else if (ez.direction === 'right') {
-      exitGfx.moveTo(exitZoneCenterX - 8, exitZoneCenterY - 18);
-      exitGfx.lineTo(exitZoneCenterX + 8, exitZoneCenterY);
-      exitGfx.lineTo(exitZoneCenterX - 8, exitZoneCenterY + 18);
+        const rp = (bx: number, by: number) => ({
+          x: bayCenterX + (bx - bayCenterX) * cosA - (by - bayCenterY) * sinA,
+          y: bayCenterY + (bx - bayCenterX) * sinA + (by - bayCenterY) * cosA,
+        });
+
+        const localX = bayCenterX - bayW / 2;
+        const localY = bayCenterY - bayH / 2;
+
+        // Green-tinted fill — rotated rectangle sized to player's AABB
+        const fillCorners = [
+          rp(localX, localY),
+          rp(localX + bayW, localY),
+          rp(localX + bayW, localY + bayH),
+          rp(localX, localY + bayH),
+        ];
+        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
+        exitGfx.beginPath();
+        exitGfx.moveTo(fillCorners[0]!.x, fillCorners[0]!.y);
+        for (let i = 1; i < fillCorners.length; i++) {
+          exitGfx.lineTo(fillCorners[i]!.x, fillCorners[i]!.y);
+        }
+        exitGfx.closePath();
+        exitGfx.fillPath();
+
+        // Two horizontal curb lines
+        const topLineStart = rp(localX + inset, localY + inset);
+        const topLineEnd   = rp(localX + bayW - inset, localY + inset);
+        const botLineStart = rp(localX + inset, localY + bayH - inset);
+        const botLineEnd   = rp(localX + bayW - inset, localY + bayH - inset);
+
+        exitGfx.lineStyle(2, lineColor, 0.90);
+        exitGfx.beginPath();
+        exitGfx.moveTo(topLineStart.x, topLineStart.y);
+        exitGfx.lineTo(topLineEnd.x, topLineEnd.y);
+        exitGfx.moveTo(botLineStart.x, botLineStart.y);
+        exitGfx.lineTo(botLineEnd.x, botLineEnd.y);
+        exitGfx.strokePath();
+
+        // Corner ticks
+        exitGfx.lineStyle(2, lineColor, 0.75);
+        exitGfx.beginPath();
+        for (const corner of [
+          { x: localX + inset, y: localY + inset },
+          { x: localX + bayW - inset, y: localY + inset },
+          { x: localX + inset, y: localY + bayH - inset },
+          { x: localX + bayW - inset, y: localY + bayH - inset },
+        ]) {
+          const base = rp(corner.x, corner.y);
+          const tip  = rp(corner.x, corner.y + (corner.y < bayCenterY ? tickLen : -tickLen));
+          exitGfx.moveTo(base.x, base.y);
+          exitGfx.lineTo(tip.x, tip.y);
+        }
+        exitGfx.strokePath();
+      } else if (ez.parkingType === 'perpendicular') {
+        // ── Rotated perpendicular marking ────────────────────────────────────
+        // Dimensions from player's real rotated AABB at exit angle.
+        const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
+        const cosA = Math.cos(rad);
+        const sinA = Math.sin(rad);
+
+        const rp = (bx: number, by: number) => ({
+          x: bayCenterX + (bx - bayCenterX) * cosA - (by - bayCenterY) * sinA,
+          y: bayCenterY + (bx - bayCenterX) * sinA + (by - bayCenterY) * cosA,
+        });
+
+        const localX = bayCenterX - bayW / 2;
+        const localY = bayCenterY - bayH / 2;
+
+        // Green-tinted fill — rotated rectangle sized to player's AABB
+        const fillCorners = [
+          rp(localX, localY),
+          rp(localX + bayW, localY),
+          rp(localX + bayW, localY + bayH),
+          rp(localX, localY + bayH),
+        ];
+        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
+        exitGfx.beginPath();
+        exitGfx.moveTo(fillCorners[0]!.x, fillCorners[0]!.y);
+        for (let i = 1; i < fillCorners.length; i++) {
+          exitGfx.lineTo(fillCorners[i]!.x, fillCorners[i]!.y);
+        }
+        exitGfx.closePath();
+        exitGfx.fillPath();
+
+        // Two vertical stall divider lines + back line (all rotated)
+        const leftLineStart  = rp(localX + inset, localY + inset);
+        const leftLineEnd    = rp(localX + inset, localY + bayH - inset);
+        const rightLineStart = rp(localX + bayW - inset, localY + inset);
+        const rightLineEnd   = rp(localX + bayW - inset, localY + bayH - inset);
+        const backLineStart  = rp(localX + inset, localY + bayH - inset);
+        const backLineEnd    = rp(localX + bayW - inset, localY + bayH - inset);
+
+        exitGfx.lineStyle(2, lineColor, 0.90);
+        exitGfx.beginPath();
+        exitGfx.moveTo(leftLineStart.x, leftLineStart.y);
+        exitGfx.lineTo(leftLineEnd.x, leftLineEnd.y);
+        exitGfx.moveTo(rightLineStart.x, rightLineStart.y);
+        exitGfx.lineTo(rightLineEnd.x, rightLineEnd.y);
+        exitGfx.moveTo(backLineStart.x, backLineStart.y);
+        exitGfx.lineTo(backLineEnd.x, backLineEnd.y);
+        exitGfx.strokePath();
+
+        // Top ticks (going inward along bay's local X axis)
+        const tlBase = rp(localX + inset, localY + inset);
+        const tlTip  = rp(localX + inset + tickLen, localY + inset);
+        const trBase = rp(localX + bayW - inset, localY + inset);
+        const trTip  = rp(localX + bayW - inset - tickLen, localY + inset);
+
+        exitGfx.lineStyle(2, lineColor, 0.75);
+        exitGfx.beginPath();
+        exitGfx.moveTo(tlBase.x, tlBase.y);
+        exitGfx.lineTo(tlTip.x, tlTip.y);
+        exitGfx.moveTo(trBase.x, trBase.y);
+        exitGfx.lineTo(trTip.x, trTip.y);
+        exitGfx.strokePath();
+      } else {
+        // 'angled' — rotated car-shaped rectangle matching exitZone.angle
+        // Uses asymmetric dimensions (40×70) to match car proportions,
+        // using the same cosA/sinA corner-rotation pattern as updateTruckTrailer().
+        // Shared constants ANGLE_EXIT_HALF_W / ANGLE_EXIT_HALF_H keep the
+        // visual and collision shapes in sync.
+        console.log(`[ANGLE_EXIT] angle=${ez.angle}° halfW=${ANGLE_EXIT_HALF_W} halfH=${ANGLE_EXIT_HALF_H} center=(${bayCenterX.toFixed(1)},${bayCenterY.toFixed(1)})`);
+        const rad = Phaser.Math.DegToRad(ez.angle ?? 0);
+        const cosA = Math.cos(rad);
+        const sinA = Math.sin(rad);
+
+        // 4 corners of the unrotated 40×70 rectangle centered at origin
+        const localCorners = [
+          { x: -ANGLE_EXIT_HALF_W, y: -ANGLE_EXIT_HALF_H },
+          { x:  ANGLE_EXIT_HALF_W, y: -ANGLE_EXIT_HALF_H },
+          { x:  ANGLE_EXIT_HALF_W, y:  ANGLE_EXIT_HALF_H },
+          { x: -ANGLE_EXIT_HALF_W, y:  ANGLE_EXIT_HALF_H },
+        ];
+
+        // Rotate each corner and translate to bay center
+        const worldCorners = localCorners.map(c => ({
+          x: bayCenterX + c.x * cosA - c.y * sinA,
+          y: bayCenterY + c.x * sinA + c.y * cosA,
+        }));
+
+        // Filled rotated rectangle — dark green fill (consistent with other parking-type markings)
+        exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
+        exitGfx.beginPath();
+        exitGfx.moveTo(worldCorners[0]!.x, worldCorners[0]!.y);
+        for (let i = 1; i < worldCorners.length; i++) {
+          exitGfx.lineTo(worldCorners[i]!.x, worldCorners[i]!.y);
+        }
+        exitGfx.closePath();
+        exitGfx.fillPath();
+
+        // Brighter green border stroke
+        exitGfx.lineStyle(2, 0x8fcf90, 0.85);
+        exitGfx.beginPath();
+        exitGfx.moveTo(worldCorners[0]!.x, worldCorners[0]!.y);
+        for (let i = 1; i < worldCorners.length; i++) {
+          exitGfx.lineTo(worldCorners[i]!.x, worldCorners[i]!.y);
+        }
+        exitGfx.closePath();
+        exitGfx.strokePath();
+      }
+
     }
-    exitGfx.strokePath();
+
+    exitGfx.setDepth(5);
+
+    if (!ez.parkingType) {
+      // Legacy: filled rectangle + border + direction chevron
+      console.log(`[LEGACY_EXIT] puzzle ${this.puzzle.id} dir=${ez.direction} center=(${exitZoneCenterX.toFixed(1)},${exitZoneCenterY.toFixed(1)}) bay=${baySize}×${baySize}`);
+
+      exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.50);
+      exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
+      // Brighter green border (matching angled exit style)
+      exitGfx.lineStyle(2, 0x8fcf90, 0.85);
+      exitGfx.strokeRect(exitPixelX, exitPixelY, baySize, baySize);
+
+      // Chevron arrow — bright green, fully opaque for contrast
+      exitGfx.lineStyle(2, 0x8fcf90, 1.0);
+      exitGfx.beginPath();
+      if (ez.direction === 'top') {
+        exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY + 8);
+        exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY - 8);
+        exitGfx.lineTo(exitZoneCenterX + 18, exitZoneCenterY + 8);
+      } else if (ez.direction === 'bottom') {
+        exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY - 8);
+        exitGfx.lineTo(exitZoneCenterX, exitZoneCenterY + 8);
+        exitGfx.lineTo(exitZoneCenterX + 18, exitZoneCenterY - 8);
+      } else if (ez.direction === 'left') {
+        exitGfx.moveTo(exitZoneCenterX + 8, exitZoneCenterY - 18);
+        exitGfx.lineTo(exitZoneCenterX - 8, exitZoneCenterY);
+        exitGfx.lineTo(exitZoneCenterX + 8, exitZoneCenterY + 18);
+      } else if (ez.direction === 'right') {
+        exitGfx.moveTo(exitZoneCenterX - 8, exitZoneCenterY - 18);
+        exitGfx.lineTo(exitZoneCenterX + 8, exitZoneCenterY);
+        exitGfx.lineTo(exitZoneCenterX - 8, exitZoneCenterY + 18);
+      }
+      exitGfx.strokePath();
+    }
 
     container.add(exitGfx);
-    this.tweens.add({
-      targets: exitGfx,
-      alpha: { from: 0.3, to: 0.5 },
-      duration: 1200,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    // ── Themed foreground elements framing the grid ────────────
-    this.addThemeForeground(container, this.puzzle.theme);
+    // ── Exit zone pulse tween (applied per parking type) ────────────────
+    if (ez.parkingType) {
+      if (ez.parkingType === 'angled') {
+        console.log(`[EXIT_ZONE] puzzle ${this.puzzle.id} ${ez.parkingType} → pulse 0.65–0.95 @ 1200ms`);
+        this.tweens.add({
+          targets: exitGfx,
+          alpha: { from: 0.65, to: 0.95 },
+          duration: 1200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      } else {
+        // parallel & perpendicular: use the same pulse range as angled
+        console.log(`[EXIT_ZONE] puzzle ${this.puzzle.id} ${ez.parkingType} → pulse 0.65–0.95 @ 1200ms`);
+        this.tweens.add({
+          targets: exitGfx,
+          alpha: { from: 0.65, to: 0.95 },
+          duration: 1200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+    } else {
+      // Legacy (no parkingType) — subtle chevron pulse
+      console.log(`[EXIT_ZONE] puzzle ${this.puzzle.id} legacy → pulse 0.30–0.50 @ 1200ms`);
+      this.tweens.add({
+        targets: exitGfx,
+        alpha: { from: 0.3, to: 0.5 },
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
 
     for (const obs of this.puzzle.obstacles) {
-      if (obs.type === 'pillar' || obs.type === 'wall') continue;
+      // 'pillar' is visual-only — walls now render (collision changed in Step 3)
+      if (obs.type === 'pillar') continue;
 
-      const obsImg = createObstacleCar(
-        this,
-        obs.col + CONTAINER_OFFSET_X,
-        obs.row + CONTAINER_OFFSET_Y,
-        obs.angle,
-      );
-      obsImg.setDepth(6);
-      obsImg.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
-      container.add(obsImg);
+      const ox = obs.x ?? ((obs.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+      const oy = obs.y ?? ((obs.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
+
+      if (obs.type === 'wall') {
+        // Wall: SVG image (replaces old Graphics-drawn placeholder)
+        const scale = PROP_VISUAL_SCALE['wall'] ?? 0.24;
+        const img = this.add.image(ox, oy, 'prop-wall');
+        img.setAngle(obs.angle);
+        img.setDepth(6);
+        img.setScale(scale, scale * COUNTER_SCALE_Y);
+        container.add(img);
+      } else if (obs.type === 'barricade-1' || obs.type === 'barricade' ||
+                 obs.type === 'cone' || obs.type === 'shrub-1' ||
+                 obs.type === 'shrub-2' || obs.type === 'tree' || obs.type === 'tree-sm') {
+        // Prop: load correct SVG texture, scale to match collision box
+        const scale = PROP_VISUAL_SCALE[obs.type] ?? 0.20;
+        const img = this.add.image(ox, oy, `prop-${obs.type}`);
+        img.setAngle(obs.angle);
+        img.setDepth(6);
+        img.setScale(scale, scale * COUNTER_SCALE_Y);
+        container.add(img);
+      } else {
+        // Car obstacles (sedan/suv): existing random-roll car sprite
+        const obsImg = createObstacleCar(this, ox, oy, obs.angle);
+        obsImg.setDepth(6);
+        obsImg.setScale(CAR_VISUAL_SCALE, CAR_VISUAL_SCALE * COUNTER_SCALE_Y);
+        container.add(obsImg);
+      }
     }
 
     const vehicle = this.puzzle.playerVehicle ?? 'sedan';
     const playerCar = createCarSprite(this, {
-      x: pc.col + CONTAINER_OFFSET_X,
-      y: pc.row + CONTAINER_OFFSET_Y,
+      x: pc.x ?? ((pc.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX,
+      y: pc.y ?? ((pc.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX,
       angle: pc.angle,
       type: 'player',
       textureKey: vehicle === 'limo' ? 'car-limo' : vehicle === 'semitruck' ? 'car-trailer' : undefined,
@@ -960,19 +1222,25 @@ export class PuzzleScene extends Phaser.Scene {
   // ──────────────────────────────────────────────────────────
 
   private renderHUD(): void {
+    // Subtle semi-transparent pill behind HUD text so it's readable against any background
+    const hudPillGfx = this.add.graphics();
+    hudPillGfx.setDepth(9);
+    hudPillGfx.fillStyle(0x000000, 0.70);
+    hudPillGfx.fillRoundedRect(10, HUD_Y - 2, 370, 28, 6);
+
     this.add
       .text(20, HUD_Y, 'PARKIQ', {
         fontSize: PARKIQ_FONT,
         color: '#E8320A',
         stroke: '#000000',
-        strokeThickness: 4,
+        strokeThickness: 6,
         fontStyle: 'bold',
       })
       .setDepth(10);
 
     this.puzzleNumberText = this.add
       .text(195, HUD_Y + 2, `PUZZLE #${this.puzzle.id}`, {
-        fontSize: HUD_MUTED_FONT,
+        fontSize: '16px',
         color: '#FFFFFF',
         stroke: '#000000',
         strokeThickness: 4,
@@ -1123,13 +1391,13 @@ export class PuzzleScene extends Phaser.Scene {
         puzzleId: this.puzzle.id,
       }).catch((error: unknown) => {
         console.error('[exit] puzzleComplete failed:', error);
-        return { puzzleIndex: this.puzzle.id >= 15 ? 1 : this.puzzle.id + 1 };
+        return { puzzleIndex: this.puzzle.id >= 16 ? 1 : this.puzzle.id + 1 };
       });
       nextIndex = result.puzzleIndex;
     }
 
-    // 3. If puzzle 15 cleared — celebrate then load bonus level
-    if (this.puzzle.id === 15) {
+    // 3. If last rotation puzzle cleared — celebrate then load bonus level
+    if (this.puzzle.id === 16) {
       await this.showClearedOverlay();
       this.loadBonusLevel();
       return;
@@ -1138,12 +1406,12 @@ export class PuzzleScene extends Phaser.Scene {
     // 4. If bonus level cleared — go back to daily rotation (puzzle 1)
     if (this.isBonusLevel) {
       this.isBonusLevel = false;
-      this.loadNextPuzzleInPlace(nextIndex);
+      await this.loadNextPuzzleInPlace(nextIndex);
       return;
     }
 
     // 5. Load next puzzle in place (normal rotation)
-    this.loadNextPuzzleInPlace(nextIndex);
+    await this.loadNextPuzzleInPlace(nextIndex);
   }
 
   private showClearedOverlay(): Promise<void> {
@@ -1168,7 +1436,7 @@ export class PuzzleScene extends Phaser.Scene {
     });
   }
 
-  private loadNextPuzzleInPlace(nextIndex: number): void {
+  private async loadNextPuzzleInPlace(nextIndex: number): Promise<void> {
     this.ready = false;
 
     // Destroy trailer overlay BEFORE container (prevents double-destroy)
@@ -1193,6 +1461,9 @@ export class PuzzleScene extends Phaser.Scene {
     // Load new puzzle
     this.puzzle = getPuzzleByIndex(nextIndex);
 
+    // Ensure background is loaded before rendering
+    await this.loadBackground(nextIndex);
+
     // Update HUD puzzle number
     this.puzzleNumberText.setText(`PUZZLE #${this.puzzle.id}`);
 
@@ -1205,6 +1476,11 @@ export class PuzzleScene extends Phaser.Scene {
     // Re-render parking scene with new puzzle data
     this.renderParkingScene();
 
+    // Prefetch next puzzle's background in the background
+    if (nextIndex + 1 <= 15) {
+      this.prefetchBackground(nextIndex + 1);
+    }
+
     // Restart elapsed timer
     this.startElapsedTimer();
     this.ready = true;
@@ -1214,25 +1490,112 @@ export class PuzzleScene extends Phaser.Scene {
   //  Collision Detection (container-local coordinates)
   // ──────────────────────────────────────────────────────────
 
+  /** Determines which lookup table to use based on vehicle/obstacle type */
+  private getVehicleTable(type: string): 'sedan' | 'large' {
+    if (type === 'truck' || type === 'limo' || type === 'semitruck') {
+      return 'large';
+    }
+    return 'sedan';
+  }
+
+  /**
+   * Returns the collision box for any obstacle type (car, wall, prop).
+   * Routes to the correct lookup table:
+   *   - sedan/suv → SEDAN_BOX via getVehicleTable+getRotatedBox
+   *   - truck/limo/semitruck → LARGE_BOX via getVehicleTable+getRotatedBox
+   *   - wall → WALL_BOX (48×48, rotation-invariant)
+   *   - props → PROP_BOX (barricades swap w/h at 90°; others are fixed)
+   */
+  private getObstacleBox(type: string, angleDeg: number): { w: number; h: number } {
+    // Car types — route through existing table system
+    if (type === 'sedan' || type === 'suv' || type === 'truck' || type === 'limo' || type === 'semitruck') {
+      const table = this.getVehicleTable(type);
+      return this.getRotatedBox(table, angleDeg);
+    }
+
+    // Wall — fixed 48×48 square (rotation doesn't matter)
+    if (type === 'wall') {
+      return WALL_BOX;
+    }
+
+    // Props — PROP_BOX lookup; barricades swap w/h at 90°
+    const base = PROP_BOX[type];
+    if (!base) {
+      // Unknown type fallback (shouldn't happen if type system is exhaustive)
+      console.warn(`[collision] unknown obstacle type "${type}" — falling back to sedan box`);
+      return this.getRotatedBox('sedan', angleDeg);
+    }
+
+    // Barricades: snap to 0° (original) or 90° (swapped)
+    if (type === 'barricade-1' || type === 'barricade') {
+      let r = angleDeg % 180;
+      if (r < 0) r += 180;
+      if (r > 90) r = 180 - r;
+      if (r >= 45) {
+        return { w: base.h, h: base.w };
+      }
+      return base;
+    }
+
+    // All other props: fixed box, no angle adjustment
+    return base;
+  }
+
+  /**
+   * Returns the effective rotated AABB size for the given angle.
+   * Snaps to nearest bucket: 15° steps for sedan table, {0,45,90} for large.
+   *
+   * Reduction: 1) r = angle mod 180  2) if r > 90: r = 180 - r  3) snap to bucket.
+   * This correctly maps 90° → 90 (not 0) and 270° → 90 (same as 90).
+   */
+  private getRotatedBox(table: 'sedan' | 'large', angleDeg: number): { w: number; h: number } {
+    // Step 1: reduce to [0, 180) — rotated AABB has 180° period
+    let r = angleDeg % 180;
+    if (r < 0) r += 180;
+    // Step 2: mirror around 90° — AABB at θ equals AABB at (180 - θ)
+    if (r > 90) r = 180 - r;
+
+    if (table === 'sedan') {
+      // Step 3: snap to nearest of {0,15,30,45,60,75,90}
+      const bucket = Math.round(r / 15) * 15;
+      return SEDAN_BOX[bucket] ?? SEDAN_BOX[0]!;
+    } else {
+      // Step 3: snap to nearest of {0,45,90}
+      const bucket = r < 22.5 ? 0 : r < 67.5 ? 45 : 90;
+      return LARGE_BOX[bucket] ?? LARGE_BOX[0]!;
+    }
+  }
+
   private checkCollision(cx: number, cy: number): boolean {
     if (DEBUG_DISABLE_COLLISIONS) return false;
 
+    // Player box — lookup table based on current angle + vehicle type
+    const playerTable = this.getVehicleTable(this.puzzle.playerVehicle ?? 'sedan');
+    const playerBox = this.getRotatedBox(playerTable, this.carAngle);
     const playerRect = new Phaser.Geom.Rectangle(
-      cx - this.activeCarW / 2,
-      cy - this.activeCarH / 2,
-      this.activeCarW,
-      this.activeCarH,
+      cx - playerBox.w / 2,
+      cy - playerBox.h / 2,
+      playerBox.w,
+      playerBox.h,
     );
 
     for (const obs of this.puzzle.obstacles) {
-      if (obs.type === 'pillar' || obs.type === 'wall') continue;
-      const ox = (obs.col + CONTAINER_OFFSET_X) * UNIT_PX;
-      const oy = (obs.row + CONTAINER_OFFSET_Y) * UNIT_PX;
+      // 'pillar' is visual-only — no collision footprint
+      if (obs.type === 'pillar') continue;
+
+      // Use pixel x,y if available (from convertGridToPixel), fall back to grid
+      const ox = obs.x ?? ((obs.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+      const oy = obs.y ?? ((obs.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
+
+      // Per-obstacle box — routes through getObstacleBox() which handles
+      // sedan/suv (SEDAN_BOX), truck/limo/semitruck (LARGE_BOX),
+      // wall (WALL_BOX), and all 6 prop types (PROP_BOX).
+      const obsBox = this.getObstacleBox(obs.type, obs.angle);
       const obsRect = new Phaser.Geom.Rectangle(
-        ox - CAR_W / 2,
-        oy - CAR_H / 2,
-        CAR_W,
-        CAR_H,
+        ox - obsBox.w / 2,
+        oy - obsBox.h / 2,
+        obsBox.w,
+        obsBox.h,
       );
       if (Phaser.Geom.Rectangle.Overlaps(playerRect, obsRect)) {
         return true;
@@ -1242,18 +1605,66 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private checkExitReached(cx: number, cy: number): boolean {
-    const carRect = new Phaser.Geom.Rectangle(
-      cx - this.activeCarW / 2,
-      cy - this.activeCarH / 2,
-      this.activeCarW,
-      this.activeCarH,
-    );
     const ez = this.puzzle.exitZone;
-    const exitPixelX = (ez.col + CONTAINER_OFFSET_X) * UNIT_PX - 48;
-    const exitPixelY = (ez.row + CONTAINER_OFFSET_Y) * UNIT_PX - 48;
-    const exitRect = new Phaser.Geom.Rectangle(exitPixelX, exitPixelY, 96, 96);
 
-    return Phaser.Geom.Rectangle.Overlaps(carRect, exitRect);
+    // Player box — same getRotatedBox() as checkCollision() (Step 3/4 consistency)
+    const playerTable = this.getVehicleTable(this.puzzle.playerVehicle ?? 'sedan');
+    const playerBox = this.getRotatedBox(playerTable, this.carAngle);
+
+    if (ez.parkingType) {
+      // ── Parking-type exit: position + angle check ─────────────────────
+      // Angle tolerance: ±10° for parallel/perpendicular, ±15° for angled.
+      const bayX = ez.x ?? ((ez.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+      const bayY = ez.y ?? ((ez.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
+      const bayAngle = ez.angle ?? 0;
+
+      if (ez.parkingType === 'angled') {
+        // Angled zones: position proximity check — car center must be near bay center.
+        // At 45° the player AABB (73×73) is larger than the bay (40×70),
+        // so pure rectangle overlap triggers when any corner barely touches.
+        // Instead require the car center to land within a fixed tolerance
+        // of the bay center, ensuring the car looks visually parked inside.
+        const POS_TOLERANCE = 8; // px — car center within ±8px of bay center on each axis
+        if (Math.abs(cx - bayX) > POS_TOLERANCE) return false;
+        if (Math.abs(cy - bayY) > POS_TOLERANCE) return false;
+      } else {
+        // Parallel / perpendicular: center-proximity check (same as angled).
+        // Replace loose rectangle-overlap with tight center-tolerance so the
+        // car visually centers itself inside the marking before winning, just
+        // like the angled branch already does.
+        const POS_TOLERANCE = 8; // px — car center within ±8px of bay center on each axis
+        if (Math.abs(cx - bayX) > POS_TOLERANCE) return false;
+        if (Math.abs(cy - bayY) > POS_TOLERANCE) return false;
+      }
+
+      // 2. Angle tolerance check
+      const tolerance = ez.parkingType === 'angled' ? 15 : 10;
+      const diff = Math.abs(Phaser.Math.Angle.WrapDegrees(this.carAngle - bayAngle));
+      if (diff > tolerance) return false;
+
+      return true;
+    } else {
+      // ── Legacy touch-only exit (96×96, no angle requirement) ───────────
+      const halfBay = 48; // 96×96 bay
+
+      const bayX = ez.x ?? ((ez.col ?? 0) + CONTAINER_OFFSET_X) * UNIT_PX;
+      const bayY = ez.y ?? ((ez.row ?? 0) + CONTAINER_OFFSET_Y) * UNIT_PX;
+
+      const playerRect = new Phaser.Geom.Rectangle(
+        cx - playerBox.w / 2,
+        cy - playerBox.h / 2,
+        playerBox.w,
+        playerBox.h,
+      );
+      const exitRect = new Phaser.Geom.Rectangle(
+        bayX - halfBay,
+        bayY - halfBay,
+        96,
+        96,
+      );
+
+      return Phaser.Geom.Rectangle.Overlaps(playerRect, exitRect);
+    }
   }
 
   // ──────────────────────────────────────────────────────────
@@ -1533,12 +1944,10 @@ export class PuzzleScene extends Phaser.Scene {
     const gap1 = this.getGapCols(1);
 
     let firstSafe = -1;
-    let lastSafe = -1;
     let overlapCount = 0;
     for (let c = 0; c < 6; c++) {
       if (gap0[c] && gap1[c]) {
         if (firstSafe === -1) firstSafe = c;
-        lastSafe = c;
         overlapCount++;
       }
     }
