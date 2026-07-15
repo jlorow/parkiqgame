@@ -33,7 +33,6 @@ const DEBUG_FORCE_PUZZLE: number | null = null;  // Force-load specific puzzle (
 
 const HUD_Y = 8;
 const PARKIQ_FONT = '20px';
-const HUD_MUTED_FONT = '13px';
 
 const OBJECTIVE_Y = 500;
 
@@ -1031,15 +1030,22 @@ export class PuzzleScene extends Phaser.Scene {
         exitGfx.strokePath();
       }
 
-      exitGfx.setDepth(5);
-    } else {
+    }
+
+    exitGfx.setDepth(5);
+
+    if (!ez.parkingType) {
       // Legacy: filled rectangle + border + direction chevron
-      exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.40);
+      console.log(`[LEGACY_EXIT] puzzle ${this.puzzle.id} dir=${ez.direction} center=(${exitZoneCenterX.toFixed(1)},${exitZoneCenterY.toFixed(1)}) bay=${baySize}×${baySize}`);
+
+      exitGfx.fillStyle(THEME_FLAT_COLORS.exitZoneColor, 0.50);
       exitGfx.fillRect(exitPixelX, exitPixelY, baySize, baySize);
-      exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.85);
+      // Brighter green border (matching angled exit style)
+      exitGfx.lineStyle(2, 0x8fcf90, 0.85);
       exitGfx.strokeRect(exitPixelX, exitPixelY, baySize, baySize);
 
-      exitGfx.lineStyle(2, THEME_FLAT_COLORS.exitZoneColor, 0.75);
+      // Chevron arrow — bright green, fully opaque for contrast
+      exitGfx.lineStyle(2, 0x8fcf90, 1.0);
       exitGfx.beginPath();
       if (ez.direction === 'top') {
         exitGfx.moveTo(exitZoneCenterX - 18, exitZoneCenterY + 8);
@@ -1062,16 +1068,33 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
     container.add(exitGfx);
-    if (ez.parkingType === 'angled') {
-      this.tweens.add({
-        targets: exitGfx,
-        alpha: { from: 0.65, to: 0.95 },
-        duration: 1200,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    } else if (!ez.parkingType) {
+    // ── Exit zone pulse tween (applied per parking type) ────────────────
+    if (ez.parkingType) {
+      if (ez.parkingType === 'angled') {
+        console.log(`[EXIT_ZONE] puzzle ${this.puzzle.id} ${ez.parkingType} → pulse 0.65–0.95 @ 1200ms`);
+        this.tweens.add({
+          targets: exitGfx,
+          alpha: { from: 0.65, to: 0.95 },
+          duration: 1200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      } else {
+        // parallel & perpendicular: use the same pulse range as angled
+        console.log(`[EXIT_ZONE] puzzle ${this.puzzle.id} ${ez.parkingType} → pulse 0.65–0.95 @ 1200ms`);
+        this.tweens.add({
+          targets: exitGfx,
+          alpha: { from: 0.65, to: 0.95 },
+          duration: 1200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+    } else {
+      // Legacy (no parkingType) — subtle chevron pulse
+      console.log(`[EXIT_ZONE] puzzle ${this.puzzle.id} legacy → pulse 0.30–0.50 @ 1200ms`);
       this.tweens.add({
         targets: exitGfx,
         alpha: { from: 0.3, to: 0.5 },
@@ -1199,19 +1222,25 @@ export class PuzzleScene extends Phaser.Scene {
   // ──────────────────────────────────────────────────────────
 
   private renderHUD(): void {
+    // Subtle semi-transparent pill behind HUD text so it's readable against any background
+    const hudPillGfx = this.add.graphics();
+    hudPillGfx.setDepth(9);
+    hudPillGfx.fillStyle(0x000000, 0.70);
+    hudPillGfx.fillRoundedRect(10, HUD_Y - 2, 370, 28, 6);
+
     this.add
       .text(20, HUD_Y, 'PARKIQ', {
         fontSize: PARKIQ_FONT,
         color: '#E8320A',
         stroke: '#000000',
-        strokeThickness: 4,
+        strokeThickness: 6,
         fontStyle: 'bold',
       })
       .setDepth(10);
 
     this.puzzleNumberText = this.add
       .text(195, HUD_Y + 2, `PUZZLE #${this.puzzle.id}`, {
-        fontSize: HUD_MUTED_FONT,
+        fontSize: '16px',
         color: '#FFFFFF',
         stroke: '#000000',
         strokeThickness: 4,

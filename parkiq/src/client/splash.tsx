@@ -15,9 +15,9 @@ export const Splash = () => {
     img.onload = () => setBgReady(true);
     img.onerror = () =>
       console.warn(
-        '[ParkIQ] public/splash-bg.png not found — using fallback solid background.',
+        '[ParkIQ] public/splash-bg.webp not found — using fallback solid background.',
       );
-    img.src = '/splash-bg.png';
+    img.src = '/splash-bg.webp';
   }, []);
 
   return (
@@ -25,7 +25,7 @@ export const Splash = () => {
       className="flex relative flex-col justify-center items-center min-h-screen"
       style={{
         backgroundColor: BG_FALLBACK,
-        backgroundImage: bgReady ? 'url(/splash-bg.png)' : undefined,
+        backgroundImage: bgReady ? 'url(/splash-bg.webp)' : undefined,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
