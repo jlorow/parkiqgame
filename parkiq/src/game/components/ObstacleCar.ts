@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 import { createCarSprite } from './CarSprite';
 
 /**
