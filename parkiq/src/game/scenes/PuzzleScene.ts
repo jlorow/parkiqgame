@@ -27,7 +27,7 @@ const CONTAINER_OFFSET_Y = 0.5;
 const DEBUG_SKIP_PUZZLE_5 = false;   // Skip puzzle 5 → load puzzle 6
 const DEBUG_DISABLE_COLLISIONS = false; // Ignore all collision hitboxes
 const DEBUG_LOAD_BONUS = false;          // Force-load bonus Dual-Train level on start
-const DEBUG_FORCE_PUZZLE: number | null = 2;  // Force-load specific puzzle (null = use daily rotation)
+const DEBUG_FORCE_PUZZLE: number | null = null;  // Force-load specific puzzle (null = use daily rotation)
 
 // ════════════════════════════════════════════════════════════
 
@@ -364,22 +364,7 @@ export class PuzzleScene extends Phaser.Scene {
     // ── Wall SVG ───────────────────────────────────────────────────
     this.load.svg('prop-wall', 'assets/sprites/props/Wall.svg', { width: 200 });
 
-    // ── Background images (per-puzzle lot surfaces) ───────────────
-    this.load.svg('bg_1', 'assets/sprites/backgrounds/puzzle1-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_2', 'assets/sprites/backgrounds/puzzle2-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_3', 'assets/sprites/backgrounds/puzzle3-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_4', 'assets/sprites/backgrounds/puzzle4-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_5', 'assets/sprites/backgrounds/puzzle5-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_6', 'assets/sprites/backgrounds/puzzle6-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_7', 'assets/sprites/backgrounds/puzzle7-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_8', 'assets/sprites/backgrounds/puzzle8-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_9', 'assets/sprites/backgrounds/puzzle9-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_10', 'assets/sprites/backgrounds/puzzle10-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_11', 'assets/sprites/backgrounds/puzzle11-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_12', 'assets/sprites/backgrounds/puzzle12-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_13', 'assets/sprites/backgrounds/puzzle13-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_14', 'assets/sprites/backgrounds/puzzle14-bg.svg', { width: 288, height: 288 });
-    this.load.svg('bg_15', 'assets/sprites/backgrounds/puzzle15-bg.svg', { width: 288, height: 288 });
+    // ── Background images loaded on-demand per puzzle (see loadBackground) ──
 
     this.load.audio('train', 'assets/sounds/train.mp3');
 
@@ -428,11 +413,19 @@ export class PuzzleScene extends Phaser.Scene {
 
     this.puzzle = getPuzzleByIndex(puzzleIndex);
 
+    // Load this puzzle's background before rendering the parking scene
+    await this.loadBackground(puzzleIndex);
+
     this.renderEnvironment();
     this.renderHUD();
     this.renderObjective();
     this.renderControls();
     this.renderParkingScene();
+
+    // Prefetch next puzzle's background in the background
+    if (puzzleIndex + 1 <= 15) {
+      this.prefetchBackground(puzzleIndex + 1);
+    }
 
     this.startElapsedTimer();
     this.ready = true;
@@ -440,6 +433,46 @@ export class PuzzleScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.playerCarImage.destroy();
     });
+  }
+
+  // ──────────────────────────────────────────────────────────
+  //  On-demand background loading
+  // ──────────────────────────────────────────────────────────
+
+  /**
+   * Ensure the background texture for `puzzleId` is loaded.
+   * Resolves immediately from cache; otherwise fetches the SVG,
+   * rasterises it into the Phaser texture manager, then resolves.
+   */
+  private loadBackground(puzzleId: number): Promise<void> {
+    const key = `bg_${puzzleId}`;
+    if (this.textures.exists(key)) return Promise.resolve();
+
+    return new Promise<void>((resolve) => {
+      const puzzle = getPuzzleByIndex(puzzleId);
+      if (!puzzle.backgroundImage) { resolve(); return; }
+
+      this.load.once('filecomplete', (loadedKey: string) => {
+        if (loadedKey === key) resolve();
+      });
+      this.load.image(key, `assets/sprites/backgrounds/puzzle${puzzleId}-bg.webp`);
+      if (!this.load.isLoading()) this.load.start();
+    });
+  }
+
+  /**
+   * Kick off a non-blocking prefetch of the next puzzle's background
+   * so it's cached before the player reaches it.
+   */
+  private prefetchBackground(puzzleId: number): void {
+    const key = `bg_${puzzleId}`;
+    if (this.textures.exists(key)) return;
+
+    const puzzle = getPuzzleByIndex(puzzleId);
+    if (!puzzle.backgroundImage) return;
+
+    this.load.image(key, `assets/sprites/backgrounds/puzzle${puzzleId}-bg.webp`);
+    if (!this.load.isLoading()) this.load.start();
   }
 
   // ──────────────────────────────────────────────────────────
@@ -1344,12 +1377,12 @@ export class PuzzleScene extends Phaser.Scene {
     // 4. If bonus level cleared — go back to daily rotation (puzzle 1)
     if (this.isBonusLevel) {
       this.isBonusLevel = false;
-      this.loadNextPuzzleInPlace(nextIndex);
+      await this.loadNextPuzzleInPlace(nextIndex);
       return;
     }
 
     // 5. Load next puzzle in place (normal rotation)
-    this.loadNextPuzzleInPlace(nextIndex);
+    await this.loadNextPuzzleInPlace(nextIndex);
   }
 
   private showClearedOverlay(): Promise<void> {
@@ -1374,7 +1407,7 @@ export class PuzzleScene extends Phaser.Scene {
     });
   }
 
-  private loadNextPuzzleInPlace(nextIndex: number): void {
+  private async loadNextPuzzleInPlace(nextIndex: number): Promise<void> {
     this.ready = false;
 
     // Destroy trailer overlay BEFORE container (prevents double-destroy)
@@ -1399,6 +1432,9 @@ export class PuzzleScene extends Phaser.Scene {
     // Load new puzzle
     this.puzzle = getPuzzleByIndex(nextIndex);
 
+    // Ensure background is loaded before rendering
+    await this.loadBackground(nextIndex);
+
     // Update HUD puzzle number
     this.puzzleNumberText.setText(`PUZZLE #${this.puzzle.id}`);
 
@@ -1410,6 +1446,11 @@ export class PuzzleScene extends Phaser.Scene {
 
     // Re-render parking scene with new puzzle data
     this.renderParkingScene();
+
+    // Prefetch next puzzle's background in the background
+    if (nextIndex + 1 <= 15) {
+      this.prefetchBackground(nextIndex + 1);
+    }
 
     // Restart elapsed timer
     this.startElapsedTimer();
